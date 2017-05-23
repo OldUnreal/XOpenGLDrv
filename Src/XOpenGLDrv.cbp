@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="XOpenGLDrv" />
+		<Option platforms="Unix;" />
+		<Option pch_mode="2" />
+		<Option compiler="clang" />
+		<Build>
+			<Target title="Debug Lin32">
+				<Option platforms="Unix;" />
+				<Option output="../../System/XOpenGLDrv" prefix_auto="0" extension_auto="1" />
+				<Option object_output="DebugLin32" />
+				<Option type="3" />
+				<Option compiler="llvm_clang_compiler_debug" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-Wl,-soname,XOpenGLDrv.so" />
+					<Add library="../../System/libSDL2.so" />
+					<Add library="../../System/libGLEW.so" />
+				</Linker>
+			</Target>
+			<Target title="Release Lin32">
+				<Option platforms="Unix;" />
+				<Option output="../../System/XOpenGLDrv" prefix_auto="0" extension_auto="1" />
+				<Option object_output="ReleaseLin32" />
+				<Option type="3" />
+				<Option compiler="clang" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-Wl,-soname,XOpenGLDrv.so" />
+					<Add library="../../System/libSDL2.so" />
+					<Add library="../../System/libGLEW.a" />
+				</Linker>
+			</Target>
+			<Target title="Debug Mac32">
+				<Option platforms="Unix;Mac;" />
+				<Option output="../../SystemOSX/XOpenGLDrv.dylib" prefix_auto="0" extension_auto="0" />
+				<Option object_output="DebugMac32" />
+				<Option type="3" />
+				<Option compiler="gnu_gcc_compiler_473_osx" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-g" />
+					<Add option="-DGPackage=GPackageXOpenGLGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-dynamiclib" />
+					<Add library="../../SystemOSX/Engine.dylib" />
+					<Add library="../../SystemOSX/Core.dylib" />
+					<Add library="X11" />
+					<Add library="../../System/libGLEW.so" />
+				</Linker>
+			</Target>
+			<Target title="Release Mac32">
+				<Option platforms="Unix;Mac;" />
+				<Option output="../../SystemOSX/XOpenGLDrv.dylib" prefix_auto="0" extension_auto="0" />
+				<Option object_output="ReleaseMac32" />
+				<Option type="3" />
+				<Option compiler="gnu_gcc_compiler_473_osx" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-dynamiclib" />
+					<Add library="../../SystemOSX/Core.so" />
+					<Add library="../../SystemOSX/Core.dylib" />
+					<Add library="X11" />
+				</Linker>
+			</Target>
+			<Target title="Debug Lin ARM">
+				<Option platforms="Unix;" />
+				<Option output="../../SystemARM/XOpenGLDrv" prefix_auto="0" extension_auto="1" />
+				<Option object_output="DebugLinARM" />
+				<Option type="3" />
+				<Option compiler="llvm_clang_compiler_for_arm_debug" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-g" />
+					<Add option="-DGPackage=GPackageXOpenGLGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-pg" />
+					<Add option="-Wl,-soname,XOpenGLGLDrv.so" />
+					<Add library="../../SystemARM/libGLEW.so" />
+				</Linker>
+			</Target>
+			<Target title="Release Lin ARM">
+				<Option platforms="Unix;" />
+				<Option output="../../SystemARM/XOpenGLDrv" prefix_auto="0" extension_auto="1" />
+				<Option object_output="ReleaseLinARM" />
+				<Option type="3" />
+				<Option compiler="llvm_clang_compiler_for_arm" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-Wl,-soname,XOpenGLGLDrv.so" />
+					<Add library="../../SystemARM/libGLEW.so" />
+				</Linker>
+			</Target>
+			<Target title="Debug MacPPC">
+				<Option platforms="Unix;Mac;" />
+				<Option output="../../SystemOSXPPC/XOpenGLDrv.dylib" prefix_auto="0" extension_auto="0" />
+				<Option object_output="DebugMacPPC" />
+				<Option type="3" />
+				<Option compiler="gnu_gcc_compiler_473_osx" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-Wall" />
+					<Add option="-g" />
+					<Add option="-DGPackage=GPackageXOpenGLGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-dynamiclib" />
+					<Add option="-framework opengl" />
+					<Add library="../../SystemOSXPPC/Core.dylib" />
+					<Add library="../../SystemOSXPPC/Engine.dylib" />
+					<Add library="X11" />
+				</Linker>
+			</Target>
+			<Target title="Release MacPPC">
+				<Option platforms="Unix;Mac;" />
+				<Option output="../../SystemOSXPPC/XOpenGLDrv.dylib" prefix_auto="0" extension_auto="0" />
+				<Option object_output="ReleaseMacPPC" />
+				<Option type="3" />
+				<Option compiler="gnu_gcc_compiler_473_osx" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLGLDrv" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-dynamiclib" />
+					<Add option="-framework opengl" />
+					<Add library="../../SystemOSXPPC/Core.dylib" />
+					<Add library="../../SystemOSXPPC/Engine.dylib" />
+					<Add library="X11" />
+				</Linker>
+			</Target>
+		</Build>
+		<Unit filename="../../System/xopengl/DrawComplexHWLights.frag" />
+		<Unit filename="../../System/xopengl/DrawComplexHWLights.vert" />
+		<Unit filename="../../System/xopengl/DrawComplexSinglePass.frag" />
+		<Unit filename="../../System/xopengl/DrawComplexSinglePass.geo" />
+		<Unit filename="../../System/xopengl/DrawComplexSinglePass.vert" />
+		<Unit filename="../../System/xopengl/DrawGouraud.frag" />
+		<Unit filename="../../System/xopengl/DrawGouraud.vert" />
+		<Unit filename="../../System/xopengl/DrawGouraudMeshBuffer.frag" />
+		<Unit filename="../../System/xopengl/DrawGouraudMeshBuffer.vert" />
+		<Unit filename="../../System/xopengl/DrawSimple.frag" />
+		<Unit filename="../../System/xopengl/DrawSimple.geo" />
+		<Unit filename="../../System/xopengl/DrawSimple.vert" />
+		<Unit filename="../../System/xopengl/DrawTile.frag" />
+		<Unit filename="../../System/xopengl/DrawTile.geo" />
+		<Unit filename="../../System/xopengl/DrawTile.vert" />
+		<Unit filename="../../System/xopengl/Globals.incl" />
+		<Unit filename="../Inc/UnShader.h" />
+		<Unit filename="../Inc/XOpenGL.h" />
+		<Unit filename="../Inc/XOpenGLDrv.h" />
+		<Unit filename="../Inc/XOpenGLTemplate.h" />
+		<Unit filename="../Inc/glad.h" />
+		<Unit filename="DebugLog.cpp" />
+		<Unit filename="DrawComplex.cpp" />
+		<Unit filename="DrawDistanceFog.cpp" />
+		<Unit filename="DrawGouraud.cpp" />
+		<Unit filename="DrawSimple.cpp" />
+		<Unit filename="DrawTile.cpp" />
+		<Unit filename="EditorHit.cpp" />
+		<Unit filename="PersistentBuffers.cpp" />
+		<Unit filename="RenderLight.cpp" />
+		<Unit filename="SetProgram.cpp" />
+		<Unit filename="SetTexture.cpp" />
+		<Unit filename="XOpenGL.cpp" />
+		<Unit filename="XOpenGLDrv.cpp" />
+		<Unit filename="glad.cpp" />
+		<Unit filename="resource.h" />
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+			<lib_finder disable_auto="1" />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>

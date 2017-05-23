@@ -1,0 +1,1368 @@
+# depslib dependency file v1.0
+1480620645 source:/data/data3/src227/XOpenGLDrv/Src/DebugLog.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1461430379 /data/data3/src227/XOpenGLDrv/Inc/XOpenGLDrv.h
+	<windows.h>
+	"Engine.h"
+	"Render.h"
+	"Render.h"
+	"RenderPrivate.h"
+
+1457420764 /data/data3/src227/Engine/Inc/Engine.h
+	"Core.h"
+	"UnEngineGnuG.h"
+	"UnObj.h"
+	"UnPrim.h"
+	"U3DCollision.h"
+	"UnModel.h"
+	"UnTex.h"
+	"UnAnim.h"
+	"UnSecurity.h"
+	"EngineClasses.h"
+	"UnReach.h"
+	"UnURL.h"
+	"UnOctreeHash.h"
+	"UnRenderOctree.h"
+	"UnLevel.h"
+	"UnIn.h"
+	"UnPlayer.h"
+	"UnEngine.h"
+	"UnTravelData.h"
+	"UnGame.h"
+	"UnCamera.h"
+	"UnMesh.h"
+	"UnStaticMesh.h"
+	"UnSkeletalMesh.h"
+	"UnActor.h"
+	"UnAudio.h"
+	"UnDynBsp.h"
+	"UnScrTex.h"
+	"UnRenderIterator.h"
+	"UnRenderIteratorSupport.h"
+
+1491294166 /data/data3/src227/Core/Inc/Core.h
+	"UnBuild.h"
+	<float.h>
+	<windows.h>
+	<string.h>
+	"UnVcWin32.h"
+	"UnGnuG.h"
+	"UnUnix.h"
+	<signal.h>
+	<SDL2/SDL.h>
+	"UnNames.h"
+	"UnFile.h"
+	"Sha.h"
+	"UnObjVer.h"
+	"UnArc.h"
+	"UnTemplate.h"
+	"UnName.h"
+	"UnStack.h"
+	"UnObjBas.h"
+	"UnCoreNet.h"
+	"UnCorObj.h"
+	"UnClass.h"
+	"UnType.h"
+	"UnScript.h"
+	"UFactory.h"
+	"UExporter.h"
+	"UnCache.h"
+	"UnMem.h"
+	"UnCId.h"
+	"UnBits.h"
+	"UnMath.h"
+	"UnFileCache.h"
+	"UnDebugLogger.h"
+	"UnThread.h"
+	"CoreClasses.h"
+	"UnMD5.h"
+	"UnHook.h"
+	"UnCoreNative.h"
+
+1490465644 /data/data3/src227/Core/Inc/UnBuild.h
+
+1445960364 /data/data3/src227/Core/Inc/UnVcWin32.h
+	<stdio.h>
+	<intrin.h>
+
+1491293999 /data/data3/src227/Core/Inc/UnGnuG.h
+	<math.h>
+	<stdlib.h>
+	<map>
+	<wchar.h>
+	<wctype.h>
+	<sys/wait.h>
+	<signal.h>
+	<setjmp.h>
+
+1269285592 /data/data3/src227/Core/Inc/UnUnix.h
+
+1486733478 /data/data3/src227/Core/Inc/UnNames.h
+
+1491998405 /data/data3/src227/Core/Inc/UnFile.h
+	"UnDebugCPUClock.h"
+	<stdio.h>
+	<stdarg.h>
+	<wchar.h>
+	<wctype.h>
+
+1401783981 /data/data3/src227/Core/Inc/UnDebugCPUClock.h
+
+1459097505 /data/data3/src227/Core/Inc/Sha.h
+
+1471636403 /data/data3/src227/Core/Inc/UnObjVer.h
+
+1289753596 /data/data3/src227/Core/Inc/UnArc.h
+
+1487793902 /data/data3/src227/Core/Inc/UnTemplate.h
+
+1486642582 /data/data3/src227/Core/Inc/UnName.h
+
+1433154037 /data/data3/src227/Core/Inc/UnStack.h
+
+1491292964 /data/data3/src227/Core/Inc/UnObjBas.h
+
+1330710578 /data/data3/src227/Core/Inc/UnCoreNet.h
+
+1485691867 /data/data3/src227/Core/Inc/UnCorObj.h
+
+1490460895 /data/data3/src227/Core/Inc/UnClass.h
+
+1406284490 /data/data3/src227/Core/Inc/UnType.h
+
+1457941980 /data/data3/src227/Core/Inc/UnScript.h
+
+1299658173 /data/data3/src227/Core/Inc/UFactory.h
+
+1219252011 /data/data3/src227/Core/Inc/UExporter.h
+
+1237310996 /data/data3/src227/Core/Inc/UnCache.h
+
+1491152373 /data/data3/src227/Core/Inc/UnMem.h
+
+1426266498 /data/data3/src227/Core/Inc/UnCId.h
+
+1199648161 /data/data3/src227/Core/Inc/UnBits.h
+
+1487319892 /data/data3/src227/Core/Inc/UnMath.h
+	<math.h>
+	<ppc_intrinsics.h>
+
+1373205560 /data/data3/src227/Core/Inc/UnFileCache.h
+	"FConfigCacheIni.h"
+
+1476960794 /data/data3/src227/Core/Inc/FConfigCacheIni.h
+
+1387031322 /data/data3/src227/Core/Inc/UnDebugLogger.h
+
+1446900192 /data/data3/src227/Core/Inc/UnThread.h
+
+1396166695 /data/data3/src227/Core/Inc/CoreClasses.h
+
+1088239620 /data/data3/src227/Core/Inc/UnMD5.h
+
+1089279840 /data/data3/src227/Core/Inc/UnHook.h
+
+1341055851 /data/data3/src227/Core/Inc/UnCoreNative.h
+
+1199648171 /data/data3/src227/Engine/Inc/UnEngineGnuG.h
+
+1463129452 /data/data3/src227/Engine/Inc/UnObj.h
+
+1332145431 /data/data3/src227/Engine/Inc/UnPrim.h
+
+1346610449 /data/data3/src227/Engine/Inc/U3DCollision.h
+
+1489685763 /data/data3/src227/Engine/Inc/UnModel.h
+
+1487412907 /data/data3/src227/Engine/Inc/UnTex.h
+
+1457279973 /data/data3/src227/Engine/Inc/UnAnim.h
+
+1466357562 /data/data3/src227/Engine/Inc/UnSecurity.h
+
+1457973773 /data/data3/src227/Engine/Inc/EngineClasses.h
+	"USecurityData.h"
+	"AActor.h"
+	"AStaticMeshActor.h"
+	"AProjector.h"
+	"APawn.h"
+	"APlayerPawn.h"
+	"ACamera.h"
+	"ABrush.h"
+	"AMover.h"
+	"ACollisionPlane.h"
+	"ABlockingActor.h"
+	"AInfo.h"
+	"APlayerReplicationInfo.h"
+	"AZoneInfo.h"
+	"ALevelInfo.h"
+	"ADynamicZoneInfo.h"
+	"ADecal.h"
+	"ANavigationPoint.h"
+	"ADecoration.h"
+	"AInventory.h"
+	"AWeapon.h"
+	"ALight.h"
+	"ADynamicCorona.h"
+	"ASunlightCorona.h"
+	"ULevelSummary.h"
+	"UAnimationNotify.h"
+
+1459156343 /data/data3/src227/Engine/Inc/USecurityData.h
+
+1440152999 /data/data3/src227/Engine/Inc/AActor.h
+
+1284038488 /data/data3/src227/Engine/Inc/AStaticMeshActor.h
+
+1455373969 /data/data3/src227/Engine/Inc/AProjector.h
+
+1420997989 /data/data3/src227/Engine/Inc/APawn.h
+
+1364546589 /data/data3/src227/Engine/Inc/APlayerPawn.h
+
+1199648171 /data/data3/src227/Engine/Inc/ACamera.h
+
+1342947272 /data/data3/src227/Engine/Inc/ABrush.h
+
+1285090471 /data/data3/src227/Engine/Inc/AMover.h
+
+1269605932 /data/data3/src227/Engine/Inc/ACollisionPlane.h
+
+1294314477 /data/data3/src227/Engine/Inc/ABlockingActor.h
+
+1237236818 /data/data3/src227/Engine/Inc/AInfo.h
+
+1364546149 /data/data3/src227/Engine/Inc/APlayerReplicationInfo.h
+
+1285090377 /data/data3/src227/Engine/Inc/AZoneInfo.h
+
+1457278783 /data/data3/src227/Engine/Inc/ALevelInfo.h
+
+1423681151 /data/data3/src227/Engine/Inc/ADynamicZoneInfo.h
+
+1431158163 /data/data3/src227/Engine/Inc/ADecal.h
+
+1385825030 /data/data3/src227/Engine/Inc/ANavigationPoint.h
+
+1364545580 /data/data3/src227/Engine/Inc/ADecoration.h
+
+1285090354 /data/data3/src227/Engine/Inc/AInventory.h
+
+1364543946 /data/data3/src227/Engine/Inc/AWeapon.h
+
+1396776512 /data/data3/src227/Engine/Inc/ALight.h
+
+1271275707 /data/data3/src227/Engine/Inc/ADynamicCorona.h
+
+1271275704 /data/data3/src227/Engine/Inc/ASunlightCorona.h
+
+1199648171 /data/data3/src227/Engine/Inc/ULevelSummary.h
+
+1322408040 /data/data3/src227/Engine/Inc/UAnimationNotify.h
+
+1431246733 /data/data3/src227/Engine/Inc/UnReach.h
+
+1305800866 /data/data3/src227/Engine/Inc/UnURL.h
+
+1304069612 /data/data3/src227/Engine/Inc/UnOctreeHash.h
+
+1304071032 /data/data3/src227/Engine/Inc/UnRenderOctree.h
+
+1457942222 /data/data3/src227/Engine/Inc/UnLevel.h
+
+1215871237 /data/data3/src227/Engine/Inc/UnIn.h
+
+1424355040 /data/data3/src227/Engine/Inc/UnPlayer.h
+
+1438961182 /data/data3/src227/Engine/Inc/UnEngine.h
+
+1454520427 /data/data3/src227/Engine/Inc/UnTravelData.h
+
+1362225823 /data/data3/src227/Engine/Inc/UnGame.h
+
+1487419020 /data/data3/src227/Engine/Inc/UnCamera.h
+
+1448563737 /data/data3/src227/Engine/Inc/UnMesh.h
+
+1441293066 /data/data3/src227/Engine/Inc/UnStaticMesh.h
+
+1411987700 /data/data3/src227/Engine/Inc/UnSkeletalMesh.h
+
+1479828110 /data/data3/src227/Engine/Inc/UnActor.h
+
+1471587371 /data/data3/src227/Engine/Inc/UnAudio.h
+	"ENCVAG.H"
+
+1404654281 /data/data3/src227/Engine/Inc/UnDynBsp.h
+
+1370631505 /data/data3/src227/Engine/Inc/UnScrTex.h
+
+1427093154 /data/data3/src227/Engine/Inc/UnRenderIterator.h
+
+1215871236 /data/data3/src227/Engine/Inc/UnRenderIteratorSupport.h
+
+1480577799 /data/data3/src227/Render/Inc/Render.h
+	"Engine.h"
+	"UnRender.h"
+	"Amd3d.h"
+	"UnSpan.h"
+
+1464600674 /data/data3/src227/Engine/Inc/UnRender.h
+	"UnRenDev.h"
+
+1460440317 /data/data3/src227/Engine/Inc/UnRenDev.h
+
+1201118838 /data/data3/src227/Render/Inc/Amd3d.h
+
+1274192686 /data/data3/src227/Render/Inc/UnSpan.h
+
+1492695856 /data/data3/src227/XOpenGLDrv/Inc/XOpenGL.h
+	<windows.h>
+	<SDL2/SDL.h>
+	"glad.h"
+	<GL/glew.h>
+	<GL/wglew.h>
+	<GL/gl.h>
+	<GL/glext.h>
+	<mmsystem.h>
+	"glad.h"
+	<GL/glew.h>
+	<SDL2/SDL.h>
+	"XOpenGLTemplate.h"
+
+1466233800 /data/data3/src227/XOpenGLDrv/Inc/glad.h
+	<windows.h>
+	<stddef.h>
+	<inttypes.h>
+	<inttypes.h>
+	<inttypes.h>
+	<stdint.h>
+	<stdint.h>
+	<inttypes.h>
+
+1484671352 source:/data/data3/src227/XOpenGLDrv/Src/DrawComplex.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1485689125 source:/data/data3/src227/XOpenGLDrv/Src/DrawGouraud.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1484671063 source:/data/data3/src227/XOpenGLDrv/Src/DrawSimple.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1491980214 source:/data/data3/src227/XOpenGLDrv/Src/DrawTile.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460578668 source:/data/data3/src227/XOpenGLDrv/Src/glad.c
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<glad.h>
+
+1460386885 source:/data/data3/src227/XOpenGLDrv/Src/XOpenGLDrv.cpp
+	"XOpenGLDrv.h"
+
+1492752110 source:/data/data3/src227/XOpenGLDrv/Src/XOpenGL.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+	"UnShader.h"
+	<comutil.h>
+
+1480357715 /data/data3/src227/XOpenGLDrv/Inc/UnShader.h
+
+1463829244 /data/data3/src227/XOpenGLDrv/Inc/XOpenGLTemplate.h
+
+1460626091 source:/data/data3/src227/XOpenGLDrv/Src/DrawDistanceFog.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460386885 source:/data/data3/src227/XOpenGLDrv/Src/RenderLight.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1492752209 source:/data/data3/src227/XOpenGLDrv/Src/SetTexture.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1491980231 source:/data/data3/src227/XOpenGLDrv/Src/SetProgram.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1464803168 source:/data/data3/src227/XOpenGLDrv/Src/EditorHit.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1465998969 source:/data/data3/src227/XOpenGLDrv/Src/PersistentBuffers.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1471587343 /data/data3/src227/Engine/Inc/ENCVAG.H
+
+1460578668 source:/data/data3/src227/XOpenGLDrv/Src/glad.cpp
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	<glad.h>
+
+1480620645 source:/home/smir/src227/XOpenGLDrv/Src/DebugLog.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1461430379 /home/smir/src227/XOpenGLDrv/Inc/XOpenGLDrv.h
+	<windows.h>
+	"Engine.h"
+	"Render.h"
+	"Render.h"
+	"RenderPrivate.h"
+
+1457420764 /home/smir/src227/Engine/Inc/Engine.h
+	"Core.h"
+	"UnEngineGnuG.h"
+	"UnObj.h"
+	"UnPrim.h"
+	"U3DCollision.h"
+	"UnModel.h"
+	"UnTex.h"
+	"UnAnim.h"
+	"UnSecurity.h"
+	"EngineClasses.h"
+	"UnReach.h"
+	"UnURL.h"
+	"UnOctreeHash.h"
+	"UnRenderOctree.h"
+	"UnLevel.h"
+	"UnIn.h"
+	"UnPlayer.h"
+	"UnEngine.h"
+	"UnTravelData.h"
+	"UnGame.h"
+	"UnCamera.h"
+	"UnMesh.h"
+	"UnStaticMesh.h"
+	"UnSkeletalMesh.h"
+	"UnActor.h"
+	"UnAudio.h"
+	"UnDynBsp.h"
+	"UnScrTex.h"
+	"UnRenderIterator.h"
+	"UnRenderIteratorSupport.h"
+
+1492975896 /home/smir/src227/Core/Inc/Core.h
+	"UnBuild.h"
+	<float.h>
+	<windows.h>
+	<string.h>
+	"UnVcWin32.h"
+	"UnGnuG.h"
+	"UnUnix.h"
+	<signal.h>
+	<SDL2/SDL.h>
+	"UnNames.h"
+	"UnFile.h"
+	"Sha.h"
+	"UnObjVer.h"
+	"UnArc.h"
+	"UnTemplate.h"
+	"UnName.h"
+	"UnStack.h"
+	"UnObjBas.h"
+	"UnCoreNet.h"
+	"UnCorObj.h"
+	"UnClass.h"
+	"UnType.h"
+	"UnScript.h"
+	"UFactory.h"
+	"UExporter.h"
+	"UnCache.h"
+	"UnMem.h"
+	"UnCId.h"
+	"UnBits.h"
+	"UnMath.h"
+	"UnFileCache.h"
+	"UnDebugLogger.h"
+	"UnThread.h"
+	"CoreClasses.h"
+	"UnMD5.h"
+	"UnHook.h"
+	"UnCoreNative.h"
+
+1490465644 /home/smir/src227/Core/Inc/UnBuild.h
+
+1445960364 /home/smir/src227/Core/Inc/UnVcWin32.h
+	<stdio.h>
+	<intrin.h>
+
+1493452170 /home/smir/src227/Core/Inc/UnGnuG.h
+	<math.h>
+	<stdlib.h>
+	<map>
+	<wchar.h>
+	<wctype.h>
+	<sys/wait.h>
+	<signal.h>
+	<setjmp.h>
+
+1269285592 /home/smir/src227/Core/Inc/UnUnix.h
+
+1486733478 /home/smir/src227/Core/Inc/UnNames.h
+
+1493450816 /home/smir/src227/Core/Inc/UnFile.h
+	"UnDebugCPUClock.h"
+	<stdio.h>
+	<stdarg.h>
+	<wchar.h>
+	<wctype.h>
+
+1401783981 /home/smir/src227/Core/Inc/UnDebugCPUClock.h
+
+1459097505 /home/smir/src227/Core/Inc/Sha.h
+
+1471636403 /home/smir/src227/Core/Inc/UnObjVer.h
+
+1289753596 /home/smir/src227/Core/Inc/UnArc.h
+
+1487793902 /home/smir/src227/Core/Inc/UnTemplate.h
+
+1486642582 /home/smir/src227/Core/Inc/UnName.h
+
+1433154037 /home/smir/src227/Core/Inc/UnStack.h
+
+1493469758 /home/smir/src227/Core/Inc/UnObjBas.h
+
+1330710578 /home/smir/src227/Core/Inc/UnCoreNet.h
+
+1485691867 /home/smir/src227/Core/Inc/UnCorObj.h
+
+1490460895 /home/smir/src227/Core/Inc/UnClass.h
+
+1406284490 /home/smir/src227/Core/Inc/UnType.h
+
+1457941980 /home/smir/src227/Core/Inc/UnScript.h
+
+1299658173 /home/smir/src227/Core/Inc/UFactory.h
+
+1219252011 /home/smir/src227/Core/Inc/UExporter.h
+
+1237310996 /home/smir/src227/Core/Inc/UnCache.h
+
+1491152373 /home/smir/src227/Core/Inc/UnMem.h
+
+1426266498 /home/smir/src227/Core/Inc/UnCId.h
+
+1199648161 /home/smir/src227/Core/Inc/UnBits.h
+
+1487319892 /home/smir/src227/Core/Inc/UnMath.h
+	<math.h>
+	<ppc_intrinsics.h>
+
+1373205560 /home/smir/src227/Core/Inc/UnFileCache.h
+	"FConfigCacheIni.h"
+
+1476960794 /home/smir/src227/Core/Inc/FConfigCacheIni.h
+
+1387031322 /home/smir/src227/Core/Inc/UnDebugLogger.h
+
+1446900192 /home/smir/src227/Core/Inc/UnThread.h
+
+1396166695 /home/smir/src227/Core/Inc/CoreClasses.h
+
+1088239620 /home/smir/src227/Core/Inc/UnMD5.h
+
+1089279840 /home/smir/src227/Core/Inc/UnHook.h
+
+1341055851 /home/smir/src227/Core/Inc/UnCoreNative.h
+
+1199648171 /home/smir/src227/Engine/Inc/UnEngineGnuG.h
+
+1463129452 /home/smir/src227/Engine/Inc/UnObj.h
+
+1332145431 /home/smir/src227/Engine/Inc/UnPrim.h
+
+1346610449 /home/smir/src227/Engine/Inc/U3DCollision.h
+
+1489685763 /home/smir/src227/Engine/Inc/UnModel.h
+
+1487412907 /home/smir/src227/Engine/Inc/UnTex.h
+
+1457279973 /home/smir/src227/Engine/Inc/UnAnim.h
+
+1466357562 /home/smir/src227/Engine/Inc/UnSecurity.h
+
+1457973773 /home/smir/src227/Engine/Inc/EngineClasses.h
+	"USecurityData.h"
+	"AActor.h"
+	"AStaticMeshActor.h"
+	"AProjector.h"
+	"APawn.h"
+	"APlayerPawn.h"
+	"ACamera.h"
+	"ABrush.h"
+	"AMover.h"
+	"ACollisionPlane.h"
+	"ABlockingActor.h"
+	"AInfo.h"
+	"APlayerReplicationInfo.h"
+	"AZoneInfo.h"
+	"ALevelInfo.h"
+	"ADynamicZoneInfo.h"
+	"ADecal.h"
+	"ANavigationPoint.h"
+	"ADecoration.h"
+	"AInventory.h"
+	"AWeapon.h"
+	"ALight.h"
+	"ADynamicCorona.h"
+	"ASunlightCorona.h"
+	"ULevelSummary.h"
+	"UAnimationNotify.h"
+
+1459156343 /home/smir/src227/Engine/Inc/USecurityData.h
+
+1440152999 /home/smir/src227/Engine/Inc/AActor.h
+
+1284038488 /home/smir/src227/Engine/Inc/AStaticMeshActor.h
+
+1455373969 /home/smir/src227/Engine/Inc/AProjector.h
+
+1420997989 /home/smir/src227/Engine/Inc/APawn.h
+
+1364546589 /home/smir/src227/Engine/Inc/APlayerPawn.h
+
+1199648171 /home/smir/src227/Engine/Inc/ACamera.h
+
+1342947272 /home/smir/src227/Engine/Inc/ABrush.h
+
+1285090471 /home/smir/src227/Engine/Inc/AMover.h
+
+1269605932 /home/smir/src227/Engine/Inc/ACollisionPlane.h
+
+1294314477 /home/smir/src227/Engine/Inc/ABlockingActor.h
+
+1237236818 /home/smir/src227/Engine/Inc/AInfo.h
+
+1364546149 /home/smir/src227/Engine/Inc/APlayerReplicationInfo.h
+
+1285090377 /home/smir/src227/Engine/Inc/AZoneInfo.h
+
+1457278783 /home/smir/src227/Engine/Inc/ALevelInfo.h
+
+1423681151 /home/smir/src227/Engine/Inc/ADynamicZoneInfo.h
+
+1431158163 /home/smir/src227/Engine/Inc/ADecal.h
+
+1385825030 /home/smir/src227/Engine/Inc/ANavigationPoint.h
+
+1364545580 /home/smir/src227/Engine/Inc/ADecoration.h
+
+1285090354 /home/smir/src227/Engine/Inc/AInventory.h
+
+1364543946 /home/smir/src227/Engine/Inc/AWeapon.h
+
+1396776512 /home/smir/src227/Engine/Inc/ALight.h
+
+1271275707 /home/smir/src227/Engine/Inc/ADynamicCorona.h
+
+1271275704 /home/smir/src227/Engine/Inc/ASunlightCorona.h
+
+1199648171 /home/smir/src227/Engine/Inc/ULevelSummary.h
+
+1322408040 /home/smir/src227/Engine/Inc/UAnimationNotify.h
+
+1431246733 /home/smir/src227/Engine/Inc/UnReach.h
+
+1305800866 /home/smir/src227/Engine/Inc/UnURL.h
+
+1304069612 /home/smir/src227/Engine/Inc/UnOctreeHash.h
+
+1304071032 /home/smir/src227/Engine/Inc/UnRenderOctree.h
+
+1457942222 /home/smir/src227/Engine/Inc/UnLevel.h
+
+1215871237 /home/smir/src227/Engine/Inc/UnIn.h
+
+1424355040 /home/smir/src227/Engine/Inc/UnPlayer.h
+
+1438961182 /home/smir/src227/Engine/Inc/UnEngine.h
+
+1454520427 /home/smir/src227/Engine/Inc/UnTravelData.h
+
+1362225823 /home/smir/src227/Engine/Inc/UnGame.h
+
+1487419020 /home/smir/src227/Engine/Inc/UnCamera.h
+
+1448563737 /home/smir/src227/Engine/Inc/UnMesh.h
+
+1441293066 /home/smir/src227/Engine/Inc/UnStaticMesh.h
+
+1411987700 /home/smir/src227/Engine/Inc/UnSkeletalMesh.h
+
+1479828110 /home/smir/src227/Engine/Inc/UnActor.h
+
+1471587371 /home/smir/src227/Engine/Inc/UnAudio.h
+	"ENCVAG.H"
+
+1471587343 /home/smir/src227/Engine/Inc/ENCVAG.H
+
+1404654281 /home/smir/src227/Engine/Inc/UnDynBsp.h
+
+1370631505 /home/smir/src227/Engine/Inc/UnScrTex.h
+
+1427093154 /home/smir/src227/Engine/Inc/UnRenderIterator.h
+
+1215871236 /home/smir/src227/Engine/Inc/UnRenderIteratorSupport.h
+
+1493136429 /home/smir/src227/Render/Inc/Render.h
+	"Engine.h"
+	"UnRender.h"
+	"Amd3d.h"
+	"UnSpan.h"
+
+1464600674 /home/smir/src227/Engine/Inc/UnRender.h
+	"UnRenDev.h"
+
+1460440317 /home/smir/src227/Engine/Inc/UnRenDev.h
+
+1201118838 /home/smir/src227/Render/Inc/Amd3d.h
+
+1274192686 /home/smir/src227/Render/Inc/UnSpan.h
+
+1494408816 /home/smir/src227/XOpenGLDrv/Inc/XOpenGL.h
+	<windows.h>
+	<SDL2/SDL.h>
+	"glad.h"
+	<GL/glew.h>
+	<GL/wglew.h>
+	<GL/gl.h>
+	<GL/glext.h>
+	<mmsystem.h>
+	"glad.h"
+	<GL/glew.h>
+	<SDL2/SDL.h>
+	"XOpenGLTemplate.h"
+
+1494152209 /home/smir/src227/XOpenGLDrv/Inc/glad.h
+	<windows.h>
+	<stddef.h>
+	<KHR/khrplatform.h>
+	<inttypes.h>
+	<inttypes.h>
+	<inttypes.h>
+	<stdint.h>
+	<stdint.h>
+	<inttypes.h>
+
+1463829244 /home/smir/src227/XOpenGLDrv/Inc/XOpenGLTemplate.h
+
+1493133626 source:/home/smir/src227/XOpenGLDrv/Src/DrawComplex.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460626091 source:/home/smir/src227/XOpenGLDrv/Src/DrawDistanceFog.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1492932311 source:/home/smir/src227/XOpenGLDrv/Src/DrawGouraud.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1492932311 source:/home/smir/src227/XOpenGLDrv/Src/DrawSimple.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1492933072 source:/home/smir/src227/XOpenGLDrv/Src/DrawTile.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1464803168 source:/home/smir/src227/XOpenGLDrv/Src/EditorHit.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494152312 source:/home/smir/src227/XOpenGLDrv/Src/glad.cpp
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	"glad.h"
+
+1494085803 source:/home/smir/src227/XOpenGLDrv/Src/PersistentBuffers.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460386885 source:/home/smir/src227/XOpenGLDrv/Src/RenderLight.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1493567505 source:/home/smir/src227/XOpenGLDrv/Src/SetProgram.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494407081 source:/home/smir/src227/XOpenGLDrv/Src/SetTexture.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494161974 source:/home/smir/src227/XOpenGLDrv/Src/XOpenGL.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+	"UnShader.h"
+	<comutil.h>
+
+1480357715 /home/smir/src227/XOpenGLDrv/Inc/UnShader.h
+
+1460386885 source:/home/smir/src227/XOpenGLDrv/Src/XOpenGLDrv.cpp
+	"XOpenGLDrv.h"
+
+1494843095 source:/server/data3/src227/XOpenGLDrv/Src/DebugLog.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1461430379 /server/data3/src227/XOpenGLDrv/Inc/XOpenGLDrv.h
+	<windows.h>
+	"Engine.h"
+	"Render.h"
+	"Render.h"
+	"RenderPrivate.h"
+
+1457420764 /server/data3/src227/Engine/Inc/Engine.h
+	"Core.h"
+	"UnEngineGnuG.h"
+	"UnObj.h"
+	"UnPrim.h"
+	"U3DCollision.h"
+	"UnModel.h"
+	"UnTex.h"
+	"UnAnim.h"
+	"UnSecurity.h"
+	"EngineClasses.h"
+	"UnReach.h"
+	"UnURL.h"
+	"UnOctreeHash.h"
+	"UnRenderOctree.h"
+	"UnLevel.h"
+	"UnIn.h"
+	"UnPlayer.h"
+	"UnEngine.h"
+	"UnTravelData.h"
+	"UnGame.h"
+	"UnCamera.h"
+	"UnMesh.h"
+	"UnStaticMesh.h"
+	"UnSkeletalMesh.h"
+	"UnActor.h"
+	"UnAudio.h"
+	"UnDynBsp.h"
+	"UnScrTex.h"
+	"UnRenderIterator.h"
+	"UnRenderIteratorSupport.h"
+
+1492975896 /server/data3/src227/Core/Inc/Core.h
+	"UnBuild.h"
+	<float.h>
+	<windows.h>
+	<string.h>
+	"UnVcWin32.h"
+	"UnGnuG.h"
+	"UnUnix.h"
+	<signal.h>
+	<SDL2/SDL.h>
+	"UnNames.h"
+	"UnFile.h"
+	"Sha.h"
+	"UnObjVer.h"
+	"UnArc.h"
+	"UnTemplate.h"
+	"UnName.h"
+	"UnStack.h"
+	"UnObjBas.h"
+	"UnCoreNet.h"
+	"UnCorObj.h"
+	"UnClass.h"
+	"UnType.h"
+	"UnScript.h"
+	"UFactory.h"
+	"UExporter.h"
+	"UnCache.h"
+	"UnMem.h"
+	"UnCId.h"
+	"UnBits.h"
+	"UnMath.h"
+	"UnFileCache.h"
+	"UnDebugLogger.h"
+	"UnThread.h"
+	"CoreClasses.h"
+	"UnMD5.h"
+	"UnHook.h"
+	"UnCoreNative.h"
+
+1490465644 /server/data3/src227/Core/Inc/UnBuild.h
+
+1445960364 /server/data3/src227/Core/Inc/UnVcWin32.h
+	<stdio.h>
+	<intrin.h>
+
+1493452170 /server/data3/src227/Core/Inc/UnGnuG.h
+	<math.h>
+	<stdlib.h>
+	<map>
+	<wchar.h>
+	<wctype.h>
+	<sys/wait.h>
+	<signal.h>
+	<setjmp.h>
+
+1269285592 /server/data3/src227/Core/Inc/UnUnix.h
+
+1486733478 /server/data3/src227/Core/Inc/UnNames.h
+
+1493450816 /server/data3/src227/Core/Inc/UnFile.h
+	"UnDebugCPUClock.h"
+	<stdio.h>
+	<stdarg.h>
+	<wchar.h>
+	<wctype.h>
+
+1401783981 /server/data3/src227/Core/Inc/UnDebugCPUClock.h
+
+1459097505 /server/data3/src227/Core/Inc/Sha.h
+
+1471636403 /server/data3/src227/Core/Inc/UnObjVer.h
+
+1289753596 /server/data3/src227/Core/Inc/UnArc.h
+
+1487793902 /server/data3/src227/Core/Inc/UnTemplate.h
+
+1486642582 /server/data3/src227/Core/Inc/UnName.h
+
+1433154037 /server/data3/src227/Core/Inc/UnStack.h
+
+1493469758 /server/data3/src227/Core/Inc/UnObjBas.h
+
+1330710578 /server/data3/src227/Core/Inc/UnCoreNet.h
+
+1485691867 /server/data3/src227/Core/Inc/UnCorObj.h
+
+1490460895 /server/data3/src227/Core/Inc/UnClass.h
+
+1406284490 /server/data3/src227/Core/Inc/UnType.h
+
+1457941980 /server/data3/src227/Core/Inc/UnScript.h
+
+1299658173 /server/data3/src227/Core/Inc/UFactory.h
+
+1219252011 /server/data3/src227/Core/Inc/UExporter.h
+
+1237310996 /server/data3/src227/Core/Inc/UnCache.h
+
+1491152373 /server/data3/src227/Core/Inc/UnMem.h
+
+1426266498 /server/data3/src227/Core/Inc/UnCId.h
+
+1199648161 /server/data3/src227/Core/Inc/UnBits.h
+
+1487319892 /server/data3/src227/Core/Inc/UnMath.h
+	<math.h>
+	<ppc_intrinsics.h>
+
+1373205560 /server/data3/src227/Core/Inc/UnFileCache.h
+	"FConfigCacheIni.h"
+
+1476960794 /server/data3/src227/Core/Inc/FConfigCacheIni.h
+
+1387031322 /server/data3/src227/Core/Inc/UnDebugLogger.h
+
+1446900192 /server/data3/src227/Core/Inc/UnThread.h
+
+1396166695 /server/data3/src227/Core/Inc/CoreClasses.h
+
+1088239620 /server/data3/src227/Core/Inc/UnMD5.h
+
+1089279840 /server/data3/src227/Core/Inc/UnHook.h
+
+1341055851 /server/data3/src227/Core/Inc/UnCoreNative.h
+
+1199648171 /server/data3/src227/Engine/Inc/UnEngineGnuG.h
+
+1463129452 /server/data3/src227/Engine/Inc/UnObj.h
+
+1332145431 /server/data3/src227/Engine/Inc/UnPrim.h
+
+1346610449 /server/data3/src227/Engine/Inc/U3DCollision.h
+
+1489685763 /server/data3/src227/Engine/Inc/UnModel.h
+
+1487412907 /server/data3/src227/Engine/Inc/UnTex.h
+
+1457279973 /server/data3/src227/Engine/Inc/UnAnim.h
+
+1466357562 /server/data3/src227/Engine/Inc/UnSecurity.h
+
+1457973773 /server/data3/src227/Engine/Inc/EngineClasses.h
+	"USecurityData.h"
+	"AActor.h"
+	"AStaticMeshActor.h"
+	"AProjector.h"
+	"APawn.h"
+	"APlayerPawn.h"
+	"ACamera.h"
+	"ABrush.h"
+	"AMover.h"
+	"ACollisionPlane.h"
+	"ABlockingActor.h"
+	"AInfo.h"
+	"APlayerReplicationInfo.h"
+	"AZoneInfo.h"
+	"ALevelInfo.h"
+	"ADynamicZoneInfo.h"
+	"ADecal.h"
+	"ANavigationPoint.h"
+	"ADecoration.h"
+	"AInventory.h"
+	"AWeapon.h"
+	"ALight.h"
+	"ADynamicCorona.h"
+	"ASunlightCorona.h"
+	"ULevelSummary.h"
+	"UAnimationNotify.h"
+
+1459156343 /server/data3/src227/Engine/Inc/USecurityData.h
+
+1440152999 /server/data3/src227/Engine/Inc/AActor.h
+
+1284038488 /server/data3/src227/Engine/Inc/AStaticMeshActor.h
+
+1455373969 /server/data3/src227/Engine/Inc/AProjector.h
+
+1420997989 /server/data3/src227/Engine/Inc/APawn.h
+
+1364546589 /server/data3/src227/Engine/Inc/APlayerPawn.h
+
+1199648171 /server/data3/src227/Engine/Inc/ACamera.h
+
+1342947272 /server/data3/src227/Engine/Inc/ABrush.h
+
+1285090471 /server/data3/src227/Engine/Inc/AMover.h
+
+1269605932 /server/data3/src227/Engine/Inc/ACollisionPlane.h
+
+1294314477 /server/data3/src227/Engine/Inc/ABlockingActor.h
+
+1237236818 /server/data3/src227/Engine/Inc/AInfo.h
+
+1364546149 /server/data3/src227/Engine/Inc/APlayerReplicationInfo.h
+
+1285090377 /server/data3/src227/Engine/Inc/AZoneInfo.h
+
+1457278783 /server/data3/src227/Engine/Inc/ALevelInfo.h
+
+1423681151 /server/data3/src227/Engine/Inc/ADynamicZoneInfo.h
+
+1431158163 /server/data3/src227/Engine/Inc/ADecal.h
+
+1385825030 /server/data3/src227/Engine/Inc/ANavigationPoint.h
+
+1364545580 /server/data3/src227/Engine/Inc/ADecoration.h
+
+1285090354 /server/data3/src227/Engine/Inc/AInventory.h
+
+1364543946 /server/data3/src227/Engine/Inc/AWeapon.h
+
+1396776512 /server/data3/src227/Engine/Inc/ALight.h
+
+1271275707 /server/data3/src227/Engine/Inc/ADynamicCorona.h
+
+1271275704 /server/data3/src227/Engine/Inc/ASunlightCorona.h
+
+1199648171 /server/data3/src227/Engine/Inc/ULevelSummary.h
+
+1322408040 /server/data3/src227/Engine/Inc/UAnimationNotify.h
+
+1431246733 /server/data3/src227/Engine/Inc/UnReach.h
+
+1305800866 /server/data3/src227/Engine/Inc/UnURL.h
+
+1304069612 /server/data3/src227/Engine/Inc/UnOctreeHash.h
+
+1304071032 /server/data3/src227/Engine/Inc/UnRenderOctree.h
+
+1457942222 /server/data3/src227/Engine/Inc/UnLevel.h
+
+1215871237 /server/data3/src227/Engine/Inc/UnIn.h
+
+1424355040 /server/data3/src227/Engine/Inc/UnPlayer.h
+
+1438961182 /server/data3/src227/Engine/Inc/UnEngine.h
+
+1454520427 /server/data3/src227/Engine/Inc/UnTravelData.h
+
+1362225823 /server/data3/src227/Engine/Inc/UnGame.h
+
+1487419020 /server/data3/src227/Engine/Inc/UnCamera.h
+
+1448563737 /server/data3/src227/Engine/Inc/UnMesh.h
+
+1441293066 /server/data3/src227/Engine/Inc/UnStaticMesh.h
+
+1411987700 /server/data3/src227/Engine/Inc/UnSkeletalMesh.h
+
+1479828110 /server/data3/src227/Engine/Inc/UnActor.h
+
+1471587371 /server/data3/src227/Engine/Inc/UnAudio.h
+	"ENCVAG.H"
+
+1471587343 /server/data3/src227/Engine/Inc/ENCVAG.H
+
+1404654281 /server/data3/src227/Engine/Inc/UnDynBsp.h
+
+1370631505 /server/data3/src227/Engine/Inc/UnScrTex.h
+
+1427093154 /server/data3/src227/Engine/Inc/UnRenderIterator.h
+
+1215871236 /server/data3/src227/Engine/Inc/UnRenderIteratorSupport.h
+
+1493136429 /server/data3/src227/Render/Inc/Render.h
+	"Engine.h"
+	"UnRender.h"
+	"Amd3d.h"
+	"UnSpan.h"
+
+1464600674 /server/data3/src227/Engine/Inc/UnRender.h
+	"UnRenDev.h"
+
+1460440317 /server/data3/src227/Engine/Inc/UnRenDev.h
+
+1201118838 /server/data3/src227/Render/Inc/Amd3d.h
+
+1274192686 /server/data3/src227/Render/Inc/UnSpan.h
+
+1494853291 /server/data3/src227/XOpenGLDrv/Inc/XOpenGL.h
+	<windows.h>
+	<SDL2/SDL.h>
+	"glad.h"
+	<GL/glew.h>
+	<GL/wglew.h>
+	<GL/gl.h>
+	<GL/glext.h>
+	<mmsystem.h>
+	"glad.h"
+	<GL/glew.h>
+	<SDL2/SDL.h>
+	"XOpenGLTemplate.h"
+
+1494152209 /server/data3/src227/XOpenGLDrv/Inc/glad.h
+	<windows.h>
+	<stddef.h>
+	<KHR/khrplatform.h>
+	<inttypes.h>
+	<inttypes.h>
+	<inttypes.h>
+	<stdint.h>
+	<stdint.h>
+	<inttypes.h>
+
+1463829244 /server/data3/src227/XOpenGLDrv/Inc/XOpenGLTemplate.h
+
+1494850754 source:/server/data3/src227/XOpenGLDrv/Src/DrawComplex.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460626091 source:/server/data3/src227/XOpenGLDrv/Src/DrawDistanceFog.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494851304 source:/server/data3/src227/XOpenGLDrv/Src/DrawGouraud.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494853196 source:/server/data3/src227/XOpenGLDrv/Src/DrawSimple.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494850521 source:/server/data3/src227/XOpenGLDrv/Src/DrawTile.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1464803168 source:/server/data3/src227/XOpenGLDrv/Src/EditorHit.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494152312 source:/server/data3/src227/XOpenGLDrv/Src/glad.cpp
+	<stdio.h>
+	<stdlib.h>
+	<string.h>
+	"glad.h"
+
+1494085803 source:/server/data3/src227/XOpenGLDrv/Src/PersistentBuffers.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460386885 source:/server/data3/src227/XOpenGLDrv/Src/RenderLight.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1494853223 source:/server/data3/src227/XOpenGLDrv/Src/SetProgram.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
+1460386885 source:/server/data3/src227/XOpenGLDrv/Src/XOpenGLDrv.cpp
+	"XOpenGLDrv.h"
+
+1494853353 source:/server/data3/src227/XOpenGLDrv/Src/XOpenGL.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+	"UnShader.h"
+	<comutil.h>
+
+1494843241 /server/data3/src227/XOpenGLDrv/Inc/UnShader.h
+
+1494854292 source:/server/data3/src227/XOpenGLDrv/Src/SetTexture.cpp
+	<glm/glm.hpp>
+	<glm/gtc/matrix_transform.hpp>
+	<glm/gtc/type_ptr.hpp>
+	<glm/gtc/matrix_inverse.hpp>
+	"XOpenGLDrv.h"
+	"XOpenGL.h"
+
