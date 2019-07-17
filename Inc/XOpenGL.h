@@ -32,11 +32,31 @@
 		extern "C" {
 			#include "glad.h"
 		}
-	#else
+	#else		
 		#include <GL/glew.h>
-		#include <GL/wglew.h>
+		#include <GL/wglew.h>		
+		#include <GL/glcorearb.h>
 		#include <GL/gl.h>
 		#include <GL/glext.h>
+		// fix for missing function type defs...
+		#ifndef PFNGLBINDTEXTUREPROC
+			typedef void (APIENTRYP PFNGLBINDTEXTUREPROC) (GLenum target, GLuint texture);
+		#endif
+		#ifndef PFNGLDELETETEXTURESPROC
+			typedef void (APIENTRYP PFNGLDELETETEXTURESPROC) (GLsizei n, const GLuint* textures);
+		#endif
+		#ifndef PFNGLDRAWARRAYSPROC
+			typedef void (APIENTRYP PFNGLDRAWARRAYSPROC) (GLenum mode, GLint first, GLsizei count);
+		#endif
+		#ifndef PFNGLGENTEXTURESPROC
+			typedef void (APIENTRYP PFNGLGENTEXTURESPROC) (GLsizei n, GLuint* textures);
+		#endif
+		#ifndef PFNGLPOLYGONOFFSETPROC
+			typedef void (APIENTRYP PFNGLPOLYGONOFFSETPROC) (GLfloat factor, GLfloat units);
+		#endif
+		#ifndef PFNGLTEXSUBIMAGE2DPROC
+			typedef void (APIENTRYP PFNGLTEXSUBIMAGE2DPROC) (GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const void* pixels);
+		#endif
 	#endif
 	#include <mmsystem.h>
 #elif __GNUG__ || __clang__
@@ -193,8 +213,8 @@ Globals.
     #define GL_TEXTURE_LOD_BIAS_EXT 0x8501
 #endif
 
-typedef void (GL_APIENTRYP PFNGLDEPTHRANGEPROC) (double n, double f);
-typedef void (GL_APIENTRYP PFNGLCLEARDEPTHPROC) (double d);
+typedef void (APIENTRYP PFNGLDEPTHRANGEPROC) (double n, double f);
+typedef void (APIENTRYP PFNGLCLEARDEPTHPROC) (double d);
 
 enum TexType
 {
@@ -348,6 +368,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// GL functions.
     public:
+		UBOOL SUPPORTS_GL = 0;
+		UBOOL SUPPORTS_GLCORE = 0;
+		UBOOL SUPPORTS_GLES = 0;
+		UBOOL AllowExt = 1;
 	#define GL_EXT(name) UBOOL SUPPORTS_##name;
 	#ifndef __EMSCRIPTEN__
 	#define GL_PROC(ext,fntype,fnname) fntype fnname;
@@ -963,9 +987,58 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void PostEditChange();
 
 	void CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
-	UBOOL FindExt( const TCHAR* Name );
-	void FindProc( void*& ProcAddress, char* Name, char* SupportName, UBOOL& Supports, UBOOL AllowExt );
-	void FindProcs( UBOOL AllowExt );
+
+	UBOOL FindExt(const TCHAR* Name)
+	{
+		guard(UXOpenGLRenderDevice::FindExt);
+		UBOOL Result = strstr((char*)glGetString(GL_EXTENSIONS), appToAnsi(Name)) != NULL;
+		if (Result)
+			debugf(NAME_Init, TEXT("Device supports: %s"), Name);
+		return Result;
+		unguard;
+	}
+
+	void FindProc(void*& ProcAddress, const char* Name, const char* SupportName, UBOOL& Supports, UBOOL AllowExt)
+	{
+		guard(UXOpenGLRenderDevice::FindProc);
+		//#ifndef __EMSCRIPTEN__
+#if USE_SDL
+		if (!ProcAddress)
+			ProcAddress = (void*)SDL_GL_GetProcAddress(Name);
+#else
+		if (!ProcAddress)
+			ProcAddress = GetProcAddress(hModuleGlMain, Name);
+		if (!ProcAddress)
+			ProcAddress = GetProcAddress(hModuleGlGdi, Name);
+		if (!ProcAddress && Supports && AllowExt)
+			ProcAddress = wglGetProcAddress(Name);
+#endif
+		//#endif
+		if (!ProcAddress)
+		{
+			if (Supports)
+				debugf(TEXT("   Missing function '%s' for '%s' support"), appFromAnsi(Name), appFromAnsi(SupportName));
+			Supports = 0;
+		}
+		unguard;
+	}
+
+	void FindProcs(UBOOL AllowExt)
+	{
+		guard(UXOpenGLRenderDevice::FindProcs);
+#ifdef __EMSCRIPTEN__
+		SUPPORTS_GL = 1;
+#define GL_EXT(name)
+#define GL_PROC(ext,ret,func,parms)
+#else
+#define GL_EXT(name) if( AllowExt ) SUPPORTS_##name = FindExt( TEXT(#name) );
+#define GL_PROC(ext,fntype,fnname) FindProc( *(void**)&fnname, #fnname, #fnname, SUPPORTS_##ext, AllowExt );
+#endif
+#include "XOpenGLFuncs.h"
+#undef GL_EXT
+#undef GL_PROC
+		unguard;
+	}
 
 	#ifdef _WIN32
 	void PrintFormat( HDC hDC, INT nPixelFormat );

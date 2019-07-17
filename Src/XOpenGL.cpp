@@ -43,6 +43,9 @@
 
 IMPLEMENT_CLASS(UXOpenGLRenderDevice);
 
+HMODULE		UXOpenGLRenderDevice::hModuleGlMain = NULL;
+HMODULE		UXOpenGLRenderDevice::hModuleGlGdi = NULL;
+
 #if ENGINE_VERSION!=227
 #ifdef _WIN32
 void TimerBegin()
@@ -420,6 +423,21 @@ void UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColor
 #elif QTBUILD
 
 #else
+	/*
+	// Find DLL's.
+	hModuleGlMain = LoadLibraryA("OpenGL32.dll");
+	if (!hModuleGlMain)
+	{
+		debugf(NAME_Init, LocalizeError("NoFindGL"), appFromAnsi("OpenGL32.dll"));
+		return;
+	}
+	hModuleGlGdi = LoadLibraryA("GDI32.dll");
+	check(hModuleGlGdi);
+
+	// Find functions.
+	FindProcs(0);
+	*/
+
 	GLenum err;
 	if (NeedGlewInit)
 	{
