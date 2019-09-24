@@ -22,7 +22,7 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 {
 	guard(UXOpenGLRenderDevice::SetProgram);
 	CHECK_GL_ERROR();
-    STAT(clock(Stats.ProgramCycles));
+    STAT(clockFast(Stats.ProgramCycles));
 
 	if (ActiveProgram != CurrentProgram)
 	{
@@ -187,6 +187,6 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 	}
 
 	CHECK_GL_ERROR();
-	STAT(unclock(Stats.ProgramCycles));
+	STAT(unclockFast(Stats.ProgramCycles));
 	unguard;
 }

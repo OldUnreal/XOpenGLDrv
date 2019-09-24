@@ -95,7 +95,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	// Determine slot to work around odd masked handling.
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format==TEXF_P8)) ? 1 : 0;
 
-	STAT(clock(Stats.BindCycles));
+	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
 #if ENGINE_VERSION==227
@@ -116,7 +116,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             {
                 Tex.TexNum = FCachedTextureInfo->TexNum[CacheSlot];
                 //debugf(TEXT("Unchanged: %ls %i 0x%08x%08x"),Info.Texture->GetFullName(),Tex.TexNum, FCachedTextureInfo->TexHandle[CacheSlot]);
-                STAT(unclock(Stats.BindCycles));
+                STAT(unclockFast(Stats.BindCycles));
                 return;
             }
             Bind = FCachedTextureInfo;
@@ -126,7 +126,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 	if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
     {
-        STAT(unclock(Stats.BindCycles));
+        STAT(unclockFast(Stats.BindCycles));
         return;
     }
 
@@ -251,10 +251,10 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         CHECK_GL_ERROR();
     }
 
-	STAT(unclock(Stats.BindCycles));
+	STAT(unclockFast(Stats.BindCycles));
 
 	// Upload if needed.
-	STAT(clock(Stats.ImageCycles));
+	STAT(clockFast(Stats.ImageCycles));
 	if( !ExistingBind || Info.bRealtimeChanged )
 	{
 		// Some debug output.
@@ -809,14 +809,14 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     Tex.TexNum = Bind->TexNum[CacheSlot];
 
     CHECK_GL_ERROR();
-	STAT(unclock(Stats.ImageCycles));
+	STAT(unclockFast(Stats.ImageCycles));
 	unguard;
 }
 
 DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool InverseOrder)
 {
 	guard(UOpenGLRenderDevice::SetBlend);
-	STAT(clock(Stats.BlendCycles));
+	STAT(clockFast(Stats.BlendCycles));
 
 	if( (PolyFlags & (PF_RenderFog|PF_Translucent))!=PF_RenderFog )
 		PolyFlags &= ~PF_RenderFog;
@@ -921,7 +921,7 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool Inver
 		}
 		CurrentPolyFlags = PolyFlags;
 	}
-	STAT(unclock(Stats.BlendCycles));
+	STAT(unclockFast(Stats.BlendCycles));
 
 	return PolyFlags;
 

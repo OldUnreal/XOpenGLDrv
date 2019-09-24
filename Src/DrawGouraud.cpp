@@ -173,7 +173,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
         }
     }
 
-	clock(Stats.GouraudPolyCycles);
+	clockFast(Stats.GouraudPolyCycles);
     CHECK_GL_ERROR();
 
     if (UsePersistentBuffersGouraud && DrawGouraudBufferRange.Sync[DrawGouraudBufferData.Index])
@@ -207,7 +207,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 
 
 	CHECK_GL_ERROR();
-	unclock(Stats.GouraudPolyCycles);
+	unclockFast(Stats.GouraudPolyCycles);
 	unguard;
 }
 
@@ -302,7 +302,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	CHECK_GL_ERROR();
 	//debugf(TEXT("PolyList: VertSize %i TexSize %i, ColorSize %i"), VertSize, TexSize, ColorSize); // VertSize 12288 TexSize 8192, ColorSize 16384
 
-	clock(Stats.GouraudPolyListCycles);
+	clockFast(Stats.GouraudPolyListCycles);
     if (UsePersistentBuffersGouraud && DrawGouraudListBufferRange.Sync[DrawGouraudListBufferData.Index])
         WaitBuffer(DrawGouraudListBufferRange, DrawGouraudListBufferData.Index);
 
@@ -330,7 +330,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
     if (DrawGouraudListBufferData.DrawFlags & DF_MacroTexture)
 		Info.Texture->MacroTexture->Unlock(MacroTextureInfo);
 
-	unclock(Stats.GouraudPolyListCycles);
+	unclockFast(Stats.GouraudPolyListCycles);
 	CHECK_GL_ERROR();
 
 	unguard;

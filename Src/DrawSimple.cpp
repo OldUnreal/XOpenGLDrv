@@ -54,7 +54,7 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 	SetBlend(PF_AlphaBlend, Simple_Prog, false);
 	CHECK_GL_ERROR();
 
-	clock(Stats.Draw2DLine);
+	clockFast(Stats.Draw2DLine);
 
 	//Unfortunately this is usually set to 0.
 	Color.W = 1.f;
@@ -88,7 +88,7 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		DrawLinesBufferData.LineFlags = LineFlags;
 	}
 
-	unclock(Stats.Draw2DLine);
+	unclockFast(Stats.Draw2DLine);
 	unguard;
 }
 
@@ -99,7 +99,7 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 	if (NoDrawSimple)
 		return;
 
-	clock(Stats.Draw3DLine);
+	clockFast(Stats.Draw3DLine);
 
 	SetProgram(Simple_Prog);
 	SetBlend(PF_AlphaBlend, Simple_Prog, false);
@@ -158,7 +158,7 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		}
 	}
 
-	unclock(Stats.Draw3DLine);
+	unclockFast(Stats.Draw3DLine);
 
 	unguard;
 }
@@ -214,7 +214,7 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 	SetBlend(PF_AlphaBlend, Simple_Prog, false);
 	CHECK_GL_ERROR();
 
-	clock(Stats.Draw2DPoint);
+	clockFast(Stats.Draw2DPoint);
 
 	//Unfortunately this is usually set to 0.
 	Color.W = 1.f;
@@ -242,7 +242,7 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 
 	DrawSimpleGeometryVerts(Draw2DPointMode, 12, GL_TRIANGLE_FAN, LineFlags, Color, false);
 
-	unclock(Stats.Draw2DPoint);
+	unclockFast(Stats.Draw2DPoint);
 
 	unguard;
 }

@@ -60,7 +60,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	SetBlend(PolyFlags, Tile_Prog, false);
     SetTexture(0, Info, PolyFlags, 0, Tile_Prog, NORMALTEX);
 
-    clock(Stats.TileBufferCycles);
+    clockFast(Stats.TileBufferCycles);
     DrawTileBufferData.PolyFlags = PolyFlags;
 
 	if (GIsEditor)
@@ -205,7 +205,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         DrawTileVerts(DrawTileBufferData);
         debugf(NAME_Dev, TEXT("DrawTile overflow!"));
     }
-    unclock(Stats.TileBufferCycles);
+    unclockFast(Stats.TileBufferCycles);
 	if (NoBuffering || !UseBindlessTextures || GIsEditor) // No buffering at this time for Editor.
         DrawTileVerts(DrawTileBufferData);
 
@@ -215,7 +215,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
 {
     CHECK_GL_ERROR();
-    clock(Stats.TileDrawCycles);
+    clockFast(Stats.TileDrawCycles);
     INT DrawMode = GL_TRIANGLES;
     GLuint BeginOffset = BufferData.BeginOffset * sizeof(float);
 
@@ -316,7 +316,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
     if (UseBindlessTextures)
         glDisableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
 
-	unclock(Stats.TileDrawCycles);
+	unclockFast(Stats.TileDrawCycles);
     CHECK_GL_ERROR();
 }
 

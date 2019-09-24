@@ -48,7 +48,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if(Frame->Recursion > MAX_FRAME_RECURSION || NoDrawComplexSurface)
 		return;
 
-	clock(Stats.ComplexCycles);
+	clockFast(Stats.ComplexCycles);
 
 	TexMaps.DrawFlags = DF_DiffuseTexture;
 
@@ -210,7 +210,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if(TexMaps.DrawFlags & DF_BumpMap)
 		Surface.Texture->Texture->BumpMap->Unlock(BumpMapInfo);
 #endif
-	unclock(Stats.ComplexCycles);
+	unclockFast(Stats.ComplexCycles);
 
 	unguard;
 }
