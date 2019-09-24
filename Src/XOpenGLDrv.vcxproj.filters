@@ -1,0 +1,131 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Src">
+      <UniqueIdentifier>{a4c846b7-9b30-4764-81eb-f83f8d90a718}</UniqueIdentifier>
+      <Extensions>*.cpp;*.h</Extensions>
+    </Filter>
+    <Filter Include="Inc">
+      <UniqueIdentifier>{61f1ea69-ad7f-4b7f-959a-d5383de5047e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{678a38c3-9317-4c50-98b0-7b1a2a3cb749}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="XOpenGL.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="XOpenGLDrv.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawTile.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawComplex.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawGouraud.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawSimple.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DebugLog.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="SetTexture.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawDistanceFog.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="SetProgram.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="EditorHit.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="PersistentBuffers.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="CheckExtensions.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="glad.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\Inc\XOpenGL.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Inc\XOpenGLDrv.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Inc\UnShader.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="..\Inc\XOpenGLTemplate.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Inc\XOpenGLFuncs.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Inc\glad.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\System\xopengl\DrawComplexSinglePass.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawComplexSinglePass.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawGouraud.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawGouraud.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawSimple.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawSimple.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawTile.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawTile.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawComplexSinglePass.geo">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\Globals.incl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawSimple.geo">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawTile.geo">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\DrawGouraud.geo">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\SimpleDepth.frag">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\xopengl\SimpleDepth.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="..\..\System\XOpenGLDrv.int" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="XOpenGLDrv.rc" />
+  </ItemGroup>
+</Project>

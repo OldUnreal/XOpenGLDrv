@@ -21,44 +21,83 @@ void UXOpenGLRenderDevice::ResetFog()
 	guard(UOpenGLRenderDevice::ResetFog);
 
 	//Reset Fog
-	DrawGouraudFogSurface.FogColor = FPlane(1.f,1.f,1.f,1.f);
-	DrawGouraudFogSurface.FogMode = 0;
-	DrawGouraudFogSurface.FogDensity = 0.f;
-	DrawGouraudFogSurface.FogDistanceEnd = 0.f;
-	DrawGouraudFogSurface.FogDistanceStart = 0.f;
+	DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
+	DistanceFogValues = glm::vec4(0.f,0.f,0.f,-1.f);
 
-	DrawComplexFogSurface.FogColor = FPlane(1.f,1.f,1.f,1.f);
-	DrawComplexFogSurface.FogMode = 0;
-	DrawComplexFogSurface.FogDensity = 0.f;
-	DrawComplexFogSurface.FogDistanceEnd = 0.f;
-	DrawComplexFogSurface.FogDistanceStart = 0.f;
+	glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(DistanceFogColor));
+	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(DistanceFogValues));
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	CHECK_GL_ERROR();
+
+	bFogEnabled = false;
 
 	unguard;
 }
 
-
-void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf) 
+void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 {
 	guard(UOpenGLRenderDevice::PreDrawGouraud);
-	DrawGouraudFogSurface.FogColor = FogSurf.FogColor;
-	DrawGouraudFogSurface.FogMode = FogSurf.FogMode;
-	DrawGouraudFogSurface.FogDensity = FogSurf.FogDensity;
-	DrawGouraudFogSurface.FogDistanceEnd = FogSurf.FogDistanceEnd;
-	DrawGouraudFogSurface.FogDistanceStart = FogSurf.FogDistanceStart;
 
-	DrawComplexFogSurface.FogColor = FogSurf.FogColor;
-	DrawComplexFogSurface.FogMode = FogSurf.FogMode;
-	DrawComplexFogSurface.FogDensity = FogSurf.FogDensity;
-	DrawComplexFogSurface.FogDistanceEnd = FogSurf.FogDistanceEnd;
-	DrawComplexFogSurface.FogDistanceStart = FogSurf.FogDistanceStart;
+	if(ActiveProgram == GouraudPolyVertList_Prog) //bZoneBasedFog Fog.
+    {
+        if (DrawGouraudListBufferData.VertSize > 0 &&
+        ( DrawGouraudListBufferData.FogSurf.FogColor != FogSurf.FogColor
+        || DrawGouraudListBufferData.FogSurf.FogMode != FogSurf.FogMode
+        || DrawGouraudListBufferData.FogSurf.FogDistanceStart != FogSurf.FogDistanceStart
+        || DrawGouraudListBufferData.FogSurf.FogDistanceEnd != FogSurf.FogDistanceEnd))
+        {
+            DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+        }
+        DrawGouraudListBufferData.FogSurf = FogSurf;
+    }
+    else if(ActiveProgram == ComplexSurfaceSinglePass_Prog)
+    {
+        if (DrawGouraudBufferData.VertSize > 0 &&
+        ( DrawGouraudBufferData.FogSurf.FogColor != FogSurf.FogColor
+        || DrawGouraudBufferData.FogSurf.FogMode != FogSurf.FogMode
+        || DrawGouraudBufferData.FogSurf.FogDistanceStart != FogSurf.FogDistanceStart
+        || DrawGouraudBufferData.FogSurf.FogDistanceEnd != FogSurf.FogDistanceEnd))
+        {
+            DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
+        }
+        DrawGouraudBufferData.FogSurf = FogSurf;
+    }
+
+	DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
+	DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)FogSurf.FogMode);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(DistanceFogColor));
+	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(DistanceFogValues));
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	CHECK_GL_ERROR();
+
+	bFogEnabled = true;
+
 	unguard;
 }
 
-void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf) 
+void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 {
 	guard(UOpenGLRenderDevice::PostDrawGouraud);
+#if ENGINE_VERSION==227
 
-	ResetFog();
+	DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
+	DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)FogSurf.FogMode);
+
+	if (!Frame->Viewport->Actor->bDistanceFogEnabled && !Frame->Viewport->Actor->Region.Zone->bDistanceFog)
+		ResetFog();
+	else
+	{
+		glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(DistanceFogColor));
+		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(DistanceFogValues));
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+		CHECK_GL_ERROR();
+	}
+
+#endif // ENGINE_VERSION
 
 	unguard;
 }

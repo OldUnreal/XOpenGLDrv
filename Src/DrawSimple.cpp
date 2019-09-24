@@ -34,16 +34,12 @@ LINE_DepthCued
 
 inline void UXOpenGLRenderDevice::BufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData)
 {
-	guard(UXOpenGLRenderDevice::BufferLines);
-
 	DrawLinesTemp[0] = LineData[0];
 	DrawLinesTemp[1] = LineData[1];
 	DrawLinesTemp[2] = LineData[2];
 	DrawLinesTemp[3] = LineData[3];
 	DrawLinesTemp[4] = LineData[4];
 	DrawLinesTemp[5] = LineData[5];
-
-	unguard;
 }
 
 
@@ -51,9 +47,14 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 {
 	guard(UXOpenGLRenderDevice::Draw2DLine);
 
+	if (NoDrawSimple)
+		return;
+
 	SetProgram(Simple_Prog);
-	SetBlend(PF_AlphaBlend, Simple_Prog);
+	SetBlend(PF_AlphaBlend, Simple_Prog, false);
 	CHECK_GL_ERROR();
+
+	clock(Stats.Draw2DLine);
 
 	//Unfortunately this is usually set to 0.
 	Color.W = 1.f;
@@ -87,6 +88,7 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		DrawLinesBufferData.LineFlags = LineFlags;
 	}
 
+	unclock(Stats.Draw2DLine);
 	unguard;
 }
 
@@ -94,11 +96,13 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 {
 	guard(UXOpenGLRenderDevice::Draw3DLine);
 
-	check(Viewport);
-	MakeCurrent();
+	if (NoDrawSimple)
+		return;
+
+	clock(Stats.Draw3DLine);
 
 	SetProgram(Simple_Prog);
-	SetBlend(PF_AlphaBlend, Simple_Prog);
+	SetBlend(PF_AlphaBlend, Simple_Prog, false);
 	CHECK_GL_ERROR();
 
 	//Unfortunately this is usually set to 0.
@@ -154,6 +158,8 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		}
 	}
 
+	unclock(Stats.Draw3DLine);
+
 	unguard;
 }
 
@@ -161,10 +167,15 @@ void UXOpenGLRenderDevice::EndFlash()
 {
 	guard(UXOpenGLRenderDevice::EndFlash);
 
+	if (NoDrawSimple)
+		return;
+
+	SetProgram(No_Prog);
+
 	if( FlashScale!=FPlane(0.5,0.5,0.5,0) || FlashFog!=FPlane(0,0,0,0) )
 	{
 		SetProgram(Simple_Prog);
-		SetBlend(PF_Highlighted, Simple_Prog);
+		SetBlend(PF_Highlighted, Simple_Prog, false);
 		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0-Min(FlashScale.X*2.f,1.f));
 
 		FLOAT RFX2 = 2.0*RProjZ       /Viewport->SizeX;
@@ -196,9 +207,14 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 {
 	guard(UXOpenGLRenderDevice::Draw2DPoint);
 
+	if (NoDrawSimple)
+		return;
+
 	SetProgram(Simple_Prog);
-	SetBlend(PF_AlphaBlend, Simple_Prog);
+	SetBlend(PF_AlphaBlend, Simple_Prog, false);
 	CHECK_GL_ERROR();
+
+	clock(Stats.Draw2DPoint);
 
 	//Unfortunately this is usually set to 0.
 	Color.W = 1.f;
@@ -226,6 +242,8 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 
 	DrawSimpleGeometryVerts(Draw2DPointMode, 12, GL_TRIANGLE_FAN, LineFlags, Color, false);
 
+	unclock(Stats.Draw2DPoint);
+
 	unguard;
 }
 
@@ -237,7 +255,8 @@ void UXOpenGLRenderDevice::DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLui
 	SetDepth(LineFlags);
 
 	//Compensate coloring for sRGB.
-	DrawColor = FOpenGLGammaDecompress_sRGB(DrawColor);
+	if (GIsEditor)
+        DrawColor = FOpenGLGammaDecompress_sRGB(DrawColor);
 
 	switch (DrawMode)
 	{
@@ -274,11 +293,15 @@ void UXOpenGLRenderDevice::DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLui
 		CHECK_GL_ERROR();
 	}
 
+	// Gamma
+	glUniform1f(DrawSimpleGamma, Gamma);
+	CHECK_GL_ERROR();
+
 	glUniform1ui(DrawSimpleLineFlags, LineFlags);
 	CHECK_GL_ERROR();
 
 	// Draw
-	glDrawArrays(Mode, 0, Size);
+	glDrawArrays(Mode, 0, Size/FloatsPerVertex);
 	CHECK_GL_ERROR();
 
 	// Clean up

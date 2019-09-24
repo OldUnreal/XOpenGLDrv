@@ -22,22 +22,22 @@
 #include "XOpenGL.h"
 
 
-inline void UXOpenGLRenderDevice::BufferComplexSurfacePoint( FLOAT* DrawComplexTemp, FTransform* P, DrawComplexTexMaps TexMaps, FSurfaceFacet& Facet, DrawComplexBuffer& Buffer, INT InterleaveCounter )
+inline void UXOpenGLRenderDevice::BufferComplexSurfacePoint( FLOAT* DrawComplexTemp, FTransform* P, DrawComplexTexMaps TexMaps, FSurfaceFacet& Facet, DrawComplexBuffer& BufferData )
 {
-	guard(UXOpenGLRenderDevice::BufferGouraudPolygonPoint);
-
 	// Points
 	DrawComplexTemp[0] = P->Point.X;
 	DrawComplexTemp[1] = P->Point.Y;
 	DrawComplexTemp[2] = P->Point.Z;
+	DrawComplexTemp[3] = 1.f;
+	BufferData.VertSize += FloatsPerVertex;
 
 	// Normals
-	DrawComplexTemp[3] = TexMaps.SurfNormal.X;
-	DrawComplexTemp[4] = TexMaps.SurfNormal.Y;
-	DrawComplexTemp[5] = TexMaps.SurfNormal.Z;
+	DrawComplexTemp[4] = TexMaps.SurfNormal.X;
+	DrawComplexTemp[5] = TexMaps.SurfNormal.Y;
+	DrawComplexTemp[6] = TexMaps.SurfNormal.Z;
+	DrawComplexTemp[7] = TexMaps.SurfNormal.W;
 
-	Buffer.VertSize += FloatsPerVertex;
-	unguard;
+	BufferData.IndexOffset += 8;
 }
 
 void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet)
@@ -45,39 +45,34 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	guard(UXOpenGLRenderDevice::DrawComplexSurface);
 	check(Surface.Texture);
 
-	if(Frame->Recursion > MAX_FRAME_RECURSION)
+	if(Frame->Recursion > MAX_FRAME_RECURSION || NoDrawComplexSurface)
 		return;
 
 	clock(Stats.ComplexCycles);
 
-	DrawComplexTexMaps TexMaps;
-	TexMaps.bLightMap = Surface.LightMap ? true : false;
-	TexMaps.bFogMap = Surface.FogMap ? true : false;
-	TexMaps.bDetailTex = (Surface.DetailTexture && DetailTextures) ? true : false;
-	TexMaps.bMacroTex = (Surface.MacroTexture && MacroTextures) ? true : false;
-#if ENGINE_VERSION==227
-	TexMaps.SurfNormal = Surface.SurfNormal;
-	TexMaps.bBumpMap = (Surface.BumpMap && BumpMaps) ? true : false;
-	TexMaps.bEnvironmentMap = (Surface.EnvironmentMap && EnvironmentMaps) ? true : false; // not yet implemented.
-	FLightInfo* LightStart;
-	FLightInfo*	LightEnd;
-	GLightManager->GetLightData(LightStart, LightEnd);
+	TexMaps.DrawFlags = DF_DiffuseTexture;
 
-	INT j = 0;
-	for (FLightInfo* Light = LightStart; Light<LightEnd; Light++)
-	{
-		if (!Light->Actor || !Light->Actor->bStatic)
-			continue;
-		TexMaps.LightPos[j] = glm::vec4(Light->Actor->Location.X, Light->Actor->Location.Y, Light->Actor->Location.Z,1.f);
-		//debugf(TEXT("%i %f %f %f"), i, Light->Actor->Location.X, Light->Actor->Location.Y, Light->Actor->Location.Z);
-		if (j == 7)
-			break;
-		j++;
-	}
-	LightNum = j;
-	//debugf(TEXT("%f %f %f %f"), Surface.SurfNormal.W, Surface.SurfNormal.X, Surface.SurfNormal.Y, Surface.SurfNormal.Z);
+	if (Surface.LightMap)
+        TexMaps.DrawFlags |= DF_LightMap;
+
+    if (Surface.FogMap)
+        TexMaps.DrawFlags |= DF_FogMap;
+
+    if (Surface.DetailTexture && DetailTextures)
+        TexMaps.DrawFlags |= DF_DetailTexture;
+
+    if (Surface.MacroTexture && MacroTextures)
+        TexMaps.DrawFlags |= DF_MacroTexture;
+
+#if ENGINE_VERSION==227
+    if (Surface.BumpMap && BumpMaps)
+        TexMaps.DrawFlags |= DF_BumpMap;
+
+    if (Surface.EnvironmentMap && EnvironmentMaps)// not yet implemented.
+        TexMaps.DrawFlags |= DF_EnvironmentMap;
+
+	TexMaps.SurfNormal = Surface.SurfNormal;
 #else
-	bool bBumpMap = false;
 	FTextureInfo BumpMapInfo;
 	if(Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap)
 	{
@@ -86,20 +81,19 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 #else
 		Surface.Texture->Texture->BumpMap->Lock(BumpMapInfo, FTime(), 0, this);
 #endif
-		bBumpMap=true;
+		TexMaps.DrawFlags |= DF_BumpMap;
 	}
-	TexMaps.LightPos[0] = glm::vec4(1.f, 1.f, 1.f, 1.f);
+	//TexMaps.LightPos[0] = glm::vec4(1.f, 1.f, 1.f,1.f);
 #endif
 
 	// Editor Support.
-	FPlane DrawColor = FPlane(0.f, 0.f, 0.f, 0.f);
 	if (GIsEditor)
 	{
-	    DrawColor = Surface.FlatColor.Plane();
+		DrawComplexBufferData.DrawColor = Surface.FlatColor.Plane();
 		if (HitTesting())
-			DrawColor = HitColor;
+			DrawComplexBufferData.DrawColor = HitColor;
 		else if (Surface.PolyFlags & PF_FlatShaded)
-			DrawColor = FOpenGLGammaDecompress_sRGB(DrawColor);
+			DrawComplexBufferData.DrawColor = FOpenGLGammaDecompress_sRGB(DrawComplexBufferData.DrawColor);
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
 			DrawComplexBufferData.RendMap = Frame->Viewport->Actor->RendMap;
@@ -107,83 +101,113 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	//Draw polygons
 	SetProgram(ComplexSurfaceSinglePass_Prog);
-	DWORD PolyFlags=SetBlend(Surface.PolyFlags, ComplexSurfaceSinglePass_Prog);
-	SetTexture(0, *Surface.Texture, Surface.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog);
-	TexMaps.TexCoords[0] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
 
+	if (DrawComplexBufferData.VertSize > 0 && (DrawComplexBufferData.PolyFlags != Surface.PolyFlags))
+		DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
+
+	DWORD PolyFlags=SetBlend(Surface.PolyFlags, ComplexSurfaceSinglePass_Prog, false);
 	DrawComplexBufferData.PolyFlags = PolyFlags;
 
-	INT InterleaveCounter = 6; // base count for Verts and SurfNormal.
+    SetTexture(0, *Surface.Texture, Surface.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog,NORMALTEX);
+    TexMaps.TexCoords[0] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
 
-	if (TexMaps.bLightMap)
+    if (UseBindlessTextures)
+        DrawComplexBufferData.TexNum[0] = TexInfo[0].TexNum;
+
+	if (TexMaps.DrawFlags & DF_LightMap) //can not make use of bindless, to many single textures. Determined by Info->Texture.
 	{
-		SetTexture(1, *Surface.LightMap, PolyFlags, -0.5, ComplexSurfaceSinglePass_Prog); //First parameter has to fit the uniform in the fragment shader
+		SetTexture(1, *Surface.LightMap, PolyFlags, -0.5, ComplexSurfaceSinglePass_Prog, LIGHTMAP); //First parameter has to fit the uniform in the fragment shader
 		TexMaps.TexCoords[1] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, TexInfo[1].UPan, TexInfo[1].VPan);
+        if (UseBindlessTextures)
+            DrawComplexBufferData.TexNum[1] = TexInfo[1].TexNum;
 	}
-	if (TexMaps.bDetailTex)
+	if (TexMaps.DrawFlags & DF_DetailTexture)
 	{
-		SetTexture(2, *Surface.DetailTexture, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog);
+		SetTexture(2, *Surface.DetailTexture, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, DETAILTEX);
 		TexMaps.TexCoords[2] = glm::vec4(TexInfo[2].UMult, TexInfo[2].VMult, TexInfo[2].UPan, TexInfo[2].VPan);
+        if (UseBindlessTextures)
+            DrawComplexBufferData.TexNum[2] = TexInfo[2].TexNum;
 	}
-	if (TexMaps.bMacroTex)
+	if (TexMaps.DrawFlags & DF_MacroTexture)
 	{
-		SetTexture(3, *Surface.MacroTexture, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog);
+		SetTexture(3, *Surface.MacroTexture, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
 		TexMaps.TexCoords[3] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
+        if (UseBindlessTextures)
+            DrawComplexBufferData.TexNum[3] = TexInfo[3].TexNum;
+		TexMaps.TexCoords[13] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->Scale);
 	}
-	if (TexMaps.bBumpMap)
+	if (TexMaps.DrawFlags & DF_BumpMap)
 	{
 #if ENGINE_VERSION==227
-		SetTexture(4, *Surface.BumpMap, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog);
+		SetTexture(4, *Surface.BumpMap, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		TexMaps.TexCoords[4] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
 #else
-		SetTexture(4, BumpMapInfo, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog);
+		SetTexture(4, BumpMapInfo, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 #endif
+        if (UseBindlessTextures)
+            DrawComplexBufferData.TexNum[4] = TexInfo[4].TexNum;
+		TexMaps.TexCoords[12] = glm::vec4(Surface.Texture->Texture->BumpMap->Diffuse, Surface.Texture->Texture->BumpMap->Specular, Surface.Texture->Texture->BumpMap->Alpha, Surface.Texture->Texture->BumpMap->Scale);
 	}
-	if (TexMaps.bFogMap)
+	if (TexMaps.DrawFlags & DF_FogMap)
 	{
-		SetTexture(5, *Surface.FogMap, PF_AlphaBlend, -0.5, ComplexSurfaceSinglePass_Prog);
+		SetTexture(5, *Surface.FogMap, PF_AlphaBlend, -0.5, ComplexSurfaceSinglePass_Prog, FOGMAP);
 		TexMaps.TexCoords[5] = glm::vec4(TexInfo[5].UMult, TexInfo[5].VMult, TexInfo[5].UPan, TexInfo[5].VPan);
+        if (UseBindlessTextures)
+            DrawComplexBufferData.TexNum[5] = TexInfo[5].TexNum;
 	}
-	if (TexMaps.bEnvironmentMap)
+#if ENGINE_VERSION==227
+	if (TexMaps.DrawFlags & DF_EnvironmentMap)
 	{
-//		SetTexture(6, *Surface.EnvironmentMap, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog);
+		SetTexture(6, *Surface.EnvironmentMap, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, ENVIRONMENTMAP);
 		TexMaps.TexCoords[6] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
+        if (UseBindlessTextures)
+            DrawComplexBufferData.TexNum[6] = TexInfo[6].TexNum;
 	}
+#endif
 
 	// UDot/VDot
 	TexMaps.TexCoords[7] = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, 0.f);
 	TexMaps.TexCoords[8] = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, 0.f);
-	TexMaps.TexCoords[9] = glm::vec4(Facet.MapCoords.Origin.X, Facet.MapCoords.Origin.Y, Facet.MapCoords.Origin.Z, 0.f);
+	TexMaps.TexCoords[9] = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, 0.f);
+	TexMaps.TexCoords[10] = glm::vec4(Facet.MapCoords.Origin.X, Facet.MapCoords.Origin.Y, Facet.MapCoords.Origin.Z, 0.f);
+	TexMaps.TexCoords[11] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->Scale);
 
-	for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
-	{
-		INT NumPts = Poly->NumPts;
-		if (NumPts < 3) //Skip invalid polygons,if any?
-			continue;
+	 //*(INT*)&TexMaps.TexCoords[11].w = (INT)Surface.Texture->Format;
 
-		for ( INT i=0; i<NumPts-2; i++ )
-		{
-			BufferComplexSurfacePoint( &DrawComplexVertsSingleBuf[DrawComplexBufferData.IndexOffset], Poly->Pts[0], TexMaps, Facet, DrawComplexBufferData, InterleaveCounter );
-			DrawComplexBufferData.IndexOffset += InterleaveCounter;
-			BufferComplexSurfacePoint( &DrawComplexVertsSingleBuf[DrawComplexBufferData.IndexOffset], Poly->Pts[i+1], TexMaps, Facet, DrawComplexBufferData, InterleaveCounter );
-			DrawComplexBufferData.IndexOffset += InterleaveCounter;
-			BufferComplexSurfacePoint( &DrawComplexVertsSingleBuf[DrawComplexBufferData.IndexOffset], Poly->Pts[i+2], TexMaps, Facet, DrawComplexBufferData, InterleaveCounter );
-			DrawComplexBufferData.IndexOffset += InterleaveCounter;
-		}
+    // Additional maps.
+	TexMaps.TexCoords[14] = glm::vec4(0.f, 0.f, 0.f, 0.f);
+	TexMaps.TexCoords[15] = glm::vec4(0.f, 0.f, (GLfloat)Surface.Texture->Texture->Format, (GLfloat)TexMaps.DrawFlags);
 
-		if(NoBuffering)
-			DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps, DrawColor);
+	//debugf(TEXT("Facet.MapCoords.XAxis.X %f, Facet.MapCoords.XAxis.Y %f, Facet.MapCoords.XAxis.Z %f,Facet.MapCoords.YAxis.X %f , Facet.MapCoords.YAxis.Y %f, Facet.MapCoords.YAxis.Z %f,Facet.MapCoords.ZAxis.X %f, Facet.MapCoords.ZAxis.Y %f, Facet.MapCoords.ZAxis.Z %f Facet.MapCoords.Origin.X %f, Facet.MapCoords.Origin.Y %f, Facet.MapCoords.Origin.Z %f"), Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, Facet.MapCoords.Origin.X, Facet.MapCoords.Origin.Y, Facet.MapCoords.Origin.Z);
 
-		if ( DrawComplexBufferData.IndexOffset >= DRAWCOMPLEX_SIZE )
-		{
-			GWarn->Logf(TEXT("DrawComplexSurface overflow!"));
-			break;
-		}
-	}
-	DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps, DrawColor);
+	if (DrawComplexSinglePassRange.Sync[DrawComplexBufferData.Index])
+            WaitBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
+
+    for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
+    {
+        INT NumPts = Poly->NumPts;
+        if (NumPts < 3) //Skip invalid polygons,if any?
+            continue;
+
+        for ( INT i=0; i<NumPts-2; i++ )
+        {
+            BufferComplexSurfacePoint( &DrawComplexSinglePassRange.Buffer[DrawComplexBufferData.BeginOffset + DrawComplexBufferData.IndexOffset], Poly->Pts[0], TexMaps, Facet, DrawComplexBufferData );
+            BufferComplexSurfacePoint( &DrawComplexSinglePassRange.Buffer[DrawComplexBufferData.BeginOffset + DrawComplexBufferData.IndexOffset], Poly->Pts[i+1], TexMaps, Facet, DrawComplexBufferData );
+            BufferComplexSurfacePoint( &DrawComplexSinglePassRange.Buffer[DrawComplexBufferData.BeginOffset + DrawComplexBufferData.IndexOffset], Poly->Pts[i+2], TexMaps, Facet, DrawComplexBufferData );
+        }
+        if ( DrawComplexBufferData.IndexOffset >= DRAWCOMPLEX_SIZE - DrawComplexStrideSize)
+        {
+            GWarn->Logf(TEXT("DrawComplexSurface overflow!"));
+            break;
+        }
+    }
+    //debugf(TEXT("DrawComplexBufferData.IndexOffset %i DrawComplexBufferData.Index %i DrawComplexBufferData.BeginOffset %i"),DrawComplexBufferData.IndexOffset, DrawComplexBufferData.Index, DrawComplexBufferData.BeginOffset);
+
+	//if (!UseHWLighting)
+		DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
 	CHECK_GL_ERROR();
 #if ENGINE_VERSION!=227
-	if(bBumpMap)
+	if(TexMaps.DrawFlags & DF_BumpMap)
 		Surface.Texture->Texture->BumpMap->Unlock(BumpMapInfo);
 #endif
 	unclock(Stats.ComplexCycles);
@@ -201,52 +225,39 @@ void UXOpenGLRenderDevice::DrawPass(FSceneNode* Frame, INT Pass)
 }
 #endif
 
-void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &Buffer, DrawComplexTexMaps TexMaps, FPlane DrawColor)
+void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferData, DrawComplexTexMaps TexMaps)
 {
-	GLuint TotalSize = 2 * Buffer.VertSize;
-	GLuint StrideSize = 2 * VertFloatSize;
+	GLuint TotalSize = BufferData.IndexOffset;
+    CHECK_GL_ERROR();
 
-	if (UseBufferInvalidation && !UsePersistentBuffers)
-		glInvalidateBufferData(DrawComplexVertBufferSinglePass);
+	// Data
+	if (!UsePersistentBuffersComplex)
+    {
+        if (UseBufferInvalidation)
+            glInvalidateBufferData(DrawComplexVertBuffer);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * TotalSize, DrawComplexSinglePassRange.Buffer);
+    }
 
-	// PolyFlags
-	glUniform1ui(DrawComplexSinglePassPolyFlags, Buffer.PolyFlags);
+    // PolyFlags
+	glUniform1ui(DrawComplexSinglePassPolyFlags, BufferData.PolyFlags);
+	CHECK_GL_ERROR();
+
+    // TexNum and Textures to be applied.
+    glUniform1uiv(DrawComplexSinglePassTexNum, 8, (const GLuint*) BufferData.TexNum);
+    CHECK_GL_ERROR();
 
 	// Gamma
 	glUniform1f(DrawComplexSinglePassGamma,Gamma);
 
-	// Data
-	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * TotalSize, DrawComplexVertsSingleBuf, GL_STREAM_DRAW);
-
 	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
 	glEnableVertexAttribArray(NORMALS_ATTRIB);// SurfNormals
 
-	glVertexAttribPointer(VERTEX_COORD_ATTRIB, 3, GL_FLOAT, GL_FALSE, StrideSize, 0);
-	glVertexAttribPointer(NORMALS_ATTRIB, 3, GL_FLOAT, GL_FALSE, StrideSize, (void*)VertFloatSize);
+	GLuint BeginOffset = BufferData.BeginOffset * sizeof(float);
+	glVertexAttribPointer(VERTEX_COORD_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (void*)BeginOffset);
+	glVertexAttribPointer(NORMALS_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (void*)(	BeginOffset + FloatSize4));
 
-	//DistanceFog
-	glUniform4f(DrawComplexSinglePassFogColor,	DrawComplexFogSurface.FogColor.X, DrawComplexFogSurface.FogColor.Y, DrawComplexFogSurface.FogColor.Z, DrawComplexFogSurface.FogColor.W);
-	glUniform1f(DrawComplexSinglePassFogStart,	DrawComplexFogSurface.FogDistanceStart);
-	glUniform1f(DrawComplexSinglePassFogEnd,	DrawComplexFogSurface.FogDistanceEnd);
-	glUniform1f(DrawComplexSinglePassFogDensity,DrawComplexFogSurface.FogDensity);
-	glUniform1i(DrawComplexSinglePassFogMode,	DrawComplexFogSurface.FogMode);
-
-	// Light position (right now for bumpmaps only).
-	glUniform4fv(DrawComplexSinglePassLightPos, 8, (const GLfloat*)TexMaps.LightPos);
-
-	// Tex UV's
-	glUniform4fv(DrawComplexSinglePassTexCoords, 10, (const GLfloat*)TexMaps.TexCoords);
-
-	// Textures to be applied.
-	INT ComplexAdds[6];
-	ComplexAdds[0] = TexMaps.bLightMap;
-	ComplexAdds[1] = TexMaps.bDetailTex;
-	ComplexAdds[2] = TexMaps.bMacroTex;
-	ComplexAdds[3] = TexMaps.bBumpMap;
-	ComplexAdds[4] = TexMaps.bFogMap;
-	ComplexAdds[5] = TexMaps.bEnvironmentMap;
-
-	glUniform1iv(DrawComplexSinglePassComplexAdds, 5, (const GLint*)ComplexAdds);
+	// Tex UVs and more.
+	glUniform4fv(DrawComplexSinglePassTexCoords, 16, (const GLfloat*)TexMaps.TexCoords);
 
 	//set DrawColor if any. UED only.
 	if (GIsEditor)
@@ -258,19 +269,31 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &Buffer,
 		}
 		else
 		{
-			glUniform4f(DrawComplexSinglePassDrawColor, DrawColor.X, DrawColor.Y, DrawColor.Z, DrawColor.W);
+			glUniform4f(DrawComplexSinglePassDrawColor, BufferData.DrawColor.X, BufferData.DrawColor.Y, BufferData.DrawColor.Z, BufferData.DrawColor.W);
 			glUniform1i(DrawComplexSinglePassbHitTesting, false);
 		}
-		glUniform1ui(DrawComplexSinglePassRendMap, Buffer.RendMap);
+		glUniform1ui(DrawComplexSinglePassRendMap, BufferData.RendMap);
 		CHECK_GL_ERROR();
 	}
 
 	// Draw
-	glDrawArrays(GL_TRIANGLES, 0, Buffer.VertSize / FloatsPerVertex);
+	glDrawArrays(GL_TRIANGLES, 0, (BufferData.VertSize / FloatsPerVertex));
+    CHECK_GL_ERROR();
 
-	DrawComplexBufferData.VertSize = 0;
-	DrawComplexBufferData.TexSize = 0;
-	DrawComplexBufferData.IndexOffset = 0;
+	if(UsePersistentBuffersComplex)
+	{
+		LockBuffer(DrawComplexSinglePassRange, BufferData.Index);
+		BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
+		CHECK_GL_ERROR();
+	}
+
+	BufferData.BeginOffset = BufferData.Index * DRAWCOMPLEX_SIZE;
+
+	BufferData.VertSize = 0;
+	BufferData.TexSize = 0;
+	BufferData.IndexOffset = 0;
+	for (INT i = 0; i < ARRAY_COUNT(BufferData.TexNum);i++)
+		BufferData.TexNum[i] = 0;
 
 	// Clean up
 	glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);

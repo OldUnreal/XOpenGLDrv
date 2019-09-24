@@ -36,11 +36,8 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 	CHECK_GL_ERROR();
 	// Set texture sampler state.
 	if (NoFiltering)
-	{
-		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		CHECK_GL_ERROR();
-	}
+        return;
+
 	else if (!(PolyFlags & PF_NoSmooth))
 	{
 
@@ -77,30 +74,71 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg )
+void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType )
 {
 	guard(UXOpenGLRenderDevice::SetTexture);
+
+	if (ActiveProgram <= No_Prog)
+        return;
 
 	// Set panning.
 	FTexInfo& Tex = TexInfo[Multi];
 	Tex.UPan      = Info.Pan.X + PanBias*Info.UScale;
 	Tex.VPan      = Info.Pan.Y + PanBias*Info.VScale;
 
+    // Account for all the impact on scale normalization.
+	Tex.UMult = 1.0/(Info.UScale*Info.USize);
+	Tex.VMult = 1.0/(Info.VScale*Info.VSize);
+
+    bool bBindlessRealtimeChanged = false;
+
 	// Determine slot to work around odd masked handling.
-	//INT CacheSlot = ((PolyFlags & PF_Masked) && ((Info.Format==TEXF_P8 && P8Mode==P8_Special ) || (Info.Format==TEXF_DXT1 && DXT1Mode==DXT1_Special))) ? 1 : 0;
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format==TEXF_P8)) ? 1 : 0;
 
-	// Find in cache.
-	if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
-		return;
-
-	// Make current.
 	STAT(clock(Stats.BindCycles));
+
+	FCachedTexture *Bind = NULL;
+#if ENGINE_VERSION==227
+    // avoid lookups by storing information directly into texture. Add bindless information if available.
+    // Should save quite some CPU.
+    // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
+	if (UseBindlessTextures && Info.Texture && Info.Texture->TextureHandle)
+    {
+        FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
+        if( FCachedTextureInfo && FCachedTextureInfo->TexNum[CacheSlot])
+        {
+            if (Info.bRealtimeChanged) //update bindless realtime textures.
+            {
+                //debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
+                bBindlessRealtimeChanged = true;
+            }
+            else
+            {
+                Tex.TexNum = FCachedTextureInfo->TexNum[CacheSlot];
+                //debugf(TEXT("Unchanged: %ls %i 0x%08x%08x"),Info.Texture->GetFullName(),Tex.TexNum, FCachedTextureInfo->TexHandle[CacheSlot]);
+                STAT(unclock(Stats.BindCycles));
+                return;
+            }
+            Bind = FCachedTextureInfo;
+        }
+    }
+#endif
+
+	if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
+    {
+        STAT(unclock(Stats.BindCycles));
+        return;
+    }
+
+    // Make current.
 	Tex.CurrentCacheSlot = CacheSlot;
 	Tex.CurrentCacheID   = Info.CacheID;
 
 	//debugf( TEXT("Tex.CurrentCacheID 0x%08x%08x, Multi %i" ), Tex.CurrentCacheID, Multi );
-	FCachedTexture *Bind=BindMap->Find(Info.CacheID);
+
+	// Find in cache.
+	if (!Bind)
+        Bind=BindMap->Find(Info.CacheID);
 
 	// Whether we can handle this texture format/size.
 	bool Unsupported = false;
@@ -111,43 +149,58 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	if ( !Bind )
 	{
 		// Figure out OpenGL-related scaling for the texture.
-		Bind           = &BindMap->Set( Info.CacheID, FCachedTexture() );
-		Bind->Ids[0]   = 0;
-		Bind->Ids[1]   = 0;
-		Bind->BaseMip  = 0;
-		Bind->MaxLevel = 0;
-		Bind->Sampler  = 0;
+		Bind                = &BindMap->Set( Info.CacheID, FCachedTexture() );
+		Bind->Ids[0]        = 0;
+		Bind->Ids[1]        = 0;
+		Bind->BaseMip       = 0;
+		Bind->MaxLevel      = 0;
+		Bind->Sampler[0]    = 0;
+		Bind->Sampler[1]	= 0;
+		Bind->TexHandle[0]  = 0;
+		Bind->TexHandle[1]  = 0;
+		Bind->TexNum[0]     = 0;
+		Bind->TexNum[1]     = 0;
 
-		// Find lowest mip level support.
-		while ( Bind->BaseMip<Info.NumMips && Max(Info.Mips[Bind->BaseMip]->USize,Info.Mips[Bind->BaseMip]->VSize)>MaxTextureSize )
+		if (Info.NumMips && !Info.Mips[0])
 		{
-			Bind->BaseMip++;
-		}
-		if ( Bind->BaseMip>=Info.NumMips )
-		{
-			GWarn->Logf( TEXT("Encountered oversize texture %s without sufficient mipmaps."), Info.Texture->GetPathName() );
+			GWarn->Logf(TEXT("Encountered texture %ls with invalid MipMaps!"), Info.Texture->GetPathName());
+			Info.NumMips = 0;
 			Unsupported = 1;
 		}
+		else
+		{
+			// Find lowest mip level support.
+			while ( Bind->BaseMip<Info.NumMips && Max(Info.Mips[Bind->BaseMip]->USize,Info.Mips[Bind->BaseMip]->VSize)>MaxTextureSize )
+			{
+				Bind->BaseMip++;
+			}
+
+			if ( Bind->BaseMip>=Info.NumMips )
+			{
+				GWarn->Logf( TEXT("Encountered oversize texture %ls without sufficient mipmaps."), Info.Texture->GetPathName() );
+				Unsupported = 1;
+			}
+		}
 	}
-	else  ExistingBind = true;
+	else ExistingBind = true;
 
 	if ( Bind->Ids[CacheSlot]==0 )
 	{
 		glGenTextures( 1, &Bind->Ids[CacheSlot] );
 
-		if(!Bind->Sampler)
-			glGenSamplers(1, &Bind->Sampler);
+		if (!Bind->Sampler[CacheSlot])
+			glGenSamplers(1, &Bind->Sampler[CacheSlot]);
 
 		CHECK_GL_ERROR();
 		#if ENGINE_VERSION==227
-			SetSampler(Bind->Sampler, PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode);
 		#else
-			SetSampler(Bind->Sampler, PolyFlags, SkipMipmaps, 0, 0);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
 		#endif
 
 		// Spew warning if we uploaded this texture twice.
 		if ( ExistingBind )
-			debugf( NAME_Warning, TEXT("Unpacking texture %s a second time as %s."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
+			debugf( NAME_Warning, TEXT("Unpacking texture %ls a second time as %ls."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
 
 		ExistingBind = false;
 	}
@@ -187,20 +240,18 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			break;
 		}
 	}
-
-	CHECK_GL_ERROR();
-	glActiveTexture(GL_TEXTURE0 + Multi);
-	CHECK_GL_ERROR();
-	glBindTexture( GL_TEXTURE_2D, Bind->Ids[CacheSlot] );
-	CHECK_GL_ERROR();
-	glBindSampler(Multi, Bind->Sampler);
-	CHECK_GL_ERROR();
+	if (!bBindlessRealtimeChanged)
+    {
+        CHECK_GL_ERROR();
+        glActiveTexture(GL_TEXTURE0 + Multi);
+        CHECK_GL_ERROR();
+        glBindTexture( GL_TEXTURE_2D, Bind->Ids[CacheSlot] );
+        CHECK_GL_ERROR();
+		glBindSampler(Multi, Bind->Sampler[CacheSlot]);
+        CHECK_GL_ERROR();
+    }
 
 	STAT(unclock(Stats.BindCycles));
-
-	// Account for all the impact on scale normalization.
-	Tex.UMult = 1.0/(Info.UScale*Info.USize);
-	Tex.VMult = 1.0/(Info.VScale*Info.VSize);
 
 	// Upload if needed.
 	STAT(clock(Stats.ImageCycles));
@@ -208,7 +259,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	{
 		// Some debug output.
 		//if( Info.Palette && Info.Palette[128].A!=255 && !(PolyFlags&PF_Translucent) )
-		//	debugf( TEXT("Would set PF_Highlighted for %s."), Info.Texture->GetFullName() );
+		//	debugf( TEXT("Would set PF_Highlighted for %ls."), Info.Texture->GetFullName() );
 
 		// Cleanup texture flags.
 		if ( SupportsLazyTextures )
@@ -231,7 +282,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		if( Info.Format==TEXF_P8 )
 		{
 			if ( !Info.Palette )
-				appErrorf( TEXT("Encountered bogus P8 texture %s"), Info.Texture->GetFullName() );
+				appErrorf( TEXT("Encountered bogus P8 texture %ls"), Info.Texture->GetFullName() );
 
 			if ( PolyFlags & PF_Masked )
 			{
@@ -250,6 +301,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 		GLuint InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 		GLuint SourceFormat   = GL_RGBA;
+		GLuint SourceType = GL_UNSIGNED_BYTE;
 
 		// Unsupported can already be set in case of only too large mip maps available.
 		if ( !Unsupported )
@@ -279,12 +331,19 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_RGB;
 					break;
-
 				case TEXF_RGBA8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_RGBA;
 					break;
-
+#if ENGINE_VERSION==227
+    #ifndef __LINUX_ARM__
+				case TEXF_RGBA16:
+					InternalFormat = GL_RGBA16;
+					SourceFormat = GL_RGBA;
+					SourceType = GL_UNSIGNED_SHORT;
+					break;
+    #endif
+#endif
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
 					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
@@ -294,63 +353,94 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 						break;
 					}
 					NoAlpha = CacheSlot;
-					if ( SUPPORTS_GL_EXT_texture_compression_dxt1 )
-					{
-						if ( UnpackSRGB )
-						{
-							if ( SUPPORTS_GL_EXT_texture_sRGB )
-							{
-								InternalFormat = NoAlpha ? GL_COMPRESSED_SRGB_S3TC_DXT1_EXT : GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
-								break;
-							}
-							if ( NoAlpha )
-								GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGB_S3TC_DXT1_EXT as fallback for %s."), Info.Texture->GetPathName() );
-							else
-								GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT1_EXT as fallback for %s."), Info.Texture->GetPathName() );
-						}
-						InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-						break;
-					}
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %s."), Info.Texture->GetPathName() );
+                    if (OpenGLVersion == GL_Core)
+                    {
+                        if ( GL_EXT_texture_compression_s3tc )
+                        {
+                            if ( UnpackSRGB )
+                            {
+                                if ( GL_EXT_texture_sRGB )
+                                {
+                                    InternalFormat = NoAlpha ? GL_COMPRESSED_SRGB_S3TC_DXT1_EXT : GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
+                                    break;
+                                }
+                                if ( NoAlpha )
+                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGB_S3TC_DXT1_EXT as fallback for %ls."), Info.Texture->GetPathName() );
+                                else
+                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT1_EXT as fallback for %ls."), Info.Texture->GetPathName() );
+                            }
+                            InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if ( GL_EXT_texture_compression_dxt1 )
+                        {
+                            InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                            break;
+                        }
+                    }
+					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
-
 #if ENGINE_VERSION==227
 				case TEXF_DXT3:
-					if ( SUPPORTS_GL_EXT_texture_compression_dxt3 )
-					{
-						if (UnpackSRGB)
-						{
-							if (SUPPORTS_GL_EXT_texture_sRGB)
-							{
-								InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
-								break;
-							}
-							GWarn->Logf(TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT3_EXT as fallback for %s."), Info.Texture->GetPathName());
-						}
-						InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
-						break;
-					}
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %s."), Info.Texture->GetPathName() );
+                    if (OpenGLVersion == GL_Core)
+                    {
+                        if ( GL_EXT_texture_compression_s3tc )
+                        {
+                            if (UnpackSRGB)
+                            {
+                                if (GL_EXT_texture_sRGB)
+                                {
+                                    InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
+                                    break;
+                                }
+                                GWarn->Logf(TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT3_EXT as fallback for %ls."), Info.Texture->GetPathName());
+                            }
+                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if(GL_ANGLE_texture_compression_dxt3)
+                        {
+                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_ANGLE;
+                            break;
+                        }
+                    }
+					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
-
 				case TEXF_DXT5:
-					if ( SUPPORTS_GL_EXT_texture_compression_dxt5 )
-					{
-						if (UnpackSRGB)
-						{
-							if (SUPPORTS_GL_EXT_texture_sRGB)
-							{
-								InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
-								break;
-							}
-							debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT5_EXT as fallback for %s."), Info.Texture->GetPathName());
-						}
-						InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
-						break;
-					}
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %s."), Info.Texture->GetPathName() );
+                    if (OpenGLVersion == GL_Core)
+                    {
+                        if ( GL_EXT_texture_compression_s3tc )
+                        {
+                            if (UnpackSRGB)
+                            {
+                                if (GL_EXT_texture_sRGB)
+                                {
+                                    InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
+                                    break;
+                                }
+                                debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT5_EXT as fallback for %ls."), Info.Texture->GetPathName());
+                            }
+                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if(GL_ANGLE_texture_compression_dxt5)
+                        {
+                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_ANGLE;
+                            break;
+                        }
+                    }
+					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
 
@@ -367,42 +457,23 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				case TEXF_RGTC_RG_SIGNED:
 					InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
 					break;
+				// BPTC Core since 4.2. BC6H and BC7 in D3D11.
+#ifndef __LINUX_ARM__
+				case TEXF_BPTC_RGB_SF:
+					InternalFormat = GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT; //BC6H
+					break;
+				case TEXF_BPTC_RGB_UF:
+					InternalFormat = GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT; //BC6H
+					break;
+				case TEXF_BPTC_RGBA:
+					InternalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM; //BC7
+						break;
+#endif
 
-				// ETC2 and EAC -- Core since OpenGL 4.3.
-				case TEXF_ETC2_RGB8:
-					InternalFormat = GL_COMPRESSED_RGB8_ETC2;
-					break;
-				case TEXF_ETC2_SRGB8:
-					InternalFormat = GL_COMPRESSED_SRGB8_ETC2;
-					break;
-				case TEXF_ETC2_RGB8_PA1:
-					InternalFormat = GL_COMPRESSED_RGB8_PUNCHTHROUGH_ALPHA1_ETC2;
-					break;
-				case TEXF_ETC2_SRGB8_PA1:
-					InternalFormat = GL_COMPRESSED_SRGB8_PUNCHTHROUGH_ALPHA1_ETC2;
-					break;
-				case TEXF_ETC2_RGB8_EAC_A8:
-					InternalFormat = GL_COMPRESSED_RGBA8_ETC2_EAC;
-					break;
-				case TEXF_ETC2_SRGB8_EAC_A8:
-					InternalFormat = GL_COMPRESSED_SRGB8_ALPHA8_ETC2_EAC;
-					break;
-				case TEXF_EAC_R11:
-					InternalFormat = GL_COMPRESSED_R11_EAC;
-					break;
-				case TEXF_EAC_R11_SIGNED:
-					InternalFormat = GL_COMPRESSED_SIGNED_R11_EAC;
-					break;
-				case TEXF_EAC_RG11:
-					InternalFormat = GL_COMPRESSED_RG11_EAC;
-					break;
-				case TEXF_EAC_RG11_SIGNED:
-					InternalFormat = GL_COMPRESSED_SIGNED_RG11_EAC;
-					break;
 #endif
 				// Default: Mark as unsupported.
 				default:
-					GWarn->Logf( TEXT("Unknown texture format %i on texture %s."), Info.Format, Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("Unknown texture format %i on texture %ls."), Info.Format, Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
 			}
@@ -434,8 +505,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			{
 				// Convert the mipmap.
 				FMipmapBase* Mip            = Info.Mips[MipIndex];
-				BYTE* 	     UnCompSrc      = Mip->DataPtr;
-				BYTE*        CompSrc        = Mip->DataPtr;
+				BYTE* 	     ImgSrc			= NULL;
 				GLsizei      CompImageSize  = 0; // !0 also enables use of glCompressedTex[Sub]Image2D.
 				GLsizei      USize          = Mip->USize;
 				GLsizei      VSize          = Mip->VSize;
@@ -447,7 +517,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 						// P8 -- Default palettized texture format.
 						case TEXF_P8:
 							guard(ConvertP8_RGBA8888);
-							UnCompSrc  = Compose;
+							ImgSrc  = Compose;
 							DWORD* Ptr = (DWORD*)Compose;
 							INT Count  = USize*VSize;
 							for ( INT i=0; i<Count; i++ )
@@ -458,7 +528,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 						// RGBA7 -- Well it's actually BGRA and used by light and fogmaps.
 						case TEXF_RGBA7:
 							guard(ConvertBGRA7777_RGBA8888);
-							UnCompSrc  = Compose;
+							ImgSrc  = Compose;
 							DWORD* Ptr = (DWORD*)Compose;
 							INT ULimit = Min(USize,Info.UClamp); // Implicit assumes NumMips==1.
 							INT VLimit = Min(VSize,Info.VClamp);
@@ -467,25 +537,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							// to emulate GL_CLAMP_TO_EDGE behaviour. This is done to avoid using NPOT textures.
 							for ( INT v=0; v<VLimit; v++ )
 							{
-								if (OpenGLVersion == GL_Core)
-								{
-									// The AND 0x7F7F7F7F is used to eliminate the top bit as this was used internally by the LightManager.
-									for ( INT u=0; u<ULimit; u++ )
-										*Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x7F7F7F7F)<<1; // We can skip this shift. Unless we want to unpack as sRGB.
-								}
-								else  // GLES needs to swizzle from BGRA to RGBA.
-								{
-									for ( INT u=0; u<ULimit; u++ )
-									{
-										union { DWORD dw; BYTE b[4]; } rgba;
-										// The AND 0x7F7F7F7F is used to eliminate the top bit as this was used internally by the LightManager.
-										rgba.dw = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x7F7F7F7F)<<1; // We can skip this shift. Unless we want to unpack as sRGB.
-										const BYTE tmp = rgba.b[0];
-										rgba.b[0] = rgba.b[2];
-										rgba.b[2] = tmp;
-										*Ptr++ = rgba.dw;
-									}
-								}
+								// The AND 0x7F7F7F7F is used to eliminate the top bit as this was used internally by the LightManager.
+								for ( INT u=0; u<ULimit; u++ )
+									*Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x7F7F7F7F)<<1; // We can skip this shift. Unless we want to unpack as sRGB.
 
 								if ( ULimit>0 )
 								{
@@ -518,7 +572,10 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 						// RGB8/RGBA8 -- Actually used by Brother Bear.
 						case TEXF_RGB8:
 						case TEXF_RGBA8:
-							UnCompSrc = (BYTE*)Mip->DataPtr;
+#if ENGINE_VERSION==227
+						case TEXF_RGBA16:
+#endif
+							ImgSrc = Mip->DataPtr;
 							break;
 
 						// S3TC -- Ubiquitous Extension.
@@ -526,6 +583,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							if ( USize<4 || VSize<4 )
 								goto FinishedUnpack;
 							CompImageSize = USize*VSize/2;
+							ImgSrc = Mip->DataPtr;
 							break;
 #if ENGINE_VERSION==227
 						case TEXF_DXT3:
@@ -533,6 +591,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							if ( USize<4 || VSize<4 )
 								goto FinishedUnpack;
 							CompImageSize = USize*VSize;
+							ImgSrc = Mip->DataPtr;
 							break;
 
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
@@ -541,83 +600,100 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							if ( USize<4 || VSize<4 )
 								goto FinishedUnpack;
 							CompImageSize  = USize*VSize/2;
+							ImgSrc = Mip->DataPtr;
 							break;
 						case TEXF_RGTC_RG:
 						case TEXF_RGTC_RG_SIGNED:
 							if ( USize<4 || VSize<4 )
 								goto FinishedUnpack;
 							CompImageSize = USize*VSize;
+							ImgSrc = Mip->DataPtr;
+							break;
+						case TEXF_BPTC_RGBA:
+						case TEXF_BPTC_RGB_SF:
+						case TEXF_BPTC_RGB_UF:
+							if (USize<4 || VSize<4)
+								goto FinishedUnpack;
+							CompImageSize = USize*VSize;
+							ImgSrc = Mip->DataPtr;
 							break;
 
-						// ETC2 and EAC -- Core since OpenGL 4.3.
-						case TEXF_ETC2_RGB8:
-						case TEXF_ETC2_SRGB8:
-						case TEXF_ETC2_RGB8_PA1:
-						case TEXF_ETC2_SRGB8_PA1:
-						case TEXF_EAC_R11:
-						case TEXF_EAC_R11_SIGNED:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize  = USize*VSize/2;
-							break;
-						case TEXF_ETC2_RGB8_EAC_A8:
-						case TEXF_ETC2_SRGB8_EAC_A8:
-						case TEXF_EAC_RG11:
-						case TEXF_EAC_RG11_SIGNED:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize  = USize*VSize;
-							break;
 #endif
 						// Should not happen (TM).
 						default:
-							appErrorf( TEXT("Unpacking unknown format %i on %s."), Info.Format, Info.Texture );
+							appErrorf( TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
 							break;
 					}
 				}
+				else {
+					appErrorf(TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
+					break;
+				}
+                CHECK_GL_ERROR();
 
 				// Upload texture.
 				if ( ExistingBind )
 				{
+#ifndef __LINUX_ARM__
 					if ( CompImageSize )
 					{
-						guard(glCompressedTexSubImage2D);
-						glCompressedTexSubImage2D( GL_TEXTURE_2D, ++MaxLevel, 0, 0, USize, VSize, InternalFormat, CompImageSize, CompSrc );
-						unguard;
+					    if (!bBindlessRealtimeChanged)
+							glCompressedTexSubImage2D(GL_TEXTURE_2D, ++MaxLevel, 0, 0, USize, VSize, InternalFormat, CompImageSize, ImgSrc);
+						else glCompressedTextureSubImage2D(Bind->Ids[CacheSlot], ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
+						CHECK_GL_ERROR();
 					}
 					else
 					{
-						guard(glTexSubImage2D);
-						glTexSubImage2D( GL_TEXTURE_2D, ++MaxLevel, 0, 0, USize, VSize, SourceFormat, GL_UNSIGNED_BYTE, UnCompSrc );
-						unguard;
+					    CHECK_GL_ERROR();
+					    if (!bBindlessRealtimeChanged)
+							glTexSubImage2D(GL_TEXTURE_2D, ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
+						else glTextureSubImage2D(Bind->Ids[CacheSlot], ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
+						CHECK_GL_ERROR();
 					}
-				}
+#endif
+                }
 				else
 				{
 					if ( CompImageSize )
 					{
-						guard(glCompressedTexImage2D);
 						if (GenerateMipMaps)
 						{
-							glTexStorage2D(GL_TEXTURE_2D, MAX_MIPS, SourceFormat, USize, VSize);
-							glCompressedTexImage2D( GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, CompImageSize, CompSrc );
+							glCompressedTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, CompImageSize, ImgSrc);
+							glHint(GL_GENERATE_MIPMAP_HINT,GL_NICEST);
 							glGenerateMipmap(GL_TEXTURE_2D);
+                            MaxLevel = Info.NumMips;
+                            CHECK_GL_ERROR();
+							break;
 						}
 						else
-							glCompressedTexImage2D(GL_TEXTURE_2D, ++MaxLevel, InternalFormat, USize, VSize, 0, CompImageSize, CompSrc);
-						unguard;
+                        {
+							glCompressedTexImage2D(GL_TEXTURE_2D, ++MaxLevel, InternalFormat, USize, VSize, 0, CompImageSize, ImgSrc);
+                            CHECK_GL_ERROR();
+                        }
 					}
 					else
 					{
-						guard(glTexImage2D);
 						if (GenerateMipMaps)
-						{
-							glTexStorage2D(GL_TEXTURE_2D, MAX_MIPS, SourceFormat, USize, VSize);
-							glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, SourceFormat, GL_UNSIGNED_BYTE, UnCompSrc);
-							glGenerateMipmap(GL_TEXTURE_2D);  //Generate num_mipmaps number of mipmaps here.
+                        {
+                            /*
+                            // OpenGL 4.2 needed. Since currently targeting 3.3 at first keep for later.
+                            glTexStorage2D(GL_TEXTURE_2D, MAX_MIPS, SourceFormat, USize, VSize);
+							CHECK_GL_ERROR();
+	                        glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, USize, VSize, SourceFormat, SourceType, UnCompSrc ); //Generate num_mipmaps number of mipmaps here.
+	                        CHECK_GL_ERROR();
+	                        */
+							glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, SourceFormat, SourceType, ImgSrc);
+							glHint(GL_GENERATE_MIPMAP_HINT,GL_NICEST);
+							glGenerateMipmap(GL_TEXTURE_2D); // generate a complete set of mipmaps for a texture object
+							MaxLevel = Info.NumMips;
+							CHECK_GL_ERROR();
+							break;
 						}
-						else glTexImage2D(GL_TEXTURE_2D, ++MaxLevel, InternalFormat, USize, VSize, 0, SourceFormat, GL_UNSIGNED_BYTE, UnCompSrc);
-						unguard;
+						else
+                        {
+							glTexImage2D(GL_TEXTURE_2D, ++MaxLevel, InternalFormat, USize, VSize, 0, SourceFormat, SourceType, ImgSrc);
+                            CHECK_GL_ERROR();
+                        }
 					}
 				}
 				CHECK_GL_ERROR();
@@ -630,7 +706,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
-				GWarn->Logf( TEXT("No mip map unpacked for texture %s."), Info.Texture->GetPathName() );
+				GWarn->Logf( TEXT("No mip map unpacked for texture %ls."), Info.Texture->GetPathName() );
 		}
 
 		// Create and unpack a chequerboard fallback texture texture for an unsupported format.
@@ -653,26 +729,91 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 			guard(glTexImage2D);
 			glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, Compose );
+			CHECK_GL_ERROR();
 			unguard;
 		}
 		unguard;
+		CHECK_GL_ERROR();
 
 		// Set max level.
 		if ( !ExistingBind || Bind->MaxLevel!=MaxLevel )
 		{
 			Bind->MaxLevel = MaxLevel;
 			glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, MaxLevel );
+			CHECK_GL_ERROR();
 		}
-
-		// Cleanup.
-		if ( SupportsLazyTextures )
-			Info.Unload();
+        // Cleanup.
+        if ( SupportsLazyTextures )
+            Info.Unload();
 	}
+
+    if (UseBindlessTextures && Info.Texture && !Unsupported)
+    {
+		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UseBindlessTextures.
+        {
+            Bind->TexNum[CacheSlot]=TexNum;
+            #ifdef __LINUX_ARM__
+            Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleNV(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
+            #else
+			Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleARB(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
+			#endif // __Linux_ARM
+            CHECK_GL_ERROR();
+
+            //debugf(TEXT("Making %ls with TexNum %i resident 0x%08x%08x"),Info.Texture->GetFullName(),FCachedTextureInfo->TexNum[CacheSlot], FCachedTextureInfo->TexHandle[CacheSlot]);
+            #ifdef __LINUX_ARM__
+            glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
+            #else
+            glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
+            #endif
+            CHECK_GL_ERROR();
+
+            if (GlobalUniformTextureHandles.Sync[0])
+                WaitBuffer(GlobalUniformTextureHandles, 0);
+
+            GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
+
+            LockBuffer(GlobalUniformTextureHandles, 0);
+
+            #if ENGINE_VERSION==227
+            // avoid lookups by storing information directly into texture. Add bindless information if available.
+            // Should save quite some CPU.
+            // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
+            FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
+
+            if (!FCachedTextureInfo)
+                FCachedTextureInfo = new (FCachedTexture);
+
+			FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
+            FCachedTextureInfo->BaseMip = Bind->BaseMip;
+            FCachedTextureInfo->MaxLevel = Bind->MaxLevel;
+			FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
+			FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
+			FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
+
+            Info.Texture->TextureHandle = FCachedTextureInfo;
+            #endif
+            TexNum++;
+
+            if (TexNum > NUMTEXTURES)
+				debugf(TEXT("Bindless texture overflow! %i"),TexNum);
+
+            if (!Bind->TexHandle[CacheSlot])
+                appErrorf(TEXT("No bindless handle!"));
+        }
+    }
+    else
+    {
+        Bind->TexHandle[CacheSlot] = 0;
+        Bind->TexNum[CacheSlot] = 0;
+    }
+    Tex.TexNum = Bind->TexNum[CacheSlot];
+
+    CHECK_GL_ERROR();
 	STAT(unclock(Stats.ImageCycles));
 	unguard;
 }
 
-DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg)
+DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool InverseOrder)
 {
 	guard(UOpenGLRenderDevice::SetBlend);
 	STAT(clock(Stats.BlendCycles));
@@ -702,7 +843,7 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg)
 		else
 			glEnable(GL_CULL_FACE);
 
-		if (PolyFlags & PF_RenderHint) // check for bInverseOrder order. Only in use in SoftDrv for DrawTile, so there should be no trouble.
+		if (InverseOrder) // check for bInverseOrder order.
 			glFrontFace(GL_CCW); //rather expensive switch better try to avoid!
 		else
 			glFrontFace(GL_CW);
@@ -710,9 +851,8 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg)
 
 		if (ActiveProgram==GouraudPolyVert_Prog)
 		{
-			FPlane DrawColor = FPlane(0.f, 0.f, 0.f, 0.f);
 			if (DrawGouraudBufferData.VertSize > 0)
-                DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData, DrawColor);
+				DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 		}
 
 		CurrentAdditionalPolyFlags=PolyFlags;
@@ -738,16 +878,13 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg)
 			}
 			else if (PolyFlags & PF_Translucent)
 			{
-				if (0)//ShaderProg == ComplexSurfaceSinglePass_Prog)
-				{
-					glBlendFunc(GL_ONE, GL_SRC1_COLOR);
-					glBlendEquation(GL_FUNC_ADD);
-					//glBlendFunc(GL_DST_COLOR, GL_SRC1_COLOR);
-				}
-				else
-				{
-					glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
-				}
+                if (1)//( !(PolyFlags & PF_Mirrored) )
+                    glBlendFunc( GL_ONE, GL_ONE_MINUS_SRC_COLOR );
+                else
+                {
+                    glBlendFunc( GL_ZERO, GL_SRC_COLOR ); //Mirrors!
+                    //debugf(TEXT("Mirror"));
+                }
 				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_Modulated)

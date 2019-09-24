@@ -21,32 +21,75 @@
 void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 {
 	guard(UXOpenGLRenderDevice::SetProgram);
-	STAT(clock(Stats.ProgramCycles));
+	CHECK_GL_ERROR();
+    STAT(clock(Stats.ProgramCycles));
 
 	if (ActiveProgram != CurrentProgram)
 	{
 		//debugf(TEXT("ActiveProgram %i CurrentProgram %i"),ActiveProgram,CurrentProgram);
-		DrawGouraudIndex = 0;
 		if (ActiveProgram == GouraudPolyVert_Prog)
 		{
-			FPlane DrawColor = FPlane(0.f, 0.f, 0.f, 0.f);
-			if(DrawGouraudBufferData.VertSize > 0)
-				DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData, DrawColor);
+			if (DrawGouraudBufferData.VertSize > 0)
+            {
+                if (DrawGouraudBufferRange.Sync[DrawGouraudBufferData.Index])
+                    WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
+				DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
+            }
+
+            CHECK_GL_ERROR();
 		}
+		else if(ActiveProgram == GouraudPolyVertList_Prog)
+		{
+			if (DrawGouraudListBufferData.VertSize > 0)
+				DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+
+            CHECK_GL_ERROR();
+		}
+		else if(ActiveProgram == ComplexSurfaceSinglePass_Prog)
+		{
+			if (DrawComplexBufferData.VertSize > 0)
+				DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
+            CHECK_GL_ERROR();
+        }
 		else if (ActiveProgram == Simple_Prog)
 		{
 			if (DrawLinesBufferData.VertSize > 0)
 				DrawSimpleGeometryVerts(DrawLineMode, DrawLinesBufferData.VertSize, GL_LINES, DrawLinesBufferData.LineFlags, DrawLinesBufferData.DrawColor, true);
+
+            CHECK_GL_ERROR();
 		}
+		else if (ActiveProgram == Tile_Prog)
+		{
+			if (DrawTileBufferData.VertSize > 0)
+                DrawTileVerts(DrawTileBufferData);
+
+            CHECK_GL_ERROR();
+		}
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
 		switch (CurrentProgram)
 		{
+            case No_Prog:
+            {
+                glBindVertexArray(0);
+				glUseProgram(0);
+				ActiveProgram = No_Prog;
+
+				if (SyncToDraw)
+                    glFinish();
+
+				CHECK_GL_ERROR();
+				break;
+            }
 			case Simple_Prog:
 			{
 				glBindVertexArray(0);
 				glUseProgram(0);
 
-//				if(UseAA && NoAATiles)
-//					glDisable(GL_MULTISAMPLE);
+				#ifndef __EMSCRIPTEN__
+				if(UseAA && NoAATiles)
+					glDisable(GL_MULTISAMPLE);
+                #endif
 
 				glUseProgram(DrawSimpleProg);
 				glBindVertexArray(DrawSimpleGeometryVertsVao);
@@ -60,12 +103,14 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 				glBindVertexArray(0);
 				glUseProgram(0);
 
-//				if(UseAA && NoAATiles)
-//					glDisable(GL_MULTISAMPLE);
+				#ifndef __EMSCRIPTEN__
+				if(UseAA && NoAATiles)
+					glDisable(GL_MULTISAMPLE);
+                #endif
 
 				glUseProgram(DrawTileProg);
 				glBindVertexArray(DrawTileVertsVao);
-				glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
+                glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
 
 				ActiveProgram = Tile_Prog;
 				CHECK_GL_ERROR();
@@ -80,11 +125,13 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 					glUseProgram(DrawGouraudProg);
 				}
 
-//				if(UseAA && NoAATiles)
-//					glEnable(GL_MULTISAMPLE);
+				#ifndef __EMSCRIPTEN__
+				if(UseAA && NoAATiles)
+					glEnable(GL_MULTISAMPLE);
+                #endif
 
 				glBindVertexArray(DrawGouraudPolyVertsVao);
-				glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBufferSingle);
+                glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
 
 				ActiveProgram = GouraudPolyVert_Prog;
 				CHECK_GL_ERROR();
@@ -99,11 +146,14 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 					glUseProgram(DrawGouraudProg);
 				}
 
-//				if(UseAA && NoAATiles)
-//					glEnable(GL_MULTISAMPLE);
+				#ifndef __EMSCRIPTEN__
+				if(UseAA && NoAATiles)
+					glEnable(GL_MULTISAMPLE);
+                #endif
 
 				glBindVertexArray(DrawGouraudPolyVertListSingleBufferVao);
-				glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBufferListSingle);
+                glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
+
 				ActiveProgram = GouraudPolyVertList_Prog;
 				CHECK_GL_ERROR();
 				break;
@@ -113,18 +163,24 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
 				glBindVertexArray(0);
 				glUseProgram(0);
 
-//				if(UseAA)
-//					glEnable(GL_MULTISAMPLE);
+				if(UseAA)
+					glEnable(GL_MULTISAMPLE);
 
-				glUseProgram(DrawComplexSinglePassProg);
+				glUseProgram(DrawComplexProg);
 				glBindVertexArray(DrawComplexVertsSinglePassVao);
-				glBindBuffer(GL_ARRAY_BUFFER, DrawComplexVertBufferSinglePass);
+                glBindBuffer(GL_ARRAY_BUFFER, DrawComplexVertBuffer);
+				//glBufferData(GL_ARRAY_BUFFER, sizeof(float) * DRAWCOMPLEX_SIZE, 0, GL_STREAM_DRAW);
 				ActiveProgram = ComplexSurfaceSinglePass_Prog;
 				CHECK_GL_ERROR();
 				break;
 			}
 			default:
 			{
+			    ActiveProgram = CurrentProgram;
+
+                if (SyncToDraw)
+                    glFinish();
+
 				break;
 			}
 		}

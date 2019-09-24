@@ -88,8 +88,8 @@ protected:
 		unguardSlow;
 	}
 	TArray<TPair> Pairs;
-	INT* Hash;
-	INT HashCount;
+	INT* Hash=0;
+	INT HashCount=0;
 public:
 	TOpenGLMapBase()
 	:	Hash( NULL )

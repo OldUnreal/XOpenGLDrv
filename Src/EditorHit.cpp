@@ -36,7 +36,7 @@ void UXOpenGLRenderDevice::PushHit(const BYTE* Data, INT Count)
 	// One of the major problems is that the OpenGL implementation is fairly free how it handles it's rounding.
 	// See: https://www.opengl.org/wiki/Normalized_Integer#Unsigned
 	//
-	// The basic idea to get around this issue is to add one (in bit representation) and not use the two least 
+	// The basic idea to get around this issue is to add one (in bit representation) and not use the two least
 	// significant bits on any color channel, which still leaves 18 bits and thus 262144 unique colors to use.
 	// If these aren't enough or ignoring the two least significant bits is not enough, I can plain use a format
 	// with 16 bits per color (which I intend to do anyway).
@@ -60,7 +60,7 @@ void UXOpenGLRenderDevice::PopHit(INT Count, UBOOL bForce)
 
 	// Force end buffing polygons. This makes sure we won't
 	// draw the buffered polygones under the wrong name.
-	SetProgram(-1);
+	SetProgram(No_Prog);
 	glFinish();
 
 	// Handle Force hit.
@@ -93,7 +93,7 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 
 	if (HitTesting())
 	{
-		SetBlend(-1, -1);
+		SetBlend(-1, -1,  false);
 
 		// Disabled dithering.
 		glDisable(GL_DITHER);
@@ -130,7 +130,7 @@ void UXOpenGLRenderDevice::UnlockHit(UBOOL Blit)
 		{
 			Compose = (BYTE*)appRealloc(Compose, MinComposeSize, TEXT("Compose"));
 			if (!Compose)
-				appErrorf(LocalizeError("ComposeAlloc"), MinComposeSize);
+				appErrorf(LocalizeError(TEXT("ComposeAlloc")), MinComposeSize);
 			ComposeSize = MinComposeSize;
 		}
 		unguard;

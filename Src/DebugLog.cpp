@@ -79,19 +79,19 @@ void UXOpenGLRenderDevice::DebugCallback(unsigned int source, unsigned int type,
 	{
 		case GL_DEBUG_SEVERITY_LOW:
 			if (LogLevel >= 2)
-				debugf(TEXT("XOpenGL DebugLog: In source %s, type %s, id %i, severity : LOW, message %s "),*SourceMessage, *TypeMessage, id, *SeverityMessage, appFromAnsi(message));
+				debugf(TEXT("XOpenGL DebugLog: In source %ls, type %ls, id %i, severity : LOW, message %ls "),*SourceMessage, *TypeMessage, id, appFromAnsi(message));
 			break;
 		case GL_DEBUG_SEVERITY_MEDIUM:
 			if (LogLevel >= 1)
-				debugf(TEXT("XOpenGL DebugLog: In source %s, type %s, id %i, severity : MEDIUM, message %s "),*SourceMessage, *TypeMessage, id, *SeverityMessage, appFromAnsi(message));
+				debugf(TEXT("XOpenGL DebugLog: In source %ls, type %ls, id %i, severity : MEDIUM, message %ls "),*SourceMessage, *TypeMessage, id, appFromAnsi(message));
 			break;
 		case GL_DEBUG_SEVERITY_HIGH:
 			if (LogLevel >= 0)
-				debugf(TEXT("XOpenGL DebugLog: In source %s, type %s, id %i, severity : HIGH, message %s "),*SourceMessage, *TypeMessage, id, *SeverityMessage, appFromAnsi(message));
+				debugf(TEXT("XOpenGL DebugLog: In source %ls, type %ls, id %i, severity : HIGH, message %ls "),*SourceMessage, *TypeMessage, id, appFromAnsi(message));
 			break;
 		default:
 			if (LogLevel >= 3)
-				debugf(TEXT("XOpenGL DebugLog: In source %s, type %s, id %i, severity : NONE, message %s "),*SourceMessage, *TypeMessage, id, *SeverityMessage, appFromAnsi(message));
+				debugf(TEXT("XOpenGL DebugLog: In source %ls, type %ls, id %i, severity : NONE, message %ls "),*SourceMessage, *TypeMessage, id, appFromAnsi(message));
 			break;
 	}
 }
