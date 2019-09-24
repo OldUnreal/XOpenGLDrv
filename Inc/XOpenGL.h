@@ -47,6 +47,7 @@
         //Glew doesn't seem to work in an ES only environment and officially it does not support ES.
         //A solely ES based context can be made using glad, so gonna use glad here.
     #endif
+		#define GLAD 1
 	#ifdef GLAD
 		extern "C"
 		{
@@ -54,11 +55,7 @@
 		}
 	#endif
 
-    #ifdef SDL2BUILD
-        #include <SDL2/SDL.h>
-    #elif QTBUILD
-
-    #endif
+#include "SDL.h"
 #endif
 
 #include "XOpenGLTemplate.h" //thanks han!

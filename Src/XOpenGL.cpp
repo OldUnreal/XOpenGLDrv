@@ -881,7 +881,6 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 #ifdef SDL2BUILD
 		debugf(TEXT("XOpenGL: SetRes requires ResizeViewport"));
 
-#ifdef __EMSCRIPTEN__ // Ryan, I don't need this here, in my SDL2Drv I don't destroy the context, indeed I just resize only the viewport instead. I assume this was the reason for you to add it.
 		INT DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
 		INT DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 		INT DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
@@ -903,7 +902,6 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 		else
 			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-#endif
 
 
 		if (!Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes)) //need to create temporary SDL2 window for context creation.
@@ -994,20 +992,23 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 	}
 	else UnsetRes();
-#endif
+# if !defined(SDL2BUILD) || ENGINE_VERSION<436 || ENGINE_VERSION>500
 	// Change window size. FIXME! Why double calling? SDL2 won't work with that.
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
 	{
 		debugf(TEXT("XOpenGL: Change window size failed!"));
-#ifdef WINBUILD
+#  ifdef WINBUILD
 		if (Fullscreen)
 		{
 			TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
 		}
-#endif
+#  endif
 		return 0;
 	}
+# endif
+
+#endif
 
 	// Verify hardware defaults.
 	CurrentPolyFlags = PF_Occlude;
