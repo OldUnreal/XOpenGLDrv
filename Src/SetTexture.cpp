@@ -98,7 +98,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
     // avoid lookups by storing information directly into texture. Add bindless information if available.
     // Should save quite some CPU.
     // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
@@ -774,7 +774,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
             LockBuffer(GlobalUniformTextureHandles, 0);
 
-            #if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || defined(UNREAL_TOURNAMENT_UTPG)
             // avoid lookups by storing information directly into texture. Add bindless information if available.
             // Should save quite some CPU.
             // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
@@ -791,7 +791,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
 
             Info.Texture->TextureHandle = FCachedTextureInfo;
-            #endif
+#endif
             TexNum++;
 
             if (TexNum > NUMTEXTURES)

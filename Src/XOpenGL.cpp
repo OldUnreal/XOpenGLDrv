@@ -106,7 +106,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("NoDrawTile"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawTile), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawSimple"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawSimple), TEXT("DebugOptions"), CPF_Config);
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || defined(UNREAL_TOURNAMENT_UTPG)
 	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
 	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
@@ -208,7 +208,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || defined(UNREAL_TOURNAMENT_UTPG)
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
@@ -264,14 +264,14 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("NoDrawTile %i"), NoDrawTile);
 	debugf(NAME_DevLoad, TEXT("NoDrawSimple %i"), NoDrawSimple);
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 
 	// new in 227j. This will tell render to use the abilities a new rendev provides instead of using internal (CPU intense) functions.
 	//In use so far for DetailTextures on meshes.
 	LegacyRenderingOnly = 0;
 
 	// Make use of DrawGouraudPolyList for Meshes and leave the clipping up for the rendev. Instead of pushing vert by vert this uses a huge list.
 	SupportsNoClipRender = UseHWClipping;
-#else
+#elif !defined(UNREAL_TOURNAMENT_UTPG)
 	UseBindlessTextures = 0;
 	UseHWClipping = 0;
 #endif
@@ -1127,7 +1127,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	debugf(TEXT("XOpenGL: Flush"));
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || defined(UNREAL_TOURNAMENT_UTPG)
 
 	// Create a list of static lights.
 	if (StaticLightList.Num())
