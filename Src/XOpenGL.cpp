@@ -2006,6 +2006,8 @@ BYTE*				UXOpenGLRenderDevice::Compose = NULL;
 
 bool				UXOpenGLRenderDevice::NeedsInit = true;
 bool				UXOpenGLRenderDevice::bMappedBuffers = false;
+PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
+PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
 
 // Shaderprogs
 INT					UXOpenGLRenderDevice::ActiveProgram = -1;

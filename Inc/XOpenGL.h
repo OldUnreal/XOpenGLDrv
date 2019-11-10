@@ -409,8 +409,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	HWND hWnd;
 	HDC hDC;
     static PIXELFORMATDESCRIPTOR pfd;
-    PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB = nullptr;
-    PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = nullptr;
+    static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
+    static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
 	#endif
 
 	UBOOL WasFullscreen;
