@@ -9,6 +9,9 @@
 =============================================================================*/
 
 // Include GLM
+#ifdef _MSC_VER
+#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -56,7 +59,7 @@ void UXOpenGLRenderDevice::PopHit(INT Count, UBOOL bForce)
 	guard(UXOpenGLRenderDevice::PopHit);
 
 	check(Count <= HitStack.Num());
-	UBOOL Hit = 0;
+	//UBOOL Hit = 0;
 
 	// Force end buffing polygons. This makes sure we won't
 	// draw the buffered polygones under the wrong name.
@@ -93,7 +96,7 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 
 	if (HitTesting())
 	{
-		SetBlend(-1, -1,  false);
+		SetBlend(static_cast<DWORD>(-1), -1,  false);
 
 		// Disabled dithering.
 		glDisable(GL_DITHER);

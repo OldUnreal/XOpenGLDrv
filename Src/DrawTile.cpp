@@ -13,6 +13,9 @@
 =============================================================================*/
 
 // Include GLM
+#ifdef _MSC_VER
+#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -217,7 +220,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
     CHECK_GL_ERROR();
     clockFast(Stats.TileDrawCycles);
     INT DrawMode = GL_TRIANGLES;
-    GLuint BeginOffset = BufferData.BeginOffset * sizeof(float);
+    PTRINT BeginOffset = BufferData.BeginOffset * sizeof(float);
 
     if (OpenGLVersion == GL_ES)
 	{

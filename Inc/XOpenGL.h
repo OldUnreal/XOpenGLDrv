@@ -613,13 +613,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//PMB's
 	struct BufferRange
 	{
-		GLsync Sync[NUMBUFFERS];
-		FLOAT* Buffer;
-		FLOAT* VertBuffer;
-		GLuint64* UniformBuffer;
-		BufferRange()
-		: Sync()
-		{}
+		GLsync Sync[NUMBUFFERS]{};
+		FLOAT* Buffer{};
+		FLOAT* VertBuffer{};
+		GLuint64* UniformBuffer{};
 	};
 
 	BufferRange DrawGouraudBufferRange;
@@ -785,8 +782,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint VertSize;
 		GLuint TexSize;
 		GLuint Index;
-		GLuint IndexOffset;
-		GLuint BeginOffset;
+		PTRINT IndexOffset;
+		PTRINT BeginOffset;
 		GLuint Iteration;
 		DWORD PolyFlags;
 		DWORD RendMap;

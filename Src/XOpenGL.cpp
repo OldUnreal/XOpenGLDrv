@@ -18,6 +18,9 @@ Todo:
 =============================================================================*/
 
 // Include GLM
+#ifdef _MSC_VER
+#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -121,7 +124,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	// Defaults.
 	RefreshRate = 60;
 	NumAASamples = 4;
-	GammaOffsetScreenshots = 0.7;
+	GammaOffsetScreenshots = 0.7f;
 	LODBias = 0.f;
 	MaxAnisotropy = 4.f;
 	UseHWClipping = 1;
@@ -530,23 +533,16 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 #else
 	if (NeedsInit)
 	{
-		PIXELFORMATDESCRIPTOR temppfd =
-		{
-			sizeof(PIXELFORMATDESCRIPTOR),
-			1,
-			PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-			PFD_TYPE_RGBA,
-			DesiredColorBits,
-			0, 0, 0, 0, 0, 0,
-			0, 0,
-			0, 0, 0, 0, 0,
-			DesiredDepthBits,
-			0,//DesiredStencilBits,
-			0,
-			PFD_MAIN_PLANE,
-			0,
-			0, 0, 0
-		};
+		PIXELFORMATDESCRIPTOR temppfd{};
+		temppfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+		temppfd.nVersion = 1;
+		temppfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+		temppfd.iPixelType = PFD_TYPE_RGBA;
+		temppfd.cColorBits = DesiredColorBits;
+		temppfd.cDepthBits = DesiredDepthBits;
+		//temppfd.cStencilBits = DesiredStencilBits;
+		temppfd.cAlphaBits = 0;
+		temppfd.iLayerType = PFD_MAIN_PLANE;
 		DWORD Style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
 		WNDCLASSEX WndClassEx;
 		memset(&WndClassEx, 0, sizeof(WNDCLASSEX));
@@ -866,7 +862,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	if (hRC && CurrentGLContext && hRC == CurrentGLContext)
 #endif
 	{
-		if (!Fullscreen && !WasFullscreen && NewColorBytes == Viewport->ColorBytes)
+		if (!Fullscreen && !WasFullscreen && NewColorBytes == static_cast<INT>(Viewport->ColorBytes))
 		{
 			// Change window size.
 			if (!Viewport->ResizeViewport(BLIT_HardwarePaint | BLIT_OpenGL, NewX, NewY, NewColorBytes))
@@ -1012,7 +1008,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 #endif
 
 	// Verify hardware defaults.
-	CurrentPolyFlags = PF_Occlude;
+	CurrentPolyFlags = static_cast<DWORD>(PF_Occlude);
 
 	// Set & Store Gamma
 	SetGamma(Viewport->GetOuterUClient()->Brightness);
@@ -1411,7 +1407,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	guard(UXOpenGLRenderDevice::SetOrthoProjection);
 
 	// Precompute stuff.
-	FLOAT zNear = 0.5f;
+	//FLOAT zNear = 0.5f;
 	FLOAT zFar = (GIsEditor && Frame->Viewport->Actor->RendMap == REN_Wire) ? 131072.0 : 65336.f;
 
 	StoredFovAngle = StoredFX = StoredFY = 0; //ensure Matrix is updated again if not ortho.
@@ -1421,7 +1417,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	StoredOrthoFY = Frame->FY;
 
 	Aspect = Frame->FY / Frame->FX;
-	RProjZ = appTan(Viewport->Actor->FovAngle * PI / 360.0);
+	RProjZ = appTan(static_cast<DOUBLE>(Viewport->Actor->FovAngle) * PI / 360.0);
 	RFX2 = 2.0*RProjZ / Frame->FX;
 	RFY2 = 2.0*RProjZ*Aspect / Frame->FY;
 	projMat = glm::ortho(-RProjZ, +RProjZ, -Aspect*RProjZ, +Aspect*RProjZ, -zFar, zFar);
@@ -1462,7 +1458,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame)
 	StoredFY = Frame->FY;
 
 	Aspect = Frame->FY / Frame->FX;
-	RProjZ = appTan(Viewport->Actor->FovAngle * PI / 360.0);
+	RProjZ = appTan(static_cast<DOUBLE>(Viewport->Actor->FovAngle) * PI / 360.0);
 	RFX2 = 2.0*RProjZ / Frame->FX;
 	RFY2 = 2.0*RProjZ*Aspect / Frame->FY;
 	projMat = glm::frustum(-RProjZ*zNear, +RProjZ*zNear, -Aspect*RProjZ*zNear, +Aspect*RProjZ*zNear, zNear, zFar);
@@ -1521,7 +1517,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 #endif
 
 	glPolygonOffset(-1.f, -1.f);
-	SetBlend(PF_Occlude, -1, false);
+	SetBlend(static_cast<DWORD>(PF_Occlude), -1, false);
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags&LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
 
 	glDepthFunc(GL_LEQUAL);
@@ -1644,7 +1640,7 @@ void UXOpenGLRenderDevice::SetGamma(FLOAT GammaCorrection)
 {
 	guard(UXOpenGLRenderDevice::SetGamma);
 
-	GammaCorrection += 0.1; // change range from 0.0-0.9 to 0.1 to 1.0
+	GammaCorrection += 0.1f; // change range from 0.0-0.9 to 0.1 to 1.0
 	Gamma = GammaCorrection;
 
 	unguard;
@@ -1655,7 +1651,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	guard(UXOpenGLRenderDevice::ClearZ);
 	CHECK_GL_ERROR();
 	SetSceneNode(Frame);
-	SetBlend(PF_Occlude, -1, false);
+	SetBlend(static_cast<DWORD>(PF_Occlude), ~0, false);
 	glClear(GL_DEPTH_BUFFER_BIT);
 	CHECK_GL_ERROR();
 	unguard;
@@ -1668,13 +1664,13 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		(
 		Result,
 		TEXT("XOpenGL stats: Bind=%04.1f Image=%04.1f Complex=%04.1f Gouraud=%04.1f GouraudList=%04.1f Tile Buffer/Draw=%04.1f/%04.1f"),
-		GSecondsPerCycle * 1000 * Stats.BindCycles,
-		GSecondsPerCycle * 1000 * Stats.ImageCycles,
-		GSecondsPerCycle * 1000 * Stats.ComplexCycles,
-		GSecondsPerCycle * 1000 * Stats.GouraudPolyCycles,
-		GSecondsPerCycle * 1000 * Stats.GouraudPolyListCycles,
-		GSecondsPerCycle * 1000 * Stats.TileBufferCycles,
-		GSecondsPerCycle * 1000 * Stats.TileDrawCycles
+		GSecondsPerCycle * 1000.f * Stats.BindCycles,
+		GSecondsPerCycle * 1000.f * Stats.ImageCycles,
+		GSecondsPerCycle * 1000.f * Stats.ComplexCycles,
+		GSecondsPerCycle * 1000.f * Stats.GouraudPolyCycles,
+		GSecondsPerCycle * 1000.f * Stats.GouraudPolyListCycles,
+		GSecondsPerCycle * 1000.f * Stats.TileBufferCycles,
+		GSecondsPerCycle * 1000.f * Stats.TileDrawCycles
 		);
 	CHECK_GL_ERROR();
 	unguard;

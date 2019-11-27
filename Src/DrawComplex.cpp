@@ -13,6 +13,9 @@
 =============================================================================*/
 
 // Include GLM
+#ifdef _MSC_VER
+#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -252,7 +255,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
 	glEnableVertexAttribArray(NORMALS_ATTRIB);// SurfNormals
 
-	GLuint BeginOffset = BufferData.BeginOffset * sizeof(float);
+	PTRINT BeginOffset = BufferData.BeginOffset * sizeof(float);
 	glVertexAttribPointer(VERTEX_COORD_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (void*)BeginOffset);
 	glVertexAttribPointer(NORMALS_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (void*)(	BeginOffset + FloatSize4));
 

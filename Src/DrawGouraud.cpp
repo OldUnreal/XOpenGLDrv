@@ -23,6 +23,9 @@
 =============================================================================*/
 
 // Include GLM
+#ifdef _MSC_VER
+#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
+#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -390,7 +393,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
 	glEnableVertexAttribArray(TEXTURE_ATTRIB);
 
-	GLuint BeginOffset = BufferData.BeginOffset * sizeof(float);
+	PTRINT BeginOffset = BufferData.BeginOffset * sizeof(float);
 
 	glVertexAttribPointer(VERTEX_COORD_ATTRIB,		3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)	BeginOffset);
 	glVertexAttribPointer(TEXTURE_COORD_ATTRIB,		2, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3));
