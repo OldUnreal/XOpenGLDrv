@@ -421,8 +421,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 {
 	guard(UXOpenGLRenderDevice::CreateOpenGLContext);
 
-    #ifdef _WIN32
-	if (hRC || CurrentGLContext)
+	#ifdef _WIN32
+	if (hRC/* || CurrentGLContext*/) // stijn: @Smirftsch if you have multiple rendevs sharing the same context, then only one of them gets added to AllContexts. This also means that everything breaks as soon as you deinitialize one XOpenGLDrv instance
 	{
 		MakeCurrent(Viewport);
 		return 1;
@@ -1078,6 +1078,8 @@ void UXOpenGLRenderDevice::SwapControl()
 	{
 		PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = NULL;
 		wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
+		if (!wglSwapIntervalEXT)
+			return;
 		switch (UseVSync)
 		{
 		case VS_On:
@@ -1368,7 +1370,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 #endif // ENGINE_VERSION
 
 	//avoid some overhead, only calculate and set again if something was really changed.
-	if (Frame->Viewport->IsOrtho() && (!bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || StoredOrthoFY != Frame->FY))
+	if (Frame->Viewport->IsOrtho())
 		SetOrthoProjection(Frame);
 	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY)
 		SetProjection(Frame);
@@ -1757,9 +1759,9 @@ void UXOpenGLRenderDevice::Exit()
 #else
 	// Shut down this GL context. May fail if window was already destroyed.
 	check(hRC)
-		CurrentGLContext = NULL;
-	verify(wglMakeCurrent(NULL, NULL));
-	verify(wglDeleteContext(hRC));
+	CurrentGLContext = NULL;
+	wglMakeCurrent(NULL, NULL);
+	wglDeleteContext(hRC);
 	verify(AllContexts.RemoveItem(hRC) == 1);
 	hRC = NULL;
 	if (WasFullscreen)
