@@ -1662,7 +1662,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 {
 	guard(UXOpenGLRenderDevice::GetStats);
-	appSprintf
+	appSprintf // stijn: mem safety NOT OK
 		(
 		Result,
 		TEXT("XOpenGL stats: Bind=%04.1f Image=%04.1f Complex=%04.1f Gouraud=%04.1f GouraudList=%04.1f Tile Buffer/Draw=%04.1f/%04.1f"),
