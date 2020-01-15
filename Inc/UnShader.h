@@ -82,7 +82,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 		debugf(TEXT("Shader %ls: %ls \n\n"), Filename, *Text);
 	}
 
-	const GLchar* Shader = TCHAR_TO_ANSI(*Text);
+	const GLchar* Shader = appToAnsi(*Text);
 	length = (GLint)appStrlen(*Text);
 	glShaderSource(ShaderObject, 1, &Shader, &length);
 	glCompileShader(ShaderObject);
@@ -311,7 +311,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformLocation(DrawComplexSinglePassTexNum, DrawComplexProg, "TexNum", DrawComplexSinglePass);
 	// Multitextures in DrawComplexProg
 	for (INT i = 0; i < 8; i++)
-        GetUniformLocation(DrawComplexSinglePassTexture[i], DrawComplexProg, (char*) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawComplexSinglePass);
+        GetUniformLocation(DrawComplexSinglePassTexture[i], DrawComplexProg, (char*) (appToAnsi(*FString::Printf(TEXT("Texture%i"), i))), DrawComplexSinglePass);
 	CHECK_GL_ERROR();
 
 	//DrawGouraud vars.
@@ -325,7 +325,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformLocation(DrawGouraudLightPos, DrawGouraudProg, "LightPos", DrawGouraud);
 	// Multitextures DrawGouraudProg
 	for (INT i = 0; i < 8; i++)
-        GetUniformLocation(DrawGouraudTexture[i], DrawGouraudProg, (char *) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawGouraud);
+        GetUniformLocation(DrawGouraudTexture[i], DrawGouraudProg, (char *) (appToAnsi(*FString::Printf(TEXT("Texture%i"), i))), DrawGouraud);
 	// ShadowMap
 
 	CHECK_GL_ERROR();

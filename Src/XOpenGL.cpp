@@ -966,7 +966,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 			dma.dmFields |= DM_DISPLAYFREQUENCY;
 			dmw.dmFields |= DM_DISPLAYFREQUENCY;
 
-			if (TCHAR_CALL_OS(ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN), ChangeDisplaySettingsA(&dma, CDS_FULLSCREEN)) != DISP_CHANGE_SUCCESSFUL)
+			if (ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL)
 			{
 				debugf(TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
 				dma.dmFields &= ~DM_DISPLAYFREQUENCY;
@@ -980,7 +980,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 		if (tryNoRefreshRate)
 		{
-			if (TCHAR_CALL_OS(ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN), ChangeDisplaySettingsA(&dma, CDS_FULLSCREEN)) != DISP_CHANGE_SUCCESSFUL)
+			if (ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL)
 			{
 				debugf(TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i"), NewX, NewY);
 				return 0;
@@ -998,7 +998,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 #  ifdef WINBUILD
 		if (Fullscreen)
 		{
-			TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
+			ChangeDisplaySettingsW(NULL, 0);
 		}
 #  endif
 		return 0;
@@ -1031,7 +1031,7 @@ void UXOpenGLRenderDevice::UnsetRes()
 #ifdef WINBUILD
 	if (WasFullscreen)
 	{
-		TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
+		ChangeDisplaySettingsW(NULL, 0);
 	}
 #elif SDL2BUILD
 
@@ -1766,7 +1766,7 @@ void UXOpenGLRenderDevice::Exit()
 	hRC = NULL;
 	if (WasFullscreen)
 	{
-		TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
+		ChangeDisplaySettingsW(NULL, 0);
 	}
 
 	if (hDC)
@@ -1877,7 +1877,7 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	verify(AllContexts.RemoveItem(hRC) == 1);
 	hRC = NULL;
 	if (WasFullscreen)
-		TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
+		ChangeDisplaySettingsW(NULL, 0);
 
 	if (hDC)
 		ReleaseDC(hWnd, hDC);
