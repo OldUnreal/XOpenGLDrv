@@ -105,8 +105,8 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	//Draw polygons
 	SetProgram(ComplexSurfaceSinglePass_Prog);
 
-	if (DrawComplexBufferData.VertSize > 0 && (DrawComplexBufferData.PolyFlags != Surface.PolyFlags))
-		DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
+	//if (DrawComplexBufferData.VertSize > 0 && (DrawComplexBufferData.PolyFlags != Surface.PolyFlags))
+	//	DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
 
 	DWORD PolyFlags=SetBlend(Surface.PolyFlags, ComplexSurfaceSinglePass_Prog, false);
 	DrawComplexBufferData.PolyFlags = PolyFlags;
@@ -183,8 +183,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	//debugf(TEXT("Facet.MapCoords.XAxis.X %f, Facet.MapCoords.XAxis.Y %f, Facet.MapCoords.XAxis.Z %f,Facet.MapCoords.YAxis.X %f , Facet.MapCoords.YAxis.Y %f, Facet.MapCoords.YAxis.Z %f,Facet.MapCoords.ZAxis.X %f, Facet.MapCoords.ZAxis.Y %f, Facet.MapCoords.ZAxis.Z %f Facet.MapCoords.Origin.X %f, Facet.MapCoords.Origin.Y %f, Facet.MapCoords.Origin.Z %f"), Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, Facet.MapCoords.Origin.X, Facet.MapCoords.Origin.Y, Facet.MapCoords.Origin.Z);
 
-	if (DrawComplexSinglePassRange.Sync[DrawComplexBufferData.Index])
-            WaitBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
+	WaitBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
 
     for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
     {
@@ -250,10 +249,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
     CHECK_GL_ERROR();
 
 	// Gamma
-	glUniform1f(DrawComplexSinglePassGamma,Gamma);
-
-	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glEnableVertexAttribArray(NORMALS_ATTRIB);// SurfNormals
+	glUniform1f(DrawComplexSinglePassGamma,Gamma);	
 
 	PTRINT BeginOffset = BufferData.BeginOffset * sizeof(float);
 	glVertexAttribPointer(VERTEX_COORD_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (void*)BeginOffset);
@@ -297,10 +293,6 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 	BufferData.IndexOffset = 0;
 	for (INT i = 0; i < ARRAY_COUNT(BufferData.TexNum);i++)
 		BufferData.TexNum[i] = 0;
-
-	// Clean up
-	glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glDisableVertexAttribArray(NORMALS_ATTRIB);
 
 	CHECK_GL_ERROR();
 }

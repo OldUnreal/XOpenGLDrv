@@ -51,9 +51,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
     if (PolyFlags & PF_Unlit)//Of no relevance here.
 		PolyFlags &= ~PF_Unlit;
 
-	if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags&PF_Translucent))
-		PolyFlags |= PF_Highlighted;
-
     if(UseBindlessTextures && (DrawTileBufferData.VertSize > 0) && (DrawTileBufferData.PolyFlags != PolyFlags))
     {
         // Non 227: to make this work, add missing ComputeRenderSize() in URender::DrawWorld and UGameEngine::Draw for canvas operations.
@@ -89,7 +86,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 #else
 	else Color.W = 1.0f;
 #endif
-	if (UsePersistentBuffersTile && DrawTileRange.Sync[DrawTileBufferData.Index])
+	if (UsePersistentBuffersTile)
 		WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
 
 	if (OpenGLVersion == GL_ES)
@@ -231,16 +228,14 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
                 glInvalidateBufferData(DrawTileVertBuffer);
             glBufferSubData(GL_ARRAY_BUFFER, 0, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
         }
-		glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-		glEnableVertexAttribArray(COLOR_ATTRIB);
-		glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
-
-		glVertexAttribPointer(VERTEX_COORD_ATTRIB, 3, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset));
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB, 2, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset + FloatSize3));
-		glVertexAttribPointer(COLOR_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset + FloatSize3_2));
-		glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB, 1, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset + FloatSize3_2_4));
-		CHECK_GL_ERROR();
+        else
+        {
+            glVertexAttribPointer(VERTEX_COORD_ATTRIB,      3, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset));
+            glVertexAttribPointer(TEXTURE_COORD_ATTRIB,     2, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset + FloatSize3));
+            glVertexAttribPointer(COLOR_ATTRIB,             4, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset + FloatSize3_2));
+            glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB,  1, GL_FLOAT, GL_FALSE, DrawTileESStrideSize, (void*)(BeginOffset + FloatSize3_2_4));
+            CHECK_GL_ERROR();
+        }
 	}
 	else
 	{
@@ -251,19 +246,15 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
             glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_STREAM_DRAW);
             CHECK_GL_ERROR();
         }
-		glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
-		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
-		glEnableVertexAttribArray(COLOR_ATTRIB);
-		glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
-
-		glVertexAttribPointer(VERTEX_COORD_ATTRIB, 3, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)BeginOffset);
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3));
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB2, 4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4));
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB3, 4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4_4));
-		glVertexAttribPointer(COLOR_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4_4_4));
-		glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB, 1, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4_4_4_4));
+        else
+        {
+            glVertexAttribPointer(VERTEX_COORD_ATTRIB,      3, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)BeginOffset);
+            glVertexAttribPointer(TEXTURE_COORD_ATTRIB,     4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3));
+            glVertexAttribPointer(TEXTURE_COORD_ATTRIB2,    4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4));
+            glVertexAttribPointer(TEXTURE_COORD_ATTRIB3,    4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4_4));
+            glVertexAttribPointer(COLOR_ATTRIB,             4, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4_4_4));
+            glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB,  1, GL_FLOAT, GL_FALSE, DrawTileCoreStrideSize, (void*)(BeginOffset + FloatSize3_4_4_4_4));
+        }
 		CHECK_GL_ERROR();
 	}
 
@@ -291,7 +282,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
 	glDrawArrays(DrawMode, 0, (BufferData.VertSize / FloatsPerVertex));
     CHECK_GL_ERROR();
 
-	if(UsePersistentBuffersTile)
+	if (UsePersistentBuffersTile)
 	{
 		LockBuffer(DrawTileRange, BufferData.Index);
         BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
@@ -304,17 +295,6 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
 	BufferData.ColorSize = 0;
 	BufferData.IndexOffset = 0;
 	BufferData.FloatSize1 = 0;
-
-    // Clean up
-    glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
-    glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-    glDisableVertexAttribArray(COLOR_ATTRIB);
-    if (OpenGLVersion == GL_Core)
-    {
-        glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-		glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
-		glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
-    }
 
     if (UseBindlessTextures)
         glDisableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);

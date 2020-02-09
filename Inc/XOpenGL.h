@@ -65,11 +65,19 @@ Globals.
 -----------------------------------------------------------------------------*/
 #define MAX_FRAME_RECURSION 4
 
+
 #define DRAWSIMPLE_SIZE 262144
 #define DRAWTILE_SIZE 524288
 #define DRAWCOMPLEX_SIZE 262144
 #define DRAWGOURAUDPOLY_SIZE 1048576
 #define DRAWGOURAUDPOLYLIST_SIZE 262144
+/*
+#define DRAWSIMPLE_SIZE (32 * 1024 * 1024)
+#define DRAWTILE_SIZE (32 * 1024 * 1024)
+#define DRAWCOMPLEX_SIZE (32 * 1024 * 1024)
+#define DRAWGOURAUDPOLY_SIZE (32 * 1024 * 1024)
+#define DRAWGOURAUDPOLYLIST_SIZE (32 * 1024 * 1024)
+*/
 #define NUMBUFFERS 6
 #define NUMTEXTURES 4096
 #define MAX_LIGHTS 256

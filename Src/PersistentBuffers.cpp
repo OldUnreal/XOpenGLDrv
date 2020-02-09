@@ -34,10 +34,11 @@ void UXOpenGLRenderDevice::LockBuffer(BufferRange& Buffer, GLuint Index)
 void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::WaitBuffer);
-
-    CHECK_GL_ERROR();
+    
+	CHECK_GL_ERROR();
 	GLuint64 WaitDuration = 0;
 	GLenum WaitReturn = GL_UNSIGNALED;
+	
 	if (Buffer.Sync[Index])
     {
         while (1)
@@ -57,6 +58,7 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 			WaitDuration = 500000;
         }
     }
+	
 	CHECK_GL_ERROR();
 	unguard;
 }
