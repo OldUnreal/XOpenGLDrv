@@ -180,7 +180,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 		if (Info.NumMips && !Info.Mips[0])
 		{
-			GWarn->Logf(TEXT("Encountered texture %ls with invalid MipMaps!"), Info.Texture->GetPathName());
+			GWarn->Logf(TEXT("Encountered texture %ls with invalid MipMaps!"), *FObjectPathName(Info.Texture));
 			Info.NumMips = 0;
 			Unsupported = 1;
 		}
@@ -194,7 +194,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 			if ( Bind->BaseMip>=Info.NumMips )
 			{
-				GWarn->Logf( TEXT("Encountered oversize texture %ls without sufficient mipmaps."), Info.Texture->GetPathName() );
+				GWarn->Logf( TEXT("Encountered oversize texture %ls without sufficient mipmaps."), *FObjectPathName(Info.Texture) );
 				Unsupported = 1;
 			}
 		}
@@ -214,15 +214,15 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			glGenSamplers(1, &Bind->Sampler[CacheSlot]);
 
 		CHECK_GL_ERROR();
-		#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode);
-		#else
+#else
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
-		#endif
+#endif
 
 		// Spew warning if we uploaded this texture twice.
 		if ( ExistingBind )
-			debugf( NAME_Warning, TEXT("Unpacking texture %ls a second time as %ls."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
+			debugf( NAME_Warning, TEXT("Unpacking texture %ls a second time as %ls."), *FObjectFullName(Info.Texture), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
 
 		ExistingBind = false;
 	}
@@ -304,7 +304,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		if( Info.Format==TEXF_P8 )
 		{
 			if ( !Info.Palette )
-				appErrorf( TEXT("Encountered bogus P8 texture %ls"), Info.Texture->GetFullName() );
+				appErrorf( TEXT("Encountered bogus P8 texture %ls"), *FObjectFullName(Info.Texture) );
 
 			if ( PolyFlags & PF_Masked )
 			{
@@ -387,9 +387,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                                     break;
                                 }
                                 if ( NoAlpha )
-                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGB_S3TC_DXT1_EXT as fallback for %ls."), Info.Texture->GetPathName() );
+                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGB_S3TC_DXT1_EXT as fallback for %ls."), *FObjectPathName(Info.Texture) );
                                 else
-                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT1_EXT as fallback for %ls."), Info.Texture->GetPathName() );
+                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT1_EXT as fallback for %ls."), *FObjectPathName(Info.Texture) );
                             }
                             InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
                             break;
@@ -403,7 +403,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                             break;
                         }
                     }
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), *FObjectPathName(Info.Texture) );
 					Unsupported = 1;
 					break;
 #if ENGINE_VERSION==227
@@ -419,7 +419,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                                     InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
                                     break;
                                 }
-                                GWarn->Logf(TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT3_EXT as fallback for %ls."), Info.Texture->GetPathName());
+                                GWarn->Logf(TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT3_EXT as fallback for %ls."), *FObjectPathName(Info.Texture) );
                             }
                             InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
                             break;
@@ -433,7 +433,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                             break;
                         }
                     }
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), *FObjectPathName(Info.Texture) );
 					Unsupported = 1;
 					break;
 				case TEXF_DXT5:
@@ -448,7 +448,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                                     InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
                                     break;
                                 }
-                                debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT5_EXT as fallback for %ls."), Info.Texture->GetPathName());
+                                debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT5_EXT as fallback for %ls."), *FObjectPathName(Info.Texture) );
                             }
                             InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
                             break;
@@ -462,7 +462,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                             break;
                         }
                     }
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), *FObjectPathName(Info.Texture) );
 					Unsupported = 1;
 					break;
 
@@ -495,7 +495,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 				// Default: Mark as unsupported.
 				default:
-					GWarn->Logf( TEXT("Unknown texture format %i on texture %ls."), Info.Format, Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("Unknown texture format %i on texture %ls."), Info.Format, *FObjectPathName(Info.Texture) );
 					Unsupported = 1;
 					break;
 			}
@@ -643,12 +643,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 						// Should not happen (TM).
 						default:
-							appErrorf( TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
+							appErrorf( TEXT("Unpacking unknown format %i on %ls."), Info.Format, *FObjectFullName(Info.Texture) );
 							break;
 					}
 				}
 				else {
-					appErrorf(TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
+					appErrorf(TEXT("Unpacking unknown format %i on %ls."), Info.Format, *FObjectFullName(Info.Texture) );
 					break;
 				}
                 CHECK_GL_ERROR();
@@ -728,7 +728,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
-				GWarn->Logf( TEXT("No mip map unpacked for texture %ls."), Info.Texture->GetPathName() );
+				GWarn->Logf( TEXT("No mip map unpacked for texture %ls."), *FObjectPathName(Info.Texture) );
 		}
 
 		// Create and unpack a chequerboard fallback texture texture for an unsupported format.
