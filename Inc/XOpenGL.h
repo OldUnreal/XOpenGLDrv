@@ -1037,7 +1037,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// UObject interface.
 	void StaticConstructor();
-	void PostEditChange();
+	void PostEditChange() ;
 
 	UBOOL CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
 	UBOOL SetWindowPixelFormat();
@@ -1049,20 +1049,20 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void PrintFormat( HDC hDC, INT nPixelFormat );
 	#endif
 
-    UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
+    UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen) ;
 	UBOOL InitGLEW(HINSTANCE hInstance);
 
 	static QSORT_RETURN CDECL CompareRes(const FPlane* A, const FPlane* B) {
 		return (QSORT_RETURN) (((A->X - B->X) != 0.0f) ? (A->X - B->X) : (A->Y - B->Y));
 	}
 
-	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar);
-	void Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize);
-	void SetSceneNode(FSceneNode* Frame);
+	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar) ;
+	void Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize) ;
+	void SetSceneNode(FSceneNode* Frame) ;
 	void SetOrthoProjection(FSceneNode* Frame);
 	void SetProjection(FSceneNode* Frame);
-	void Unlock(UBOOL Blit);
-	void Flush(UBOOL AllowPrecache);
+	void Unlock(UBOOL Blit) ;
+	void Flush(UBOOL AllowPrecache) ;
 	void SetPermanentState();
 
 	void LockBuffer(BufferRange& Buffer, GLuint Index);
@@ -1072,39 +1072,39 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL GLExtensionSupported(FString Extension_Name);
 	void CheckExtensions();
 
-	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
+	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet) ;
 	void BufferComplexSurfacePoint( FLOAT* DrawComplexTemp, FTransform* P, DrawComplexTexMaps TexMaps, FSurfaceFacet& Facet, DrawComplexBuffer& BufferData );
-	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
+	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span) ;
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, AActor* Owner);
 	void BufferGouraudPolygonPoint(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer );
 	void BufferGouraudPolygonVert(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
-	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
+	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags) ;
 	void BufferTiles(FLOAT* DrawTilesTemp, FLOAT* TileData);
-	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
-	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
-	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
+	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2) ;
+	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2) ;
+	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z) ;
 	void BufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
 	void DrawPass(FSceneNode* Frame, INT Pass);
-	void ClearZ(FSceneNode* Frame);
-	void GetStats(TCHAR* Result);
-	void ReadPixels(FColor* Pixels);
-	void EndFlash();
+	void ClearZ(FSceneNode* Frame) ;
+	void GetStats(TCHAR* Result) ;
+	void ReadPixels(FColor* Pixels) ;
+	void EndFlash() ;
 	void SwapControl();
-	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
+	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags) ;
 
 	// OldUnreal UT extended interface
-	void PushTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span) override;
-
+	void PushTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span) ;
+	
 	// Editor
-	void PushHit(const BYTE* Data, INT Count);
-	void PopHit(INT Count, UBOOL bForce);
+	void PushHit(const BYTE* Data, INT Count) ;
+	void PopHit(INT Count, UBOOL bForce) ;
 	void LockHit(BYTE* InHitData, INT* InHitSize);
 	void UnlockHit(UBOOL Blit);
 	void SetSceneNodeHit(FSceneNode* Frame);
 	bool HitTesting() { return HitData != NULL; }
 
 	void SetProgram( INT CurrentProgram );
-	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
+	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen) ;
 	void UnsetRes();
 	void MakeCurrent(UViewport* Viewport);
 
