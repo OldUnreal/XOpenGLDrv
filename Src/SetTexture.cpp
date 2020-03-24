@@ -353,7 +353,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_RGB;
 					break;
-				case TEXF_RGBA8:
+				case TEXF_BGRA8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_RGBA;
 					break;
@@ -593,7 +593,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// RGB8/RGBA8 -- Actually used by Brother Bear.
 						case TEXF_RGB8:
-						case TEXF_RGBA8:
+						case TEXF_BGRA8:
 #if ENGINE_VERSION==227
 						case TEXF_RGBA16:
 #endif

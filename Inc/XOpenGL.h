@@ -328,12 +328,18 @@ enum DrawFlags
 	XOpenGLDrv.
 -----------------------------------------------------------------------------*/
 
+#if UNREAL_TOURNAMENT_UTPG
+class UXOpenGLRenderDevice : public URenderDeviceOldUnreal469
+#else
 class UXOpenGLRenderDevice : public URenderDevice
+#endif
 {
 #if ENGINE_VERSION==227
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
 #elif ENGINE_VERSION==430
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
+#elif UNREAL_TOURNAMENT_UTPG
+	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDeviceOldUnreal469, CLASS_Config, XOpenGLDrv)
 #elif ENGINE_VERSION>=436 && ENGINE_VERSION < 1100
     DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
 #else
@@ -1085,6 +1091,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void EndFlash();
 	void SwapControl();
 	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
+
+	// OldUnreal UT extended interface
+	void PushTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span) override;
 
 	// Editor
 	void PushHit(const BYTE* Data, INT Count);

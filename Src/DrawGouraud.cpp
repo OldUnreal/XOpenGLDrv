@@ -214,7 +214,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	unguard;
 }
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
 void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, AActor* Owner)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolyList);
@@ -339,6 +339,11 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	unguard;
 }
 #endif
+
+void UXOpenGLRenderDevice::PushTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
+{
+	DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts, NumPts, PolyFlags, nullptr);
+}
 
 void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData)
 {
