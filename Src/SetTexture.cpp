@@ -349,12 +349,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
-					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
-					{
-						GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
-						Unsupported = 1;
-						break;
-					}
 					NoAlpha = CacheSlot;
                     if (OpenGLVersion == GL_Core)
                     {
@@ -583,41 +577,31 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// S3TC -- Ubiquitous Extension.
 						case TEXF_DXT1:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize/2;
+							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
 							ImgSrc = Mip->DataPtr;
 							break;
 #if ENGINE_VERSION==227
 						case TEXF_DXT3:
 						case TEXF_DXT5:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize;
+							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
 							ImgSrc = Mip->DataPtr;
 							break;
 
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
 						case TEXF_RGTC_R:
 						case TEXF_RGTC_R_SIGNED:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize  = USize*VSize/2;
+							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
 							ImgSrc = Mip->DataPtr;
 							break;
 						case TEXF_RGTC_RG:
 						case TEXF_RGTC_RG_SIGNED:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize;
+							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
 							ImgSrc = Mip->DataPtr;
 							break;
 						case TEXF_BPTC_RGBA:
 						case TEXF_BPTC_RGB_SF:
 						case TEXF_BPTC_RGB_UF:
-							if (USize<4 || VSize<4)
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize;
+							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
 							ImgSrc = Mip->DataPtr;
 							break;
 
@@ -703,9 +687,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				if (GenerateMipMaps)
 					break;
 			}
-
-			// DXT1 textures contain mip maps until 1x1.
-			FinishedUnpack:
 
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
