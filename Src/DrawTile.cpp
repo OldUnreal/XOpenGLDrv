@@ -51,6 +51,9 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
     if (PolyFlags & PF_Unlit)//Of no relevance here.
 		PolyFlags &= ~PF_Unlit;
 
+    if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
+        PolyFlags &= ~PF_Masked;
+
     if(UseBindlessTextures && (DrawTileBufferData.VertSize > 0) && (DrawTileBufferData.PolyFlags != PolyFlags))
     {
         // Non 227: to make this work, add missing ComputeRenderSize() in URender::DrawWorld and UGameEngine::Draw for canvas operations.
