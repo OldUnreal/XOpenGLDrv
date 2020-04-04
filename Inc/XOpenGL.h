@@ -176,6 +176,10 @@ enum DrawSimpleMode
 	DrawEndFlashMode    = 4,
 };
 
+#if UNREAL_TOURNAMENT_UTPG
+#define PF_AlphaBlend 0x20000 // stijn: we don't export this currently
+#endif
+
 #ifdef DEBUGGL
 #define CHECK_GL_ERROR() CheckGLError(__FILE__, __LINE__)
 #else
