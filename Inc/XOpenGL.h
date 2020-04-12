@@ -180,7 +180,7 @@ enum DrawSimpleMode
 // stijn: missing defs in UTPG tree
 #ifdef UNREAL_TOURNAMENT_UTPG
 #define PF_AlphaBlend 0x2000
-#define TEXF_RGBA8 TEXF_RGBA8_ // stijn: really BGRA8
+#define TEXF_RGBA8 TEXF_BGRA8 // stijn: really BGRA8
 
 enum ERenderZTest
 {
