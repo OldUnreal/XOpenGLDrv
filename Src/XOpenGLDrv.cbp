@@ -5,6 +5,7 @@
 		<Option title="XOpenGLDrv" />
 		<Option pch_mode="2" />
 		<Option compiler="clang" />
+		<Option virtualFolders="XOpenGLDrv/Inc/" />
 		<Build>
 			<Target title="Debug Win32">
 				<Option platforms="Windows;" />
@@ -235,23 +236,75 @@
 					<Add option="-Wl,-soname,XOpenGLGLDrv.so" />
 				</Linker>
 			</Target>
+			<Target title="Debug Lin64">
+				<Option platforms="Unix;" />
+				<Option output="../../System64/XOpenGLDrv" prefix_auto="0" extension_auto="1" />
+				<Option working_dir="../../System64" />
+				<Option object_output="DebugLin64" />
+				<Option type="3" />
+				<Option compiler="llvm_clang_compiler_debug_64" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add option="-DGLAD" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-Wl,-soname,XOpenGLDrv.so" />
+					<Add library="../../System64/libSDL2.so" />
+				</Linker>
+			</Target>
+			<Target title="Release Lin64">
+				<Option platforms="Unix;" />
+				<Option output="../../System64/XOpenGLDrv" prefix_auto="0" extension_auto="1" />
+				<Option working_dir="../../System64" />
+				<Option object_output="ReleaseLin64" />
+				<Option type="3" />
+				<Option compiler="llvm_clang_compiler_debug_64" />
+				<Option createDefFile="1" />
+				<Compiler>
+					<Add option="-DGPackage=GPackageXOpenGLDrv" />
+					<Add option="-DUNICODE" />
+					<Add option="-DGLAD" />
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+					<Add directory="../../Render/Inc" />
+				</Compiler>
+				<ResourceCompiler>
+					<Add directory="../Inc" />
+					<Add directory="../../Core/Inc" />
+					<Add directory="../../Engine/Inc" />
+				</ResourceCompiler>
+				<Linker>
+					<Add option="-Wl,-soname,XOpenGLDrv.so" />
+					<Add library="../../System64/libSDL2.so" />
+				</Linker>
+			</Target>
 		</Build>
 		<Unit filename="../../System/xopengl/DrawComplexHWLights.frag" />
 		<Unit filename="../../System/xopengl/DrawComplexHWLights.vert" />
 		<Unit filename="../../System/xopengl/DrawComplexSinglePass.frag" />
-		<Unit filename="../../System/xopengl/DrawComplexSinglePass.geo" />
 		<Unit filename="../../System/xopengl/DrawComplexSinglePass.vert" />
 		<Unit filename="../../System/xopengl/DrawGouraud.frag" />
 		<Unit filename="../../System/xopengl/DrawGouraud.geo" />
 		<Unit filename="../../System/xopengl/DrawGouraud.vert" />
-		<Unit filename="../../System/xopengl/DrawGouraudMeshBuffer.frag" />
-		<Unit filename="../../System/xopengl/DrawGouraudMeshBuffer.vert" />
 		<Unit filename="../../System/xopengl/DrawSimple.frag" />
 		<Unit filename="../../System/xopengl/DrawSimple.geo" />
 		<Unit filename="../../System/xopengl/DrawSimple.vert" />
 		<Unit filename="../../System/xopengl/DrawTile.frag" />
 		<Unit filename="../../System/xopengl/DrawTile.geo" />
 		<Unit filename="../../System/xopengl/DrawTile.vert" />
+		<Unit filename="../../System/xopengl/Extensions.incl" />
 		<Unit filename="../../System/xopengl/Globals.incl" />
 		<Unit filename="../Inc/UnShader.h" />
 		<Unit filename="../Inc/XOpenGL.h" />
@@ -264,8 +317,11 @@
 			<Option target="Release Mac32" />
 			<Option target="Debug Lin ARM" />
 			<Option target="Release Lin ARM" />
+			<Option target="Debug Lin64" />
+			<Option target="Release Lin64" />
 		</Unit>
 		<Unit filename="CheckExtensions.cpp" />
+		<Unit filename="ClipPlanes.cpp" />
 		<Unit filename="DebugLog.cpp" />
 		<Unit filename="DrawComplex.cpp" />
 		<Unit filename="DrawDistanceFog.cpp" />
@@ -279,7 +335,9 @@
 		<Unit filename="XOpenGL.cpp" />
 		<Unit filename="XOpenGLDrv.cpp" />
 		<Unit filename="glad.cpp" />
-		<Unit filename="resource.h" />
+		<Unit filename="resource.h">
+			<Option virtualFolder="XOpenGLDrv/Inc/" />
+		</Unit>
 		<Extensions>
 			<code_completion />
 			<envvars />

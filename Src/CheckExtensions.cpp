@@ -8,9 +8,6 @@ Revision history:
 =============================================================================*/
 
 // Include GLM
-#ifdef _MSC_VER
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -165,7 +162,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
 	if (MaxAnisotropy)
 	{
-		float tmp;
+		FLOAT tmp;
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &tmp);
 
 		if (tmp <= 0.f)
@@ -186,7 +183,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
 	if (NumAASamples)
 	{
-		int NumberOfAASamples = 0, MaxAASamples;
+		INT NumberOfAASamples = 0, MaxAASamples;
 		glGetIntegerv(GL_MAX_SAMPLES, &MaxAASamples);
 		glGetIntegerv(GL_SAMPLES, &NumberOfAASamples);
 		debugf(TEXT("XOpenGL: NumAASamples: (%i/%i)"), NumberOfAASamples, MaxAASamples);
@@ -203,6 +200,17 @@ void UXOpenGLRenderDevice::CheckExtensions()
 		debugf(TEXT("XOpenGL: Enabling UsePrecache for GenerateMipMaps."));
 		UsePrecache = 1;
 	}
+
+    // Extensions
+    NumberOfExtensions = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
+    debugf(TEXT("XOpenGL: GL_NUM_EXTENSIONS found: %i"), NumberOfExtensions);
+
+    // Clipping Planes
+    MaxClippingPlanes = 0;
+    glGetIntegerv(GL_MAX_CLIP_DISTANCES, &MaxClippingPlanes);
+    debugf(TEXT("XOpenGL: GL_MAX_CLIP_DISTANCES found: %i"), MaxClippingPlanes);
+
 
 	CHECK_GL_ERROR();
 

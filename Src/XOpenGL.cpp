@@ -18,9 +18,6 @@ Todo:
 =============================================================================*/
 
 // Include GLM
-#ifdef _MSC_VER
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -51,6 +48,7 @@ IMPLEMENT_CLASS(UXOpenGLRenderDevice);
 
 #if ENGINE_VERSION!=227
 #ifdef _WIN32
+#pragma comment(lib,"Winmm")
 void TimerBegin()
 {
 	// This will increase the precision of the kernel interrupt
@@ -85,7 +83,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UseVSync"), RF_Public)UByteProperty(CPP_PROPERTY(UseVSync), TEXT("Options"), CPF_Config, VSyncs);
 	new(GetClass(), TEXT("RefreshRate"), RF_Public)UIntProperty(CPP_PROPERTY(RefreshRate), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NumAASamples"), RF_Public)UIntProperty(CPP_PROPERTY(NumAASamples), TEXT("Options"), CPF_Config);
-	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("GammaOffsetScreenshots"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaOffsetScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("LODBias"), RF_Public)UFloatProperty(CPP_PROPERTY(LODBias), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxAnisotropy"), RF_Public)UFloatProperty(CPP_PROPERTY(MaxAnisotropy), TEXT("Options"), CPF_Config);
@@ -101,6 +98,18 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("NoAATiles"), RF_Public)UBoolProperty(CPP_PROPERTY(NoAATiles), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GenerateMipMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(GenerateMipMaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("SyncToDraw"), RF_Public)UBoolProperty(CPP_PROPERTY(SyncToDraw), TEXT("Options"), CPF_Config);
+
+
+#if ENGINE_VERSION==227
+	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
+	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
+	// OpenGL 4
+	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
+
+	// Debug Options
+	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoBuffering"), RF_Public)UBoolProperty(CPP_PROPERTY(NoBuffering), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawComplexSurface"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawComplexSurface), TEXT("DebugOptions"), CPF_Config);
@@ -108,15 +117,15 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("NoDrawGouraudList"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawGouraudList), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawTile"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawTile), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawSimple"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawSimple), TEXT("DebugOptions"), CPF_Config);
-
-#if ENGINE_VERSION==227// || defined(UNREAL_TOURNAMENT_UTPG)
-	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
-	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
-	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
-	// OpenGL 4
-	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
+#else
+	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("NoBuffering"), RF_Public)UBoolProperty(CPP_PROPERTY(NoBuffering), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("NoDrawComplexSurface"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawComplexSurface), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("NoDrawGouraud"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawGouraud), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("NoDrawTile"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawTile), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("NoDrawSimple"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawSimple), TEXT("Options"), CPF_Config);
 #endif
-	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBufferInvalidation"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBufferInvalidation), TEXT("Options"), CPF_Config);
 
 	//new(GetClass(),TEXT("EnableShadows"),			RF_Public)UBoolProperty ( CPP_PROPERTY(EnableShadows			), TEXT("Options"), CPF_Config);
@@ -154,7 +163,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #else
 	OpenGLVersion = GL_Core;
 #endif
-	UseVSync = VS_Off;
+	UseVSync = VS_On;
 
 	UseOpenGLDebug = 0;
 	DebugLevel = 2;
@@ -182,6 +191,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	Viewport = InViewport;
 
+	LastZMode = 255;
+	NumClipPlanes = 0;
+
 #if _WIN32 && ENGINE_VERSION!=227
 	TimerBegin();
 #endif
@@ -207,11 +219,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	TexNum = 1;
 	SwapControlExt = 0;
 	SwapControlTearExt = 0;
+	bFogEnabled = true; //force initial state.
 
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
 
-#if ENGINE_VERSION==227// || defined(UNREAL_TOURNAMENT_UTPG)
+#if ENGINE_VERSION==227
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
@@ -267,14 +280,13 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("NoDrawTile %i"), NoDrawTile);
 	debugf(NAME_DevLoad, TEXT("NoDrawSimple %i"), NoDrawSimple);
 
-#if ENGINE_VERSION==227 
+#if ENGINE_VERSION==227
 	// new in 227j. This will tell render to use the abilities a new rendev provides instead of using internal (CPU intense) functions.
 	//In use so far for DetailTextures on meshes.
 	LegacyRenderingOnly = 0;
 
 	// Make use of DrawGouraudPolyList for Meshes and leave the clipping up for the rendev. Instead of pushing vert by vert this uses a huge list.
 	SupportsNoClipRender = UseHWClipping;
-//#elif !defined(UNREAL_TOURNAMENT_UTPG)
 #else
 	UseBindlessTextures = 0;
 	UseHWClipping = 0;
@@ -295,7 +307,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
 
 #ifdef SDL2BUILD
-	SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
+	Viewport->GetWindow();
 #elif QTBUILD
 
 #else
@@ -318,7 +330,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 #endif
 
-	// Set resolution
+	// Set resolution, also creates context and checks extensions.
 	if (!SetRes(NewX, NewY, NewColorBytes, Fullscreen))
 	{
 		GWarn->Logf(TEXT("XOpenGL: SetRes failed!"));
@@ -357,6 +369,10 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	if (UseHWLighting)
 		InViewport->GetOuterUClient()->NoLighting = 1; // Disable (Engine) lighting.
+
+	// stijn: This ResetFog call was missing and caused the black screen bug in UTPG
+	if (bMappedBuffers)
+		ResetFog();
 
 	return 1;
 	unguard;
@@ -421,13 +437,13 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 {
 	guard(UXOpenGLRenderDevice::CreateOpenGLContext);
 
-	#ifdef _WIN32
-	if (hRC/* || CurrentGLContext*/) // stijn: @Smirftsch if you have multiple rendevs sharing the same context, then only one of them gets added to AllContexts. This also means that everything breaks as soon as you deinitialize one XOpenGLDrv instance
+#ifdef _WIN32
+	if (hRC)// || CurrentGLContext)
 	{
 		MakeCurrent(Viewport);
 		return 1;
 	}
-    #endif
+#endif
 
 	debugf(TEXT("XOpenGL: Creating new OpenGL context."));
 
@@ -453,14 +469,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 
 
 #ifdef SDL2BUILD
-	// Init global GL.
-	// no need to do SDL_Init here, done in SDL2Drv (USDL2Viewport::ResizeViewport).
-	SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
-
-	if (!Window)
-		appErrorf(TEXT("XOpenGL: No SDL Window found!"));
-
-	//Request OpenGL context.
+	
+	// Tell SDL what kind of context we want
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, MinorVersion);
 
@@ -470,9 +480,25 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	if (OpenGLVersion == GL_ES)
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	else
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
 
-	// not checking for any existing SDL context, create a new one, since using SDL for splash already and it's getting confused.
+	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, DesiredColorBits == 16 ? 5 : 8);
+	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, DesiredColorBits == 16 ? 5 : 8);
+	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, DesiredColorBits == 16 ? 5 : 8);
+	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
+//	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+
+	// not checking for any existing SDL context, create a new one, since using
+	// SDL for splash already and it's getting confused.
+	//
+
+	// Init global GL.
+	// no need to do SDL_Init here, done in SDL2Drv (USDL2Viewport::ResizeViewport).
+	SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
+
+	if (!Window)
+		appErrorf(TEXT("XOpenGL: No SDL Window found!"));
+
 	if (!glContext)
 		glContext = SDL_GL_CreateContext(Window);
 
@@ -481,21 +507,21 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 
 	MakeCurrent(Viewport);
 
-    #ifdef GLAD
-        if (OpenGLVersion == GL_ES)
-            gladLoadGLES2Loader(SDL_GL_GetProcAddress);
-        else
-            gladLoadGLLoader(SDL_GL_GetProcAddress);
-    #else
-        #define GL_PROC(ext,fntype,fnname) \
-                    if (SUPPORTS_##ext) { \
-                        if ((fnname = (fntype) SDL_GL_GetProcAddress(#fnname)) == NULL) { \
-                            debugf(NAME_Init, TEXT("Missing OpenGL entry point '%ls' for '%ls'"), #fnname, #ext); \
-                            SUPPORTS_##ext = 0; \
-                                        } \
-                                }
-        #include "XOpenGLFuncs.h"
-    #endif
+#ifdef GLAD
+	if (OpenGLVersion == GL_ES)
+		gladLoadGLES2Loader(SDL_GL_GetProcAddress);
+	else
+		gladLoadGLLoader(SDL_GL_GetProcAddress);
+#else
+# define GL_PROC(ext,fntype,fnname)										\
+	if (SUPPORTS_##ext) {												\
+		if ((fnname = (fntype) SDL_GL_GetProcAddress(#fnname)) == NULL) { \
+			debugf(NAME_Init, TEXT("Missing OpenGL entry point '%ls' for '%ls'"), #fnname, #ext); \
+			SUPPORTS_##ext = 0;											\
+		}																\
+	}
+# include "XOpenGLFuncs.h"
+#endif
 
 	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
 	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
@@ -503,8 +529,6 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
 	debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
 
-	int NumberOfExtensions = 0;
-	glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
 	for (INT i = 0; i<NumberOfExtensions; i++)
 	{
 		FString ExtensionString = appFromAnsi((const ANSICHAR *)glGetStringi(GL_EXTENSIONS, i));
@@ -820,6 +844,8 @@ void UXOpenGLRenderDevice::SetPermanentState()
 	CHECK_GL_ERROR();
 	glEnable(GL_BLEND);
 	CHECK_GL_ERROR();
+	glDisable(GL_CLIP_DISTANCE0);
+    CHECK_GL_ERROR();
 
 	/*
 	GLES 3 supports sRGB functionality, but it does not expose the
@@ -873,54 +899,6 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 			return 1;
 		}
 	}
-	else
-	{
-#ifdef SDL2BUILD
-		debugf(TEXT("XOpenGL: SetRes requires ResizeViewport"));
-
-		INT DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
-		INT DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
-		INT DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
-
-		INT MajorVersion = 3;
-		INT MinorVersion = 3;
-
-		if (OpenGLVersion == GL_ES)
-		{
-			MajorVersion = 2;
-			MinorVersion = 0;
-		}
-
-		//Request OpenGL 3.3 context.
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, MinorVersion);
-
-		if (OpenGLVersion == GL_ES)
-			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-		else
-			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-
-		if (!Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes)) //need to create temporary SDL2 window for context creation.
-			appErrorf(TEXT("XOpenGL: ResizeViewport failed!"));
-		if (glContext && glContext != CurrentGLContext)
-			MakeCurrent(Viewport);
-#else
-		// (Re)init OpenGL rendering context.
-		if (hRC && hRC != CurrentGLContext)
-			MakeCurrent(Viewport);
-#endif
-		else
-		{
-			if (!CreateOpenGLContext(Viewport, NewColorBytes))
-				return 0;
-		}
-		CHECK_GL_ERROR();
-
-		// Set permanent state... (OpenGL Presets)
-		SetPermanentState();
-		CHECK_GL_ERROR();
-	}
 
 #ifdef WINBUILD
 	// Change display settings.
@@ -956,6 +934,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		dma.dmBitsPerPel = dmw.dmBitsPerPel = NewColorBytes * 8;
 		dma.dmFields = dmw.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_POSITION;// | DM_BITSPERPEL;
 
+
 		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, NewX, NewY, SWP_SHOWWINDOW);
 
 		debugf(TEXT("XOpenGL: Fullscreen NewX %i NewY %i"), NewX, NewY);
@@ -989,32 +968,47 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 	}
 	else UnsetRes();
-# if !defined(SDL2BUILD) || ENGINE_VERSION<436 || ENGINE_VERSION>500
-	// Change window size. FIXME! Why double calling? SDL2 won't work with that.
+
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
 	{
 		debugf(TEXT("XOpenGL: Change window size failed!"));
-#  ifdef WINBUILD
 		if (Fullscreen)
 		{
-			ChangeDisplaySettingsW(NULL, 0);
+			TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
 		}
-#  endif
 		return 0;
 	}
-# endif
 
+	// (Re)init OpenGL rendering context.
+	if (hRC && hRC != CurrentGLContext)
+		MakeCurrent(Viewport);
+	else
+		CreateOpenGLContext(Viewport, NewColorBytes);
+#else
+
+	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
+	if (!Result)
+	{
+		debugf(TEXT("XOpenGL: Change window size failed!"));
+		return 0;
+	}
+
+	if (glContext && glContext != CurrentGLContext)
+		MakeCurrent(Viewport);
+	else
+		CreateOpenGLContext(Viewport, NewColorBytes);
 #endif
-
-	// Verify hardware defaults.
-	CurrentPolyFlags = static_cast<DWORD>(PF_Occlude);
-
-	// Set & Store Gamma
-	SetGamma(Viewport->GetOuterUClient()->Brightness);
 
 	// Flush textures.
 	Flush(1);
+
+	// Set permanent state... (OpenGL Presets)
+	SetPermanentState();
+	CHECK_GL_ERROR();
+
+	// Verify hardware defaults.
+	CurrentPolyFlags = static_cast<DWORD>(PF_Occlude);
 
 	// Remember fullscreenness.
 	WasFullscreen = Fullscreen;
@@ -1125,15 +1119,14 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	CHECK_GL_ERROR();
 
 	debugf(TEXT("XOpenGL: Flush"));
-
-#if ENGINE_VERSION==227 //|| defined(UNREAL_TOURNAMENT_UTPG)
-
+	
 	// Create a list of static lights.
 	if (StaticLightList.Num())
 		StaticLightList.Empty();
 
 	NumStaticLights = 0;
 
+#if ENGINE_VERSION==227
 	for (TObjectIterator<UTexture> It; It; ++It)
 	{
 		FCachedTexture* FCachedTextureInfo = (FCachedTexture*)It->TextureHandle;
@@ -1207,7 +1200,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	TexNum = 1;
 
 	if (bMappedBuffers)
-		ResetFog();
+        ResetFog();
 
 	if (SyncToDraw)
 		debugf(TEXT("XOpenGL: SyncToDraw enabled"));
@@ -1245,7 +1238,7 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 #else
 		FString Str = TEXT("");
 		// Available fullscreen video modes
-		INT display_count = 0, display_index = 0, mode_index = 0, i = 0;
+		INT display_count = 0, display_index = 0, i = 0;
 		SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
 
 		if ((display_count = SDL_GetNumDisplayModes(0)) < 1)
@@ -1254,6 +1247,7 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 		}
 		//debugf(TEXT("SDL_GetNumVideoDisplays returned: %i"), display_count);
 
+		INT PrevW = 0, PrevH = 0;
 		for (i = 0; i < display_count; i++)
 		{
 			mode.format = 0;
@@ -1264,18 +1258,21 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 			if (SDL_GetDisplayMode(display_index, i, &mode) != 0)
 				debugf(TEXT("SDL_GetDisplayMode failed: %ls"), SDL_GetError());
 			//debugf(TEXT("SDL_GetDisplayMode(0, 0, &mode):\t\t%i bpp\t%i x %i"), SDL_BITSPERPIXEL(mode.format), mode.w, mode.h);
-			Str += FString::Printf(TEXT("%ix%i "), mode.w, mode.h);
+			if (mode.w != PrevW || mode.h != PrevH)
+				Str += FString::Printf(TEXT("%ix%i "), mode.w, mode.h);
+			PrevW = mode.w;
+			PrevH = mode.h;
 		}
 		// Send the resolution string to the engine.
 		Ar.Log(*Str.LeftChop(1));
 		return 1;
 }
 #endif
-	if (ParseCommand(&Cmd, TEXT("CrashGL")))
+	else if (ParseCommand(&Cmd, TEXT("CrashGL")))
 	{
 		appErrorf(TEXT("XOpenGL: Forced OpenGL crash!"));
 	}
-	if (ParseCommand(&Cmd, TEXT("VideoFlush")))
+	else if (ParseCommand(&Cmd, TEXT("VideoFlush")))
 	{
 		debugf(NAME_Dev, TEXT("XOpenGL: VideoFlush"));
 		Flush(1);
@@ -1310,21 +1307,20 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 
 			FPlane RGBColor = FGetHSV(StaticLightList(i)->LightHue, StaticLightList(i)->LightSaturation, StaticLightList(i)->LightBrightness);
 
-#if ENGINE_VERSION>=436 && ENGINE_VERSION<1100
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 			StaticLightData.LightData1[i] = glm::vec4(RGBColor.X, RGBColor.Y, RGBColor.Z, StaticLightList(i)->LightCone);
 #else
 			StaticLightData.LightData1[i] = glm::vec4(RGBColor.R, RGBColor.G, RGBColor.B, StaticLightList(i)->LightCone);
 #endif
 			StaticLightData.LightData2[i] = glm::vec4(StaticLightList(i)->LightEffect, StaticLightList(i)->LightPeriod, StaticLightList(i)->LightPhase, StaticLightList(i)->LightRadius);
 			StaticLightData.LightData3[i] = glm::vec4(StaticLightList(i)->LightType, StaticLightList(i)->VolumeBrightness, StaticLightList(i)->VolumeFog, StaticLightList(i)->VolumeRadius);
-#if ENGINE_VERSION>=436 && ENGINE_VERSION<1100
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 			StaticLightData.LightData4[i] = glm::vec4(StaticLightList(i)->WorldLightRadius(), NumStaticLights, (GLfloat)StaticLightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
-			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->LightRadius, 1, 0.0, 0.0);
+			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->LightRadius * 10, 1.0, 0.0, 0.0);
 #else
 			StaticLightData.LightData4[i] = glm::vec4(StaticLightList(i)->WorldLightRadius(), NumStaticLights, (GLfloat)StaticLightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
 			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->NormalLightRadius, (GLfloat)StaticLightList(i)->bZoneNormalLight, 0.0, 0.0);
 #endif
-
 			if (i == MAX_LIGHTS - 1)
 				break;
 		}
@@ -1347,7 +1343,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 
 
 	//Flush Buffers.
-	SetProgram(No_Prog);
+	DrawProgram();
 
 	if (GIsEditor)
 		MakeCurrent(Frame->Viewport);
@@ -1365,12 +1361,12 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
 #if ENGINE_VERSION==227
-	if (bFogEnabled && (!Frame->Viewport->Actor->bDistanceFogEnabled || !Frame->Viewport->Actor->Region.Zone->bDistanceFog))
+	if (bFogEnabled)
 		ResetFog();
 #endif // ENGINE_VERSION
 
 	//avoid some overhead, only calculate and set again if something was really changed.
-	if (Frame->Viewport->IsOrtho())
+	if (Frame->Viewport->IsOrtho() && (!bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || StoredOrthoFY != Frame->FY))
 		SetOrthoProjection(Frame);
 	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY)
 		SetProjection(Frame);
@@ -1401,6 +1397,12 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 
 	// Set clip planes.
 	SetSceneNodeHit(Frame);
+
+	// Disable clipping
+	while (NumClipPlanes > 0)
+	{
+		PopClipPlane();
+	}
 	unguard;
 }
 
@@ -1409,7 +1411,6 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	guard(UXOpenGLRenderDevice::SetOrthoProjection);
 
 	// Precompute stuff.
-	//FLOAT zNear = 0.5f;
 	FLOAT zFar = (GIsEditor && Frame->Viewport->Actor->RendMap == REN_Wire) ? 131072.0 : 65336.f;
 
 	StoredFovAngle = StoredFX = StoredFY = 0; //ensure Matrix is updated again if not ortho.
@@ -1419,7 +1420,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	StoredOrthoFY = Frame->FY;
 
 	Aspect = Frame->FY / Frame->FX;
-	RProjZ = appTan(static_cast<DOUBLE>(Viewport->Actor->FovAngle) * PI / 360.0);
+	RProjZ = appTan(Viewport->Actor->FovAngle * PI / 360.0);
 	RFX2 = 2.0*RProjZ / Frame->FX;
 	RFY2 = 2.0*RProjZ*Aspect / Frame->FY;
 	projMat = glm::ortho(-RProjZ, +RProjZ, -Aspect*RProjZ, +Aspect*RProjZ, -zFar, zFar);
@@ -1460,7 +1461,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame)
 	StoredFY = Frame->FY;
 
 	Aspect = Frame->FY / Frame->FX;
-	RProjZ = appTan(static_cast<DOUBLE>(Viewport->Actor->FovAngle) * PI / 360.0);
+	RProjZ = appTan(Viewport->Actor->FovAngle * PI / 360.0);
 	RFX2 = 2.0*RProjZ / Frame->FX;
 	RFY2 = 2.0*RProjZ*Aspect / Frame->FY;
 	projMat = glm::frustum(-RProjZ*zNear, +RProjZ*zNear, -Aspect*RProjZ*zNear, +Aspect*RProjZ*zNear, zNear, zFar);
@@ -1551,10 +1552,10 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #ifdef SDL2BUILD
 	if (Blit)
 	{
+		DrawProgram();
+
 		SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
 		SDL_GL_SwapWindow(Window);
-
-		SetProgram(No_Prog);
 
 		/*
 		GLsync SwapFence = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
@@ -1567,8 +1568,8 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #else
 	if (Blit)
 	{
+        DrawProgram();
 		verify(SwapBuffers(hDC));
-		SetProgram(No_Prog);
 	}
 #endif
 	appSleep(0);
@@ -1753,7 +1754,9 @@ void UXOpenGLRenderDevice::Exit()
 #endif
 
 	CurrentGLContext = NULL;
+# if !UNREAL_TOURNAMENT_UTPG
 	SDL_GL_DeleteContext(glContext);
+# endif
 #elif QTBUILD
 
 #else
@@ -1865,7 +1868,9 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 
 #ifdef SDL2BUILD
 	CurrentGLContext = NULL;
+# if !UNREAL_TOURNAMENT_UTPG
 	SDL_GL_DeleteContext(glContext);
+# endif
 #elif QTBUILD
 
 #else
@@ -1893,61 +1898,65 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	unguard;
 }
 
-
 void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 {
 	guard(UXOpenGLRenderDevice::DrawStats);
-	INT CurY = 112; // place below "timedemo" stats.
+	INT CurY = 48;
+	UCanvas* Canvas = Frame->Viewport->Canvas;
 
-	Frame->Viewport->Canvas->Color = FColor(255, 255, 255);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = CurY;
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("XOpenGL Statistics"));
+	Canvas->Color = FColor(255, 255, 255);
+	Canvas->CurX = 392;
+	Canvas->CurY = CurY;
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("[XOpenGL]"));
 
-#if ENGINE_VERSION==227
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Number of static Lights: %i"), NumStaticLights);
-#endif
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Cycles:"));
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Bind____________= %05.2f"), GSecondsPerCycle * 1000 * Stats.BindCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Image___________= %05.2f"), GSecondsPerCycle * 1000 * Stats.ImageCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Blend___________= %05.2f"), GSecondsPerCycle * 1000 * Stats.BlendCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Program_________= %05.2f"), GSecondsPerCycle * 1000 * Stats.ProgramCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Draw2DLine______= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw2DLine);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Draw3DLine______= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw3DLine);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Draw2DPoint_____= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw2DPoint);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Tile_Buffer/Draw= %05.2f/%05.2f"), (GSecondsPerCycle * 1000 * Stats.TileBufferCycles), (GSecondsPerCycle * 1000 * Stats.TileDrawCycles));
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("ComplexSurface__= %05.2f"), GSecondsPerCycle * 1000 * Stats.ComplexCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("GouraudPoly_____= %05.2f"), GSecondsPerCycle * 1000 * Stats.GouraudPolyCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("GouraudPolyList_= %05.2f"), GSecondsPerCycle * 1000 * Stats.GouraudPolyListCycles);
-	Frame->Viewport->Canvas->CurX = 10;
-	Frame->Viewport->Canvas->CurY = (CurY += 8);
-	Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Persistent buffer stalls = %i"), Stats.StallCount);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Cycles:"));
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Bind____________= %05.2f"), GSecondsPerCycle * 1000 * Stats.BindCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Image___________= %05.2f"), GSecondsPerCycle * 1000 * Stats.ImageCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Blend___________= %05.2f"), GSecondsPerCycle * 1000 * Stats.BlendCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Program_________= %05.2f"), GSecondsPerCycle * 1000 * Stats.ProgramCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Draw2DLine______= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw2DLine);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Draw3DLine______= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw3DLine);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Draw2DPoint_____= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw2DPoint);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Tile_Buffer/Draw= %05.2f/%05.2f"), (GSecondsPerCycle * 1000 * Stats.TileBufferCycles), (GSecondsPerCycle * 1000 * Stats.TileDrawCycles));
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("ComplexSurface__= %05.2f"), GSecondsPerCycle * 1000 * Stats.ComplexCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("GouraudPoly_____= %05.2f"), GSecondsPerCycle * 1000 * Stats.GouraudPolyCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("GouraudPolyList_= %05.2f"), GSecondsPerCycle * 1000 * Stats.GouraudPolyListCycles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 24);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Other:"));
+	#if ENGINE_VERSION==227
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of static Lights: %i"), NumStaticLights);
+    #endif
+    Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Persistent buffer stalls = %i"), Stats.StallCount);
+
 #ifndef __LINUX_ARM__
 	if (NVIDIAMemoryInfo)
 	{
@@ -1956,9 +1965,9 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 		GLint TotalAvailableVideoMemory = 0;
 		glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &TotalAvailableVideoMemory);
 		FLOAT Percent = (FLOAT)CurrentAvailableVideoMemory / (FLOAT)TotalAvailableVideoMemory * 100.0f;
-		Frame->Viewport->Canvas->CurX = 10;
-		Frame->Viewport->Canvas->CurY = (CurY += 8);
-		Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("NVidia VRAM (%d MB) Used (%d MB) Usage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
+		Canvas->CurX = 400;
+		Canvas->CurY = (CurY += 12);
+		Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("NVidia VRAM (%d MB) Used (%d MB) Usage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
 		glGetError();
 	}
 	if (AMDMemoryInfo)
@@ -1969,17 +1978,17 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, &CurrentAvailableVBOMemory);
 		GLint CurrentAvailableRenderbufferMemory = 0;
 		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, &CurrentAvailableRenderbufferMemory);
-		Frame->Viewport->Canvas->CurX = 10;
-		Frame->Viewport->Canvas->CurY = (CurY += 8);
-		Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("AMD CurrentAvailableTextureMemory (%d MB) CurrentAvailableVBOMemory (%d MB) CurrentAvailableRenderbufferMemory (%d MB)"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
+		Canvas->CurX = 400;
+		Canvas->CurY = (CurY += 12);
+		Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("AMD CurrentAvailableTextureMemory (%d MB) CurrentAvailableVBOMemory (%d MB) CurrentAvailableRenderbufferMemory (%d MB)"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
 		glGetError();
 	}
 #endif
 	if (UseBindlessTextures)
 	{
-		Frame->Viewport->Canvas->CurX = 10;
-		Frame->Viewport->Canvas->CurY = (CurY += 8);
-		Frame->Viewport->Canvas->WrappedPrintf(Frame->Viewport->Canvas->SmallFont, 0, TEXT("Number of bindless Textures in use: %i"), TexNum);
+		Canvas->CurX = 400;
+		Canvas->CurY = (CurY += 12);
+		Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of bindless Textures in use: %i"), TexNum);
 	}
 
 	unguard;
@@ -1996,8 +2005,10 @@ HGLRC				UXOpenGLRenderDevice::CurrentGLContext = NULL;
 HDC					UXOpenGLRenderDevice::CurrenthDC = NULL;
 TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
 PIXELFORMATDESCRIPTOR UXOpenGLRenderDevice::pfd;
+PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
+PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
 #endif
-INT					UXOpenGLRenderDevice::iPixelFormat = 0;
+INT                 UXOpenGLRenderDevice::iPixelFormat = 0;
 INT					UXOpenGLRenderDevice::LockCount = 0;
 INT					UXOpenGLRenderDevice::LogLevel = 0;
 DWORD				UXOpenGLRenderDevice::ComposeSize = 0;
@@ -2005,10 +2016,6 @@ BYTE*				UXOpenGLRenderDevice::Compose = NULL;
 
 bool				UXOpenGLRenderDevice::NeedsInit = true;
 bool				UXOpenGLRenderDevice::bMappedBuffers = false;
-#ifdef _WIN32
-PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
-PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
-#endif
 
 // Shaderprogs
 INT					UXOpenGLRenderDevice::ActiveProgram = -1;

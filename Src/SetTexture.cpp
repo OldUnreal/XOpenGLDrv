@@ -9,9 +9,6 @@
 =============================================================================*/
 
 // Include GLM
-#ifdef _MSC_VER
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -101,7 +98,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
-#if ENGINE_VERSION==227 //|| UNREAL_TOURNAMENT_UTPG
+#if ENGINE_VERSION==227
     // avoid lookups by storing information directly into texture. Add bindless information if available.
     // Should save quite some CPU.
     // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
@@ -127,7 +124,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     }
 #endif
 
-#if UNREAL_TOURNAMENT_UTPG
+	#if UNREAL_TOURNAMENT_UTPG
  	static UTexture* PrevTexture	= NULL;
  	static FCachedTexture* PrevBind = NULL;
  	if (Info.Texture 
@@ -337,7 +334,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					SourceFormat   = GL_RGBA;
 					break;
 
-				// RGBA7 -- Well it's actually BGRA and used by light and fogmaps.
+				// RGBA7 -- Well it's actually BGRA and used for FogMaps.
 				case TEXF_RGBA7:
 					MinComposeSize = Info.Mips[Bind->BaseMip]->USize*Info.Mips[Bind->BaseMip]->VSize*4;
 					InternalFormat = GL_RGBA8;
@@ -347,15 +344,24 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                         SourceFormat   = GL_RGBA; // ES prefers RGBA...
 
 					break;
+#if ENGINE_VERSION==227
+                // RGB10A2_LM. Used for Lightmaps.
+				case TEXF_RGB10A2_LM:
+					MinComposeSize = Info.Mips[Bind->BaseMip]->USize*Info.Mips[Bind->BaseMip]->VSize*4;
+					InternalFormat = GL_RGB10_A2;
+					SourceFormat   = GL_RGBA;
+					SourceType     = GL_UNSIGNED_INT_2_10_10_10_REV; // This seems to make alpha to be placed in the right spot.
+					break;
+#endif
 
-				// RGB8/RGBA8 -- Actually used by Brother Bear.
+				// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
 				case TEXF_RGB8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
-					SourceFormat   = GL_RGB;
+					SourceFormat   = GL_BGR; // Was GL_RGB;
 					break;
-				case TEXF_RGBA8_:
+				case TEXF_RGBA8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
-					SourceFormat   = GL_RGBA;
+					SourceFormat   = GL_BGRA; // Was GL_RGBA;
 					break;
 #if ENGINE_VERSION==227
     #ifndef __LINUX_ARM__
@@ -368,6 +374,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
+					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
+					{
+						GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
+						Unsupported = 1;
+						break;
+					}
 					NoAlpha = CacheSlot;
                     if (OpenGLVersion == GL_Core)
                     {
@@ -585,9 +597,54 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							unguard;
 							break;
 
+#if ENGINE_VERSION==227
+                        // RGB9.
+                        case TEXF_RGB10A2_LM:
+                            guard(TEXF_RGB10A2_LM);
+                            ImgSrc  = Compose;
+                            DWORD* Ptr = (DWORD*)Compose;
+							INT ULimit = Min(USize,Info.UClamp); // Implicit assumes NumMips==1.
+							INT VLimit = Min(VSize,Info.VClamp);
+
+                            // Do resampling. The area outside of the clamp gets filled up with the last valid values
+                            // to emulate GL_CLAMP_TO_EDGE behaviour. This is done to avoid using NPOT textures.
+                            for ( INT v=0; v<VLimit; v++ )
+                            {
+                                // The AND 0x1FF7FDFF is used to eliminate the top bit as this was used internally by the LightManager.
+                                for ( INT u=0; u<ULimit; u++ )
+                                    *Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x1FF7FDFF);
+
+                                if ( ULimit>0 )
+                                {
+                                    // Copy last valid value until end of line.
+                                    DWORD LastValidValue = Ptr[-1];
+                                    for ( INT ux=ULimit; ux<USize; ux++ )
+                                        *Ptr++ = LastValidValue;
+                                }
+                                else
+                                {
+                                    // If we had no valid value just memzero.
+                                    appMemzero( Ptr, USize*sizeof(DWORD) );
+                                    Ptr += USize;
+                                }
+                            }
+                            if ( VLimit>0 )
+                            {
+                                // Copy last valid line until reaching the bottom.
+                                BYTE* LastValidLine = Compose + (VLimit-1)*USize*sizeof(DWORD); // Compose is BYTE*.
+                                for ( INT vx=VLimit; vx<VSize; vx++ )
+                                    appMemcpy( Compose + vx*USize*sizeof(DWORD), LastValidLine, USize*sizeof(DWORD) );
+                            }
+                            else // If we had no valid lines just memzero.
+                                appMemzero( Compose, USize*VSize*sizeof(DWORD) );
+
+                            unguard;
+                            break;
+#endif
+
 						// RGB8/RGBA8 -- Actually used by Brother Bear.
 						case TEXF_RGB8:
-						case TEXF_RGBA8_:
+						case TEXF_RGBA8:
 #if ENGINE_VERSION==227
 						case TEXF_RGBA16:
 #endif
@@ -596,31 +653,41 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// S3TC -- Ubiquitous Extension.
 						case TEXF_DXT1:
-							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
+							if ( USize<4 || VSize<4 )
+								goto FinishedUnpack;
+							CompImageSize = USize*VSize/2;
 							ImgSrc = Mip->DataPtr;
 							break;
 #if ENGINE_VERSION==227
 						case TEXF_DXT3:
 						case TEXF_DXT5:
-							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
+							if ( USize<4 || VSize<4 )
+								goto FinishedUnpack;
+							CompImageSize = USize*VSize;
 							ImgSrc = Mip->DataPtr;
 							break;
 
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
 						case TEXF_RGTC_R:
 						case TEXF_RGTC_R_SIGNED:
-							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
+							if ( USize<4 || VSize<4 )
+								goto FinishedUnpack;
+							CompImageSize  = USize*VSize/2;
 							ImgSrc = Mip->DataPtr;
 							break;
 						case TEXF_RGTC_RG:
 						case TEXF_RGTC_RG_SIGNED:
-							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
+							if ( USize<4 || VSize<4 )
+								goto FinishedUnpack;
+							CompImageSize = USize*VSize;
 							ImgSrc = Mip->DataPtr;
 							break;
 						case TEXF_BPTC_RGBA:
 						case TEXF_BPTC_RGB_SF:
 						case TEXF_BPTC_RGB_UF:
-							CompImageSize = FTextureBytes(Info.Format, USize, VSize, 1);
+							if (USize<4 || VSize<4)
+								goto FinishedUnpack;
+							CompImageSize = USize*VSize;
 							ImgSrc = Mip->DataPtr;
 							break;
 
@@ -707,6 +774,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					break;
 			}
 
+			// DXT1 textures contain mip maps until 1x1.
+			FinishedUnpack:
+
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
 				GWarn->Logf( TEXT("No mip map unpacked for texture %ls."), Info.Texture->GetPathName() );
@@ -762,46 +832,52 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			#endif // __Linux_ARM
             CHECK_GL_ERROR();
 
-            //debugf(TEXT("Making %ls with TexNum %i resident 0x%08x%08x"),Info.Texture->GetFullName(),FCachedTextureInfo->TexNum[CacheSlot], FCachedTextureInfo->TexHandle[CacheSlot]);
-            #ifdef __LINUX_ARM__
-            glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
-            #else
-            glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
-            #endif
-            CHECK_GL_ERROR();
+            if (!Bind->TexHandle[CacheSlot])
+            {
+                debugf(TEXT("No bindless handle for: %ls!"), Info.Texture->GetFullName());
+                Bind->TexHandle[CacheSlot] = 0;
+                Bind->TexNum[CacheSlot] = 0;
+            }
+            else
+            {
+                //debugf(TEXT("Making %ls with TexNum %i resident 0x%08x%08x"),Info.Texture->GetFullName(),FCachedTextureInfo->TexNum[CacheSlot], FCachedTextureInfo->TexHandle[CacheSlot]);
+                #ifdef __LINUX_ARM__
+                glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
+                #else
+                glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
+                #endif
+                CHECK_GL_ERROR();
 
-//            if (GlobalUniformTextureHandles.Sync[0])
-                WaitBuffer(GlobalUniformTextureHandles, 0);
+                if (GlobalUniformTextureHandles.Sync[0])
+                    WaitBuffer(GlobalUniformTextureHandles, 0);
 
-            GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
+                GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
 
-            LockBuffer(GlobalUniformTextureHandles, 0);
+                LockBuffer(GlobalUniformTextureHandles, 0);
 
-#if ENGINE_VERSION==227 //|| defined(UNREAL_TOURNAMENT_UTPG)
-            // avoid lookups by storing information directly into texture. Add bindless information if available.
-            // Should save quite some CPU.
-            // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
-            FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
+                #if ENGINE_VERSION==227
+                // avoid lookups by storing information directly into texture. Add bindless information if available.
+                // Should save quite some CPU.
+                // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
+                FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
 
-            if (!FCachedTextureInfo)
-                FCachedTextureInfo = new (FCachedTexture);
+                if (!FCachedTextureInfo)
+                    FCachedTextureInfo = new (FCachedTexture);
 
-			FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
-            FCachedTextureInfo->BaseMip = Bind->BaseMip;
-            FCachedTextureInfo->MaxLevel = Bind->MaxLevel;
-			FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
-			FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
-			FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
+                FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
+                FCachedTextureInfo->BaseMip = Bind->BaseMip;
+                FCachedTextureInfo->MaxLevel = Bind->MaxLevel;
+                FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
+                FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
+                FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
 
-            Info.Texture->TextureHandle = FCachedTextureInfo;
-#endif
-            TexNum++;
+                Info.Texture->TextureHandle = FCachedTextureInfo;
+                #endif
+                TexNum++;
+            }
 
             if (TexNum > NUMTEXTURES)
 				debugf(TEXT("Bindless texture overflow! %i"),TexNum);
-
-            if (!Bind->TexHandle[CacheSlot])
-                appErrorf(TEXT("No bindless handle!"));
         }
     }
     else
@@ -931,13 +1007,17 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool Inver
 	CHECK_GL_ERROR();
 	unguard;
 }
-void UXOpenGLRenderDevice::SetFlatState(bool bEnable)
+
+BYTE UXOpenGLRenderDevice::SetZTestMode(BYTE Mode)
 {
-	guard(UOpenGLRenderDevice::SetFlatState);
-	if (bEnable)
-		glDepthFunc(GL_EQUAL);
-	else glDepthFunc(GL_LEQUAL);
-	unguard;
+	if (LastZMode == Mode || Mode > 6)
+		return Mode;
+
+	static GLenum ModeList[] = { GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_NOTEQUAL, GL_ALWAYS };
+	glDepthFunc(ModeList[Mode]);
+	BYTE Prev = LastZMode;
+	LastZMode = Mode;
+	return Prev;
 }
 
 // SetBlend inspired approach to handle LineFlags.
@@ -951,7 +1031,7 @@ DWORD UXOpenGLRenderDevice::SetDepth(DWORD LineFlags)
 	{
 		if (LineFlags & LINE_DepthCued)
 		{
-			glDepthFunc(GL_LEQUAL);
+			SetZTestMode(ZTEST_LessEqual);
 			glDepthMask(GL_TRUE);
 
 			// Sync with SetBlend.
@@ -959,7 +1039,7 @@ DWORD UXOpenGLRenderDevice::SetDepth(DWORD LineFlags)
 		}
 		else
 		{
-			glDepthFunc(GL_ALWAYS);
+			SetZTestMode(ZTEST_Always);
 			glDepthMask(GL_FALSE);
 
 			// Sync with SetBlend.

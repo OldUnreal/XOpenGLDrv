@@ -7,9 +7,6 @@
 
 =============================================================================*/
 
-#ifdef _MSC_VER
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -34,11 +31,10 @@ void UXOpenGLRenderDevice::LockBuffer(BufferRange& Buffer, GLuint Index)
 void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::WaitBuffer);
-    
-	CHECK_GL_ERROR();
+
+    CHECK_GL_ERROR();
 	GLuint64 WaitDuration = 0;
 	GLenum WaitReturn = GL_UNSIGNALED;
-	
 	if (Buffer.Sync[Index])
     {
         while (1)
@@ -58,7 +54,6 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 			WaitDuration = 500000;
         }
     }
-	
 	CHECK_GL_ERROR();
 	unguard;
 }

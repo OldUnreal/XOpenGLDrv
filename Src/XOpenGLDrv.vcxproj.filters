@@ -55,6 +55,9 @@
     <ClCompile Include="glad.cpp">
       <Filter>Src</Filter>
     </ClCompile>
+    <ClCompile Include="ClipPlanes.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Inc\XOpenGL.h">

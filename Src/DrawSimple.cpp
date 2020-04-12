@@ -10,9 +10,6 @@
 =============================================================================*/
 
 // Include GLM
-#ifdef _MSC_VER
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -314,7 +311,7 @@ void UXOpenGLRenderDevice::DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLui
 	if (BufferedDraw)
 	{
 		DrawLinesBufferData.DrawColor = FPlane(0.f, 0.f, 0.f, 0.f);
-		DrawLinesBufferData.LineFlags = static_cast<DWORD>(-1);
+		DrawLinesBufferData.LineFlags = -1;
 		DrawLinesBufferData.VertSize = 0;
 	}
 

@@ -23,9 +23,6 @@
 =============================================================================*/
 
 // Include GLM
-#ifdef _MSC_VER
-#pragma warning(disable: 4201) // nonstandard extension used: nameless struct/union
-#endif
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -179,7 +176,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	clockFast(Stats.GouraudPolyCycles);
     CHECK_GL_ERROR();
 
-    if (UsePersistentBuffersGouraud)
+    if (UsePersistentBuffersGouraud && DrawGouraudBufferRange.Sync[DrawGouraudBufferData.Index])
         WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
     CHECK_GL_ERROR();
 
@@ -215,7 +212,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 }
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
-void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, AActor* Owner)
+void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolyList);
 	if (NumPts < 3 || Frame->Recursion > MAX_FRAME_RECURSION || NoDrawGouraudList)		//reject invalid.
@@ -306,7 +303,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	//debugf(TEXT("PolyList: VertSize %i TexSize %i, ColorSize %i"), VertSize, TexSize, ColorSize); // VertSize 12288 TexSize 8192, ColorSize 16384
 
 	clockFast(Stats.GouraudPolyListCycles);
-    if (UsePersistentBuffersGouraud)
+    if (UsePersistentBuffersGouraud && DrawGouraudListBufferRange.Sync[DrawGouraudListBufferData.Index])
         WaitBuffer(DrawGouraudListBufferRange, DrawGouraudListBufferData.Index);
 
     for (INT i = 0; i < NumPts; i++)
@@ -378,24 +375,45 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 		CHECK_GL_ERROR();
 		*/
 	}
+/*
 	else
 	{
-		const PTRINT BeginOffset = BufferData.BeginOffset * sizeof(float);
-
-		glVertexAttribPointer(VERTEX_COORD_ATTRIB,		3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)	BeginOffset);
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB,		2, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3));
-		glVertexAttribPointer(NORMALS_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3_2));
-		glVertexAttribPointer(COLOR_ATTRIB,				4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3_2_4));
-		glVertexAttribPointer(FOGMAP_COORD_ATTRIB,		4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3_2_4_4));
-		glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB,	3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3_2_4_4_4));
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB2,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3_2_4_4_4_3));// Tex U/V Mult, MacroTex U/V Mult
-		glVertexAttribPointer(TEXTURE_COORD_ATTRIB3,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset	+ FloatSize3_2_4_4_4_3_4));// DetailTex U/V Mult, Texture Format, DrawFlags
-		glVertexAttribPointer(TEXTURE_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (void*)(	BeginOffset + FloatSize3_2_4_4_4_3_4_4));// Additional texture information
-		CHECK_GL_ERROR();
+        if (ActiveProgram == GouraudPolyVertList_Prog)
+            glFlushMappedNamedBufferRange(DrawGouraudVertListBuffer, sizeof(float) * BufferData.BeginOffset, TotalSize * sizeof(float));
+        else if (ActiveProgram == GouraudPolyVert_Prog)
+            glFlushMappedNamedBufferRange(DrawGouraudVertBuffer, sizeof(float) * BufferData.BeginOffset, TotalSize * sizeof(float));
 	}
+*/
+
+	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
+	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+	glEnableVertexAttribArray(NORMALS_ATTRIB);
+	glEnableVertexAttribArray(COLOR_ATTRIB);
+	glEnableVertexAttribArray(FOGMAP_COORD_ATTRIB);//here for VertexFogColor
+	glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
+	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
+	glEnableVertexAttribArray(TEXTURE_ATTRIB);
+
+	GLintptr BeginOffset = BufferData.BeginOffset * sizeof(float);
+
+	glVertexAttribPointer(VERTEX_COORD_ATTRIB,		3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)	BeginOffset);
+	glVertexAttribPointer(TEXTURE_COORD_ATTRIB,		2, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3));
+	glVertexAttribPointer(NORMALS_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2));
+	glVertexAttribPointer(COLOR_ATTRIB,				4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4));
+	glVertexAttribPointer(FOGMAP_COORD_ATTRIB,		4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4));
+	glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB,	3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4));
+	glVertexAttribPointer(TEXTURE_COORD_ATTRIB2,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4_3));// Tex U/V Mult, MacroTex U/V Mult
+	glVertexAttribPointer(TEXTURE_COORD_ATTRIB3,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4_3_4));// DetailTex U/V Mult, Texture Format, DrawFlags
+	glVertexAttribPointer(TEXTURE_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset + FloatSize3_2_4_4_4_3_4_4));// Additional texture information
+	CHECK_GL_ERROR();
 
     //PolyFlags
-	glUniform1ui(DrawGouraudPolyFlags, BufferData.PolyFlags);    
+	glUniform1ui(DrawGouraudPolyFlags, BufferData.PolyFlags);
+
+    // Gamma
+    glUniform1f(DrawGouraudGamma, Gamma);
+	CHECK_GL_ERROR();
 
 	//set DrawColor if any
 	if (GIsEditor)
@@ -421,7 +439,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	// Draw
 	glDrawArrays(Mode, 0, (BufferData.VertSize / FloatsPerVertex));
 
-	if (UsePersistentBuffersGouraud)
+	if(UsePersistentBuffersGouraud)
 	{
 		if (ActiveProgram == GouraudPolyVertList_Prog)
 		{
@@ -436,6 +454,18 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 		BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
 		CHECK_GL_ERROR();
 	}
+
+	// Clean up
+	glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
+	glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+	glDisableVertexAttribArray(NORMALS_ATTRIB);
+	glDisableVertexAttribArray(COLOR_ATTRIB);
+	glDisableVertexAttribArray(FOGMAP_COORD_ATTRIB);
+	glDisableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+	glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
+	glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
+	glDisableVertexAttribArray(TEXTURE_ATTRIB);
+	CHECK_GL_ERROR();
 
     BufferData.VertSize = 0;
     BufferData.IndexOffset = 0;

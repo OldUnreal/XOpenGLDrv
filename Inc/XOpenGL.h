@@ -20,6 +20,10 @@
 // Linux/OSX mostly, needs to be set in Windows for SDL2Launch.
 // #define SDL2BUILD 1
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4351)
+#endif
+
 #ifdef WIN32
 	#define WINBUILD 1
 	#define GLAD 1
@@ -40,7 +44,7 @@
 	#elif QTBUILD
 
 	#endif
-#elif __GNUG__
+#else
     #define SDL2BUILD 1
     #ifdef __LINUX_ARM__
         //On init Glew uses OpenGL instead of GL ES, or fails entirely if SDL2 is built with ES support only, which forces ES only platforms like the ODROID-XU4 to fall back to Mesa.
@@ -55,29 +59,26 @@
 		}
 	#endif
 
-#include <SDL2/SDL.h>
+    #include <SDL2/SDL.h>
 #endif
 
 #include "XOpenGLTemplate.h" //thanks han!
+
+#if ENGINE_VERSION==436 || ENGINE_VERSION==430
+#define clockFast(Timer)   {Timer -= appCycles();}
+#define unclockFast(Timer) {Timer += appCycles()-34;}
+#endif
 
 /*-----------------------------------------------------------------------------
 Globals.
 -----------------------------------------------------------------------------*/
 #define MAX_FRAME_RECURSION 4
 
-
 #define DRAWSIMPLE_SIZE 262144
 #define DRAWTILE_SIZE 524288
 #define DRAWCOMPLEX_SIZE 262144
 #define DRAWGOURAUDPOLY_SIZE 1048576
 #define DRAWGOURAUDPOLYLIST_SIZE 262144
-/*
-#define DRAWSIMPLE_SIZE (32 * 1024 * 1024)
-#define DRAWTILE_SIZE (32 * 1024 * 1024)
-#define DRAWCOMPLEX_SIZE (32 * 1024 * 1024)
-#define DRAWGOURAUDPOLY_SIZE (32 * 1024 * 1024)
-#define DRAWGOURAUDPOLYLIST_SIZE (32 * 1024 * 1024)
-*/
 #define NUMBUFFERS 6
 #define NUMTEXTURES 4096
 #define MAX_LIGHTS 256
@@ -176,8 +177,21 @@ enum DrawSimpleMode
 	DrawEndFlashMode    = 4,
 };
 
-#if UNREAL_TOURNAMENT_UTPG
-#define PF_AlphaBlend 0x20000 // stijn: we don't export this currently
+// stijn: missing defs in UTPG tree
+#ifdef UNREAL_TOURNAMENT_UTPG
+#define PF_AlphaBlend 0x2000
+#define TEXF_RGBA8 TEXF_RGBA8_ // stijn: really BGRA8
+
+enum ERenderZTest
+{
+	ZTEST_Less,
+	ZTEST_Equal,
+	ZTEST_LessEqual,
+	ZTEST_Greater,
+	ZTEST_GreaterEqual,
+	ZTEST_NotEqual,
+	ZTEST_Always
+};
 #endif
 
 #ifdef DEBUGGL
@@ -332,6 +346,7 @@ enum DrawFlags
 	XOpenGLDrv.
 -----------------------------------------------------------------------------*/
 
+
 #if UNREAL_TOURNAMENT_UTPG
 class UXOpenGLRenderDevice : public URenderDeviceOldUnreal469
 #else
@@ -436,10 +451,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	TArray<FPlane> Modes;
 	ULevel* Level;
 
-	#if ENGINE_VERSION==227 || (ENGINE_VERSION>=436&&ENGINE_VERSION<1100)
+	#if ENGINE_VERSION==227 || (ENGINE_VERSION>436&&ENGINE_VERSION<1100)
 	TArray<FLightInfo*> LightCache;
-	TArray<AActor*> StaticLightList;
 	#endif
+	TArray<AActor*> StaticLightList;
+
 
 	// Context specifics.
 	INT DesiredColorBits;
@@ -472,6 +488,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FLOAT MaxAnisotropy;
 	INT DebugLevel;
 	INT NumAASamples;
+    INT MaxClippingPlanes;
+    INT NumberOfExtensions;
 
     // Config
 	BITFIELD NoFiltering;
@@ -631,10 +649,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//PMB's
 	struct BufferRange
 	{
-		GLsync Sync[NUMBUFFERS]{};
-		FLOAT* Buffer{};
-		FLOAT* VertBuffer{};
-		GLuint64* UniformBuffer{};
+		GLsync Sync[NUMBUFFERS];
+		FLOAT* Buffer;
+		FLOAT* VertBuffer;
+		GLuint64* UniformBuffer;
+		BufferRange()
+		: Sync()
+		{}
 	};
 
 	BufferRange DrawGouraudBufferRange;
@@ -661,17 +682,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 #if ENGINE_VERSION!=227
 
-	// Definition for a surface that Fog
+	// Definition for a surface that has fog
 	struct FFogSurf
 	{
-		FSavedPoly* Polys;
+		struct FSavedPoly* Polys;
 		FLOAT		FogDistanceStart;	// Zone fog start (zero if none)
 		FLOAT		FogDistanceEnd;		// Zone fog distance (zero if none)
 		FLOAT		FogDensity;			// for exponential fog.
 		FPlane		FogColor;			// Zone fog color
 		INT			FogMode;			// 0 Linear, 1 Exponential, 2 Exponential2
 		DWORD		PolyFlags;			// Surface flags.
-		UBOOL		bBSP;				// this flag is unfortunately needed for the old renderers to emulate the fog.
+		BYTE		bBSP;				// this flag is unfortunately needed for the old renderers to emulate the fog.
 		FFogSurf()
 			:Polys(NULL),
 			FogDistanceStart(0.f),
@@ -682,7 +703,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 			PolyFlags(0),
 			bBSP(0)
 		{}
+		inline BYTE IsValid()
+		{
+			return ((FogDistanceEnd > FogDistanceStart) && (FogDensity > 0.f || FogMode == 0));
+		}
 	};
+
 #endif
 
 	//DrawTile
@@ -770,12 +796,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 LightData5[MAX_LIGHTS];
 		glm::vec4 LightPos[MAX_LIGHTS];
 		LightInfo()
-			: LightPos(),
-			LightData1(),
+			:LightData1(),
 			LightData2(),
 			LightData3(),
 			LightData4(),
-			LightData5()
+			LightData5(),
+            LightPos()
 		{}
 	}StaticLightData;
 	LightInfo LightData;
@@ -800,8 +826,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint VertSize;
 		GLuint TexSize;
 		GLuint Index;
-		PTRINT IndexOffset;
-		PTRINT BeginOffset;
+		GLuint IndexOffset;
+		GLuint BeginOffset;
 		GLuint Iteration;
 		DWORD PolyFlags;
 		DWORD RendMap;
@@ -876,7 +902,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     BufferRange GlobalUniformTextureHandles;
 	static const GLuint GlobalTextureHandlesBindingIndex = 1;
 
-	// Global bindless textures.
+	// Global DistanceFog.
 	GLuint GlobalUniformDistanceFogIndex;
 	GLuint GlobalDistanceFogUBO;
 	static const GLuint GlobalDistanceFogBindingIndex = 2;
@@ -890,6 +916,11 @@ class UXOpenGLRenderDevice : public URenderDevice
     GLuint GlobalUniformCoordsBlockIndex;
 	GLuint GlobalCoordsUBO;
 	static const GLuint GlobalCoordsBindingIndex = 4;
+
+	// Global ClipPlanes.
+	GLuint GlobalUniformClipPlaneIndex;
+	GLuint GlobalClipPlaneUBO;
+	static const GLuint GlobalClipPlaneBindingIndex = 5;
 
 	glm::vec4 DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
 	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
@@ -1020,6 +1051,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL HaveOriginalRamp;
 	FGammaRamp OriginalRamp; // to restore original value at exit or crash.
 
+	GLfloat NumClipPlanes;
+	BYTE LastZMode;
+
 	// Static variables.
 	static TOpenGLMap<QWORD,FCachedTexture> *SharedBindMap;
 	static INT   LockCount;
@@ -1041,7 +1075,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// UObject interface.
 	void StaticConstructor();
-	void PostEditChange() ;
+	void PostEditChange();
 
 	UBOOL CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
 	UBOOL SetWindowPixelFormat();
@@ -1053,20 +1087,20 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void PrintFormat( HDC hDC, INT nPixelFormat );
 	#endif
 
-    UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen) ;
+    UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
 	UBOOL InitGLEW(HINSTANCE hInstance);
 
 	static QSORT_RETURN CDECL CompareRes(const FPlane* A, const FPlane* B) {
 		return (QSORT_RETURN) (((A->X - B->X) != 0.0f) ? (A->X - B->X) : (A->Y - B->Y));
 	}
 
-	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar) ;
-	void Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize) ;
-	void SetSceneNode(FSceneNode* Frame) ;
+	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar);
+	void Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize);
+	void SetSceneNode(FSceneNode* Frame);
 	void SetOrthoProjection(FSceneNode* Frame);
 	void SetProjection(FSceneNode* Frame);
-	void Unlock(UBOOL Blit) ;
-	void Flush(UBOOL AllowPrecache) ;
+	void Unlock(UBOOL Blit);
+	void Flush(UBOOL AllowPrecache);
 	void SetPermanentState();
 
 	void LockBuffer(BufferRange& Buffer, GLuint Index);
@@ -1076,39 +1110,43 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL GLExtensionSupported(FString Extension_Name);
 	void CheckExtensions();
 
-	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet) ;
-	void BufferComplexSurfacePoint( FLOAT* DrawComplexTemp, FTransform* P, DrawComplexTexMaps TexMaps, FSurfaceFacet& Facet, DrawComplexBuffer& BufferData );
-	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span) ;
-	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, AActor* Owner);
+	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
+	void BufferComplexSurfacePoint( FLOAT* DrawComplexTemp, FTransform* P, DrawComplexTexMaps TexMaps, DrawComplexBuffer& BufferData );
+	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
+	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);
 	void BufferGouraudPolygonPoint(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer );
 	void BufferGouraudPolygonVert(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
-	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags) ;
+	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
 	void BufferTiles(FLOAT* DrawTilesTemp, FLOAT* TileData);
-	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2) ;
-	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2) ;
-	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z) ;
+	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
+	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
+	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
 	void BufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
 	void DrawPass(FSceneNode* Frame, INT Pass);
-	void ClearZ(FSceneNode* Frame) ;
-	void GetStats(TCHAR* Result) ;
-	void ReadPixels(FColor* Pixels) ;
-	void EndFlash() ;
+	void ClearZ(FSceneNode* Frame);
+	void GetStats(TCHAR* Result);
+	void ReadPixels(FColor* Pixels);
+	void EndFlash();
 	void SwapControl();
-	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags) ;
+	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
+
+	BYTE PushClipPlane(const FPlane& Plane);
+	BYTE PopClipPlane();
 
 	// OldUnreal UT extended interface
 	void PushTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span) ;
-	
+
 	// Editor
-	void PushHit(const BYTE* Data, INT Count) ;
-	void PopHit(INT Count, UBOOL bForce) ;
+	void PushHit(const BYTE* Data, INT Count);
+	void PopHit(INT Count, UBOOL bForce);
 	void LockHit(BYTE* InHitData, INT* InHitSize);
 	void UnlockHit(UBOOL Blit);
 	void SetSceneNodeHit(FSceneNode* Frame);
 	bool HitTesting() { return HitData != NULL; }
 
 	void SetProgram( INT CurrentProgram );
-	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen) ;
+	void DrawProgram();
+	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
 	void UnsetRes();
 	void MakeCurrent(UViewport* Viewport);
 
@@ -1121,7 +1159,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void BuildGammaRamp(FLOAT GammaCorrection, FGammaRamp& Ramp);
 	void BuildGammaRamp(FLOAT GammaCorrection, FByteGammaRamp& Ramp);
 	void SetGamma(FLOAT GammaCorrection);
-	void SetFlatState(bool bEnable);
+	BYTE SetZTestMode(BYTE Mode);
 
 	// DistanceFog
 	void PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf);
