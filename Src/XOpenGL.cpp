@@ -293,6 +293,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #endif
 	UseMeshBuffering = 0;
 
+	PrevDrawGouraudTexture = nullptr;
+
 	if (NoBuffering)
 		UsePersistentBuffers = 0;
 

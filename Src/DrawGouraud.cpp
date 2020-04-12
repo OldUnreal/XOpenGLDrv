@@ -220,10 +220,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	SetProgram(GouraudPolyVertList_Prog);
 
-	if (DrawGouraudListBufferData.VertSize > 0 && DrawGouraudListBufferData.PolyFlags != PolyFlags)
+	if (DrawGouraudListBufferData.VertSize > 0 && (DrawGouraudListBufferData.PolyFlags != PolyFlags || Info.Texture != PrevDrawGouraudTexture))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 	}
+
+	PrevDrawGouraudTexture = Info.Texture;
 
     bool bInverseOrder = false;
 	/*
@@ -337,7 +339,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 }
 #endif
 
-void UXOpenGLRenderDevice::PushTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
+void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
 {
 	DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts, NumPts, PolyFlags, nullptr);
 }
