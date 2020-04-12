@@ -482,12 +482,6 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	else
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
 
-	SDL_GL_SetAttribute(SDL_GL_RED_SIZE, DesiredColorBits == 16 ? 5 : 8);
-	SDL_GL_SetAttribute(SDL_GL_GREEN_SIZE, DesiredColorBits == 16 ? 5 : 8);
-	SDL_GL_SetAttribute(SDL_GL_BLUE_SIZE, DesiredColorBits == 16 ? 5 : 8);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
-//	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
 	// not checking for any existing SDL context, create a new one, since using
 	// SDL for splash already and it's getting confused.
 	//
