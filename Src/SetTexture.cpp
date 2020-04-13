@@ -98,7 +98,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
     // avoid lookups by storing information directly into texture. Add bindless information if available.
     // Should save quite some CPU.
     // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
@@ -124,25 +124,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     }
 #endif
 
-	#if UNREAL_TOURNAMENT_UTPG
- 	static UTexture* PrevTexture	= NULL;
- 	static FCachedTexture* PrevBind = NULL;
- 	if (Info.Texture 
- 		&& Info.Texture == PrevTexture
- 		&& Info.CacheID == Tex.CurrentCacheID 
- 		&& CacheSlot == Tex.CurrentCacheSlot
- 		&& !Info.bRealtimeChanged)
- 	{
- 		Bind = PrevBind;
- 		bBindlessRealtimeChanged = true;
- 	}
- #else
 	if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
     {
         STAT(unclockFast(Stats.BindCycles));
         return;
     }
-#endif
 
     // Make current.
 	Tex.CurrentCacheSlot = CacheSlot;
@@ -197,11 +183,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		}
 	}
 	else ExistingBind = true;
-
-#if UNREAL_TOURNAMENT_UTPG
- 	PrevTexture = Info.Texture;
- 	PrevBind = Bind;
- #endif
 
 	if ( Bind->Ids[CacheSlot]==0 )
 	{
@@ -855,7 +836,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
                 LockBuffer(GlobalUniformTextureHandles, 0);
 
-                #if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
                 // avoid lookups by storing information directly into texture. Add bindless information if available.
                 // Should save quite some CPU.
                 // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
@@ -872,7 +853,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
 
                 Info.Texture->TextureHandle = FCachedTextureInfo;
-                #endif
+#endif
                 TexNum++;
             }
 

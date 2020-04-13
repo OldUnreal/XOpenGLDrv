@@ -220,12 +220,13 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	SetProgram(GouraudPolyVertList_Prog);
 
-	if (DrawGouraudListBufferData.VertSize > 0 && (DrawGouraudListBufferData.PolyFlags != PolyFlags || Info.Texture != PrevDrawGouraudTexture))
+	if (DrawGouraudListBufferData.VertSize > 0 && (PrevGouraudListPolyFlags != PolyFlags || Info.Texture != PrevGouraudListTexture))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 	}
 
-	PrevDrawGouraudTexture = Info.Texture;
+	PrevGouraudListTexture = Info.Texture;
+	PrevGouraudListPolyFlags = PolyFlags;
 
     bool bInverseOrder = false;
 	/*
@@ -339,10 +340,71 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 }
 #endif
 
+// stijn: This is the UT extended renderer interface. This does not map directly onto DrawGouraudPolyList because DrawGouraudTriangles pushes info out earlier
+#if UNREAL_TOURNAMENT_UTPG
 void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
 {
-	DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts, NumPts, PolyFlags, nullptr);
+	FTransTexture* Tri[3];
+	INT StartOffset = 0;
+	INT i = 0;
+
+	for (; i < NumPts; i += 3)
+	{
+		Tri[0] = &Pts[i];
+		Tri[1] = &Pts[i + 1];
+		Tri[2] = &Pts[i + 2];
+
+		if (Frame->Mirror == -1.0)
+			Exchange(Pts[i+2], Pts[i]);
+
+		// Environment mapping.
+		if (PolyFlags & PF_Environment)
+		{
+			FLOAT UScale = Info.UScale * Info.USize / 256.0f;
+			FLOAT VScale = Info.VScale * Info.VSize / 256.0f;
+
+			for (INT j = 0; j < 3; j++)
+			{
+				FVector T = Pts[i+j].Point.UnsafeNormal().MirrorByVector(Pts[i+j].Normal).TransformVectorBy(Frame->Uncoords);
+				Pts[i+j].U = (T.X + 1.0f) * 0.5f * 256.0f * UScale;
+				Pts[i+j].V = (T.Y + 1.0f) * 0.5f * 256.0f * VScale;
+			}
+		}
+
+		// If outcoded, skip it.
+		if (Pts[i].Flags & Pts[i + 1].Flags & Pts[i + 2].Flags)
+		{
+			// stijn: push the triangles we've already processed (if any)
+			if (i - StartOffset > 0)
+			{
+				DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
+				StartOffset = i + 3;
+			}
+			continue;
+		}
+
+		// Backface reject it.
+		if ((PolyFlags & PF_TwoSided) && FTriple(Pts[i].Point, Pts[i+1].Point, Pts[i+2].Point) <= 0.0)
+		{
+			if (!(PolyFlags & PF_TwoSided))
+			{
+				// stijn: push the triangles we've already processed (if any)
+				if (i - StartOffset > 0)
+				{
+					DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
+					StartOffset = i + 3;
+				}
+				continue;
+			}
+			Exchange(Pts[i+2], Pts[i]);
+		}
+	}
+
+	// stijn: push the remaining triangles
+	if (i - StartOffset > 0)
+		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
 }
+#endif
 
 void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData)
 {

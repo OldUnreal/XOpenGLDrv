@@ -100,10 +100,13 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("SyncToDraw"), RF_Public)UBoolProperty(CPP_PROPERTY(SyncToDraw), TEXT("Options"), CPF_Config);
 
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 
 	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
 	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
+#endif
+
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
@@ -224,7 +227,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
@@ -293,7 +296,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #endif
 	UseMeshBuffering = 0;
 
-	PrevDrawGouraudTexture = nullptr;
+	PrevGouraudListTexture = nullptr;
+	PrevGouraudListPolyFlags = 0;
 
 	if (NoBuffering)
 		UsePersistentBuffers = 0;
@@ -1122,7 +1126,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	NumStaticLights = 0;
 
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
 	for (TObjectIterator<UTexture> It; It; ++It)
 	{
 		FCachedTexture* FCachedTextureInfo = (FCachedTexture*)It->TextureHandle;

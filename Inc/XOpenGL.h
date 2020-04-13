@@ -786,7 +786,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{}
 	}DrawGouraudBufferData;
 	DrawGouraudBuffer DrawGouraudListBufferData;
-	UTexture* PrevDrawGouraudTexture;
+	DWORD		PrevGouraudListPolyFlags;
+	UTexture*	PrevGouraudListTexture;
 
 	struct LightInfo
 	{
@@ -1135,7 +1136,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BYTE PopClipPlane();
 
 	// OldUnreal UT extended interface
+#if UNREAL_TOURNAMENT_UTPG
 	void DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span) ;
+#endif
 
 	// Editor
 	void PushHit(const BYTE* Data, INT Count);
