@@ -313,7 +313,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
 
 #ifdef SDL2BUILD
-	Viewport->GetWindow();
+	Window = Viewport->GetWindow();
 #elif QTBUILD
 
 #else
@@ -446,7 +446,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 #ifdef _WIN32
 	if (hRC)// || CurrentGLContext)
 	{
-		MakeCurrent(Viewport);
+		MakeCurrent();
 		return 1;
 	}
 #endif
@@ -505,7 +505,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	if (glContext == NULL)
 		appErrorf(TEXT("XOpenGL: Error failed creating SDL_GL_CreateContext: %ls"), appFromAnsi(SDL_GetError()));
 
-	MakeCurrent(Viewport);
+	MakeCurrent();
 
 #ifdef GLAD
 	if (OpenGLVersion == GL_ES)
@@ -698,7 +698,7 @@ InitContext:
 
 	if (hRC)
 	{
-		MakeCurrent(Viewport);
+		MakeCurrent();
 		Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
 		debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
 		debugf(NAME_Init, TEXT("GL_RENDERER   : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER)));
@@ -775,13 +775,12 @@ InitContext:
 	unguard;
 }
 
-void UXOpenGLRenderDevice::MakeCurrent(UViewport* Viewport) {
+void UXOpenGLRenderDevice::MakeCurrent() {
 	guard(UOpenGLRenderDevice::MakeCurrent);
 #ifdef SDL2BUILD
 	if (CurrentGLContext != glContext)
 	{
 		//debugf(TEXT("XOpenGL: MakeCurrent"));
-		SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
 		INT Result = SDL_GL_MakeCurrent(Window, glContext);
 		if (Result != 0)
 			debugf(TEXT("XOpenGL: MakeCurrent failed with: %ls\n"), appFromAnsi(SDL_GetError()));
@@ -797,34 +796,12 @@ void UXOpenGLRenderDevice::MakeCurrent(UViewport* Viewport) {
 		hRC = CurrentGLContext;
 	check(hRC);
 
-	hWnd = (HWND)Viewport->GetWindow();
-	hDC = GetDC(hWnd);
-
 	if (CurrentGLContext != hRC)
 	{
-		debugf(NAME_Dev, TEXT("XOpenGL: MakeCurrent"));
-		if (hDC != CurrenthDC || !hDC)
-		{
-			SetProgram(No_Prog);
-			wglMakeCurrent(NULL, NULL);
-			SetWindowPixelFormat();
-		}
 		check(hDC);
 		if (!wglMakeCurrent(hDC, hRC))
 			appGetLastError();
 		CurrentGLContext = hRC;
-		CurrenthDC = hDC;
-	}
-	else if (hDC != CurrenthDC || !hDC)
-	{
-		SetProgram(No_Prog);
-		wglMakeCurrent(NULL, NULL);
-		check(hDC);
-		CurrenthDC = hDC;
-		SetWindowPixelFormat();
-		if (!wglMakeCurrent(hDC, hRC))
-			appGetLastError();
-		CurrenthDC = hDC;
 	}
 
 #endif
@@ -879,7 +856,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::SetRes);
-	debugf(NAME_Dev, TEXT("XOpenGL: SetRes"));
+	debugf(NAME_Dev, TEXT("XOpenGL: SetRes %s"), GetFullName());
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 #ifdef SDL2BUILD
@@ -982,7 +959,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 	// (Re)init OpenGL rendering context.
 	if (hRC && hRC != CurrentGLContext)
-		MakeCurrent(Viewport);
+		MakeCurrent();
 	else
 		CreateOpenGLContext(Viewport, NewColorBytes);
 #else
@@ -995,7 +972,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	}
 
 	if (glContext && glContext != CurrentGLContext)
-		MakeCurrent(Viewport);
+		MakeCurrent();
 	else
 		CreateOpenGLContext(Viewport, NewColorBytes);
 #endif
@@ -1345,9 +1322,6 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	//Flush Buffers.
 	DrawProgram();
 
-	if (GIsEditor)
-		MakeCurrent(Frame->Viewport);
-
 	// Update Coords:  World to Viewspace projection.
 	FrameCoords[0] = glm::vec4(Frame->Coords.Origin.X, Frame->Coords.Origin.Y, Frame->Coords.Origin.Z, 0.0f);
 	FrameCoords[1] = glm::vec4(Frame->Coords.XAxis.X, Frame->Coords.XAxis.Y, Frame->Coords.XAxis.Z, 0.0f);
@@ -1408,7 +1382,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 
 void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 {
-	guard(UXOpenGLRenderDevice::SetOrthoProjection);
+	guard(UXOpenGLRenderDevice::SetOrthoProjection);	
 
 	// Precompute stuff.
 	FLOAT zFar = (GIsEditor && Frame->Viewport->Actor->RendMap == REN_Wire) ? 131072.0 : 65336.f;
@@ -1493,6 +1467,8 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	check(LockCount == 0);
 	++LockCount;
+
+	MakeCurrent();
 
 	// Compensate UED coloring for sRGB.
 	if (GIsEditor)
@@ -1850,6 +1826,7 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	guard(UXOpenGLRenderDevice::ShutdownAfterError);
 	debugf(NAME_Exit, TEXT("XOpenGL: ShutdownAfterError"));
 
+#if XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP
 	Flush(0);
 	UnMapBuffers();
 	DeleteShaderBuffers();
@@ -1859,11 +1836,11 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 		delete SharedBindMap;
 		SharedBindMap = NULL;
 	}
-
-
-#ifndef __EMSCRIPTEN__  // !!! FIXME: upsets Emscripten.
+	
+# ifndef __EMSCRIPTEN__  // !!! FIXME: upsets Emscripten.
 	//Unmap persistent buffer.
 	glUnmapBuffer(GL_ARRAY_BUFFER);
+# endif
 #endif
 
 #ifdef SDL2BUILD
@@ -1874,21 +1851,21 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 #elif QTBUILD
 
 #else
+# if XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP
 	// Shut down this GL context. May fail if window was already destroyed.
-	check(hRC)
-		CurrentGLContext = NULL;
-	verify(wglMakeCurrent(NULL, NULL));
-	verify(wglDeleteContext(hRC));
-	verify(AllContexts.RemoveItem(hRC) == 1);
+	CurrentGLContext = NULL;
+	wglMakeCurrent(NULL, NULL);
+	wglDeleteContext(hRC);
+	AllContexts.RemoveItem(hRC);
 	hRC = NULL;
+# endif
+
 	if (WasFullscreen)
 		ChangeDisplaySettingsW(NULL, 0);
 
 	if (hDC)
 		ReleaseDC(hWnd, hDC);
-
-	// Shut down global GL.
-	AllContexts.~TArray<HGLRC>();
+	
 #endif
 
 #if _WIN32 && ENGINE_VERSION!=227
@@ -2002,7 +1979,6 @@ TArray<SDL_GLContext> UXOpenGLRenderDevice::AllContexts;
 
 #else
 HGLRC				UXOpenGLRenderDevice::CurrentGLContext = NULL;
-HDC					UXOpenGLRenderDevice::CurrenthDC = NULL;
 TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
 PIXELFORMATDESCRIPTOR UXOpenGLRenderDevice::pfd;
 PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
@@ -2018,7 +1994,7 @@ bool				UXOpenGLRenderDevice::NeedsInit = true;
 bool				UXOpenGLRenderDevice::bMappedBuffers = false;
 
 // Shaderprogs
-INT					UXOpenGLRenderDevice::ActiveProgram = -1;
+//INT					UXOpenGLRenderDevice::ActiveProgram = -1;
 
 // Gamma
 FLOAT				UXOpenGLRenderDevice::Gamma = 0.f;

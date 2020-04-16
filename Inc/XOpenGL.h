@@ -444,6 +444,8 @@ class UXOpenGLRenderDevice : public URenderDevice
     static PIXELFORMATDESCRIPTOR pfd;
     static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
+	#else
+	SDL_Window* Window;
 	#endif
 
 	UBOOL WasFullscreen;
@@ -586,7 +588,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	} TexInfo[8];
 	FLOAT RFX2, RFY2;
 
-	static INT ActiveProgram;
+	INT ActiveProgram;
 	static DWORD ComposeSize;
 	static BYTE* Compose;
 
@@ -1069,7 +1071,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 #elif _WIN32
 	static TArray<HGLRC> AllContexts;
-	static HDC CurrenthDC;
 	static HGLRC   CurrentGLContext;
 	static HMODULE hModuleGlMain;
 	static HMODULE hModuleGlGdi;
@@ -1152,7 +1153,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void DrawProgram();
 	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
 	void UnsetRes();
-	void MakeCurrent(UViewport* Viewport);
+	void MakeCurrent();
 
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
