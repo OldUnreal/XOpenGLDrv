@@ -199,8 +199,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		#endif
 
 		// Spew warning if we uploaded this texture twice.
-		if ( ExistingBind )
-			debugf( NAME_Warning, TEXT("Unpacking texture %ls a second time as %ls."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
+		//if ( ExistingBind )
+		//	debugf( NAME_Warning, TEXT("Unpacking texture %ls a second time as %ls."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
 
 		ExistingBind = false;
 	}

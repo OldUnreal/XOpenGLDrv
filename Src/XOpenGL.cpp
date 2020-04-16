@@ -313,7 +313,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
 
 #ifdef SDL2BUILD
-	Window = Viewport->GetWindow();
+	Window = (SDL_Window*)Viewport->GetWindow();
 #elif QTBUILD
 
 #else
@@ -494,7 +494,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 
 	// Init global GL.
 	// no need to do SDL_Init here, done in SDL2Drv (USDL2Viewport::ResizeViewport).
-	SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
+	Window = (SDL_Window*)Viewport->GetWindow();
 
 	if (!Window)
 		appErrorf(TEXT("XOpenGL: No SDL Window found!"));
@@ -856,7 +856,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::SetRes);
-	debugf(NAME_Dev, TEXT("XOpenGL: SetRes %s"), GetFullName());
+	debugf(NAME_Dev, TEXT("XOpenGL: SetRes"));
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 #ifdef SDL2BUILD
@@ -1529,8 +1529,6 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	if (Blit)
 	{
 		DrawProgram();
-
-		SDL_Window* Window = (SDL_Window*)Viewport->GetWindow();
 		SDL_GL_SwapWindow(Window);
 
 		/*
