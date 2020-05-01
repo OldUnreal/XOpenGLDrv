@@ -187,46 +187,57 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 		if (UsePersistentBuffersGouraud)
 		{
 			glGetNamedBufferParameteriv(DrawGouraudVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
+			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawGouraudVertBuffer);
+				CHECK_GL_ERROR();
 				DrawGouraudBufferRange.Buffer = 0;
 			}
 
 			glGetNamedBufferParameteriv(DrawGouraudVertListBuffer, GL_BUFFER_MAPPED, &IsMapped);
+			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawGouraudVertListBuffer);
+				CHECK_GL_ERROR();
 				DrawGouraudListBufferRange.Buffer = 0;
 			}
 		}
 		if (UsePersistentBuffersComplex)
 		{
 			glGetNamedBufferParameteriv(DrawComplexVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
+			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawComplexVertBuffer);
+				CHECK_GL_ERROR();
 				DrawComplexSinglePassRange.Buffer = 0;
 			}
 		}
 		if (UsePersistentBuffersTile)
 		{
 			glGetNamedBufferParameteriv(DrawTileVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
+			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawTileVertBuffer);
+				CHECK_GL_ERROR();
 				DrawTileRange.Buffer = 0;
 			}
 		}
 		glGetNamedBufferParameteriv(GlobalTextureHandlesUBO, GL_BUFFER_MAPPED, &IsMapped);
+		CHECK_GL_ERROR();
 		if (IsMapped == GL_TRUE)
 		{
 			glUnmapNamedBuffer(GlobalTextureHandlesUBO);
+			CHECK_GL_ERROR();
 			GlobalUniformTextureHandles.UniformBuffer = 0;
 		}
 #else
         glUnmapBuffer(GL_UNIFORM_BUFFER);
         GlobalUniformTextureHandles.UniformBuffer = 0;
+		CHECK_GL_ERROR();
 #endif
 	}
 	else

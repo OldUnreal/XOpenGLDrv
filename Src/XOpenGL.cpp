@@ -193,6 +193,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	//it is really a bad habit of the UEngine1 games to call init again each time a fullscreen change is needed.
 
 	Viewport = InViewport;
+	NeedsInit = true;
+	bMappedBuffers = false;
+	bInitializedShaders = false;
+	TexNum = 1;
+	iPixelFormat = 0;
+	hRC = NULL;
 
 	LastZMode = 255;
 	NumClipPlanes = 0;
@@ -587,6 +593,14 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		HWND TemphWnd = CreateWindowEx(WS_EX_APPWINDOW, WndClassEx.lpszClassName, L"InitWIndow", Style, 0, 0, Viewport->SizeX, Viewport->SizeY, NULL, NULL, hInstance, NULL);
 		HDC TemphDC = GetDC(TemphWnd);
 		INT nPixelFormat = ChoosePixelFormat(TemphDC, &temppfd);
+		if (!nPixelFormat) {
+			pfd.cDepthBits = 24;
+			nPixelFormat = ChoosePixelFormat(TemphDC, &pfd);
+		}
+		if (!nPixelFormat) {
+			pfd.cDepthBits = 16;
+			nPixelFormat = ChoosePixelFormat(TemphDC, &pfd);
+		}
 		check(nPixelFormat);
 		verify(SetPixelFormat(TemphDC, nPixelFormat, &temppfd));
 
@@ -612,11 +626,12 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 			appErrorf(TEXT("XOpenGL: Init failed!"));
 		}
 		else debugf(NAME_Init, TEXT("XOpenGL: Successfully initialized."));
+		CHECK_GL_ERROR();
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(tempContext);
 		ReleaseDC(TemphWnd, TemphDC);
 		DestroyWindow(TemphWnd);
-		NeedsInit = false;
+		NeedsInit = false;		
 
 	}
 	//Now init pure OpenGL >= 3.3 context.
@@ -775,7 +790,8 @@ InitContext:
 	unguard;
 }
 
-void UXOpenGLRenderDevice::MakeCurrent() {
+void UXOpenGLRenderDevice::MakeCurrent()
+{
 	guard(UOpenGLRenderDevice::MakeCurrent);
 #ifdef SDL2BUILD
 	if (CurrentGLContext != glContext)
@@ -796,13 +812,15 @@ void UXOpenGLRenderDevice::MakeCurrent() {
 		hRC = CurrentGLContext;
 	check(hRC);
 
-	if (CurrentGLContext != hRC)
+	if (CurrentGLContext != hRC || GIsEditor)
 	{
 		check(hDC);
 		if (!wglMakeCurrent(hDC, hRC))
 			appGetLastError();
 		CurrentGLContext = hRC;
 	}
+	
+	CLEAR_GL_ERROR();
 
 #endif
 	unguard;
@@ -871,6 +889,13 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 			if (!Viewport->ResizeViewport(BLIT_HardwarePaint | BLIT_OpenGL, NewX, NewY, NewColorBytes))
 			{
 				return 0;
+			}
+
+			// stijn: force a switch to our context if we're in the editor
+			if (GIsEditor)
+			{
+				wglMakeCurrent(NULL, NULL);
+				MakeCurrent();
 			}
 			glViewport(0, 0, NewX, NewY);
 			return 1;
@@ -1096,6 +1121,9 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	CHECK_GL_ERROR();
 
 	debugf(TEXT("XOpenGL: Flush"));
+
+	wglMakeCurrent(NULL, NULL);
+	MakeCurrent();
 	
 	// Create a list of static lights.
 	if (StaticLightList.Num())
@@ -1306,10 +1334,15 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		CHECK_GL_ERROR();
 
 		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightPos);
+		CHECK_GL_ERROR();
 		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData1);
+		CHECK_GL_ERROR();
 		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 2, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData2);
+		CHECK_GL_ERROR();
 		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 3, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData3);
+		CHECK_GL_ERROR();
 		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 4, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData4);
+		CHECK_GL_ERROR();
 		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 5, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData5);
 		CHECK_GL_ERROR();
 
@@ -1340,9 +1373,9 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 #endif // ENGINE_VERSION
 
 	//avoid some overhead, only calculate and set again if something was really changed.
-	if (Frame->Viewport->IsOrtho() && (!bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || StoredOrthoFY != Frame->FY))
+	if (Frame->Viewport->IsOrtho() && (GIsEditor || !bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || StoredOrthoFY != Frame->FY))
 		SetOrthoProjection(Frame);
-	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY)
+	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || GIsEditor)
 		SetProjection(Frame);
 	else
 	{
@@ -1467,8 +1500,10 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	check(LockCount == 0);
 	++LockCount;
+	CLEAR_GL_ERROR();
 
 	MakeCurrent();
+	CHECK_GL_ERROR();
 
 	// Compensate UED coloring for sRGB.
 	if (GIsEditor)
@@ -1476,6 +1511,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
+	CHECK_GL_ERROR();
 
 	if (glClearDepthf)
 		glClearDepthf(1.f);
@@ -1495,9 +1531,12 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
     #endif
 #endif
 
+	CHECK_GL_ERROR();
 	glPolygonOffset(-1.f, -1.f);
+	CHECK_GL_ERROR();
 	SetBlend(static_cast<DWORD>(PF_Occlude), -1, false);
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags&LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
+	CHECK_GL_ERROR();
 
 	glDepthFunc(GL_LEQUAL);
 
@@ -1710,7 +1749,8 @@ void UXOpenGLRenderDevice::Exit()
 	guard(UXOpenGLRenderDevice::Exit);
 	debugf(NAME_Exit, TEXT("XOpenGL: Exit"));
 
-	Flush(0);
+	if (!GIsEditor)
+		Flush(0);
 
 #ifdef SDL2BUILD
 
@@ -1978,27 +2018,19 @@ TArray<SDL_GLContext> UXOpenGLRenderDevice::AllContexts;
 #else
 HGLRC				UXOpenGLRenderDevice::CurrentGLContext = NULL;
 TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
-PIXELFORMATDESCRIPTOR UXOpenGLRenderDevice::pfd;
 PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
 PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
 #endif
-INT                 UXOpenGLRenderDevice::iPixelFormat = 0;
 INT					UXOpenGLRenderDevice::LockCount = 0;
 INT					UXOpenGLRenderDevice::LogLevel = 0;
 DWORD				UXOpenGLRenderDevice::ComposeSize = 0;
 BYTE*				UXOpenGLRenderDevice::Compose = NULL;
-
-bool				UXOpenGLRenderDevice::NeedsInit = true;
-bool				UXOpenGLRenderDevice::bMappedBuffers = false;
 
 // Shaderprogs
 //INT					UXOpenGLRenderDevice::ActiveProgram = -1;
 
 // Gamma
 FLOAT				UXOpenGLRenderDevice::Gamma = 0.f;
-
-//Bindless
-GLuint              UXOpenGLRenderDevice::TexNum = 1;
 
 TOpenGLMap<QWORD, UXOpenGLRenderDevice::FCachedTexture> *UXOpenGLRenderDevice::SharedBindMap;
 

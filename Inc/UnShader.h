@@ -436,6 +436,8 @@ void UXOpenGLRenderDevice::InitShaders()
 	*/
 	CHECK_GL_ERROR();
 
+	bInitializedShaders = true;
+
 	unguard;
 }
 
@@ -492,5 +494,6 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 	if (SimpleDepthVao)
 		glDeleteVertexArrays(1, &SimpleDepthVao);
     */
+	bInitializedShaders = false;
 	unguard;
 }

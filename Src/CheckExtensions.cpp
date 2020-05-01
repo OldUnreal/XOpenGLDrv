@@ -24,7 +24,7 @@ Revision history:
 
         // determine pointer to function
         wglGetExtensionsStringEXT = reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGEXTPROC>(wglGetProcAddress("wglGetExtensionsStringEXT"));
-        if (appStrstr(appFromAnsi(wglGetExtensionsStringEXT()), *Extension_Name) == 0)
+        if (!wglGetExtensionsStringEXT || appStrstr(appFromAnsi(wglGetExtensionsStringEXT()), *Extension_Name) == 0)
             return 0;
 
         // extension supported

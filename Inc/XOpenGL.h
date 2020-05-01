@@ -196,8 +196,10 @@ enum ERenderZTest
 
 #ifdef DEBUGGL
 #define CHECK_GL_ERROR() CheckGLError(__FILE__, __LINE__)
+#define CLEAR_GL_ERROR() glGetError()
 #else
 #define CHECK_GL_ERROR()
+#define CLEAR_GL_ERROR()
 #endif
 
 inline int RGBA_MAKE( BYTE r, BYTE g, BYTE b, BYTE a)
@@ -441,7 +443,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	HGLRC hRC;
 	HWND hWnd;
 	HDC hDC;
-    static PIXELFORMATDESCRIPTOR pfd;
+    PIXELFORMATDESCRIPTOR pfd;
     static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
 	#else
@@ -463,7 +465,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	INT DesiredColorBits;
 	INT DesiredStencilBits;
 	INT DesiredDepthBits;
-	static INT iPixelFormat;
+	INT iPixelFormat;
 
 	// Timing.
 	struct FGLStats
@@ -538,8 +540,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	INT MaxTextureSize;
 	BYTE OpenGLVersion;
 	BYTE UseVSync;
-	static bool NeedsInit;
-	static bool bMappedBuffers;
+	bool NeedsInit;
+	bool bMappedBuffers;
+	bool bInitializedShaders;
 	BYTE* ScaleByte;
 
 	#if ENGINE_VERSION==227
@@ -931,7 +934,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool bFogEnabled = false;
 
 	FCachedTexture* MapTextureData[8];
-    static GLuint TexNum;
+    GLuint TexNum;
 
 	// Editor
 	GLuint DrawSimplebHitTesting;
