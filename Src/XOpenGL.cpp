@@ -198,7 +198,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	bInitializedShaders = false;
 	TexNum = 1;
 	iPixelFormat = 0;
+#if WIN32
 	hRC = NULL;
+#endif
 
 	LastZMode = 255;
 	NumClipPlanes = 0;
@@ -892,11 +894,13 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 			}
 
 			// stijn: force a switch to our context if we're in the editor
+#if WIN32
 			if (GIsEditor)
 			{
 				wglMakeCurrent(NULL, NULL);
 				MakeCurrent();
 			}
+#endif
 			glViewport(0, 0, NewX, NewY);
 			return 1;
 		}
@@ -1122,8 +1126,10 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	debugf(TEXT("XOpenGL: Flush"));
 
+#if WIN32
 	wglMakeCurrent(NULL, NULL);
 	MakeCurrent();
+#endif
 	
 	// Create a list of static lights.
 	if (StaticLightList.Num())
