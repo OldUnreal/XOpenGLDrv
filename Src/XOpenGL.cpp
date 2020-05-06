@@ -1127,8 +1127,11 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	debugf(TEXT("XOpenGL: Flush"));
 
 #if WIN32
-	wglMakeCurrent(NULL, NULL);
-	MakeCurrent();
+	if (GIsEditor)
+	{
+		wglMakeCurrent(NULL, NULL);
+		MakeCurrent();
+	}
 #endif
 	
 	// Create a list of static lights.
