@@ -123,7 +123,7 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		// See if points form a line parallel to our line of sight (i.e. line appears as a dot).
 		if (Abs(P2.X - P1.X) + Abs(P2.Y - P1.Y) >= 0.2f)
 			Draw2DLine( Frame, Color, LineFlags, P1, P2 );
-		else if( Frame->Viewport->Actor->OrthoZoom < ORTHO_LOW_DETAIL )
+		else 
 			Draw2DPoint(Frame, Color, LineFlags&LINE_DepthCued, P1.X - 1.f, P1.Y - 1.f, P1.X + 1.f, P1.Y + 1.f, P1.Z);
 	}
 	else
