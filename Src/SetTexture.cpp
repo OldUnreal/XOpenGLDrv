@@ -18,6 +18,21 @@
 #include "XOpenGL.h"
 
 
+UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
+{
+	switch( Format )
+	{
+	case TEXF_P8:
+	case TEXF_RGBA7:
+	case TEXF_RGB8:
+	case TEXF_BGRA8: return true;
+	case TEXF_BC1:
+	case TEXF_BC2:
+	case TEXF_BC3:   return SupportsTC;
+	default:         return false;
+	}
+}
+
 void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 {
 	guard(UXOpenGLRenderDevice::SetNoTexture);
@@ -393,7 +408,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
-#if ENGINE_VERSION==227
 				case TEXF_DXT3:
                     if (OpenGLVersion == GL_Core)
                     {
@@ -453,6 +467,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					Unsupported = 1;
 					break;
 
+#if ENGINE_VERSION==227
 				// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10. Not in GLES it seems.
 				case TEXF_RGTC_R:
 					InternalFormat = GL_COMPRESSED_RED_RGTC1;
@@ -639,7 +654,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							CompImageSize = USize*VSize/2;
 							ImgSrc = Mip->DataPtr;
 							break;
-#if ENGINE_VERSION==227
 						case TEXF_DXT3:
 						case TEXF_DXT5:
 							if ( USize<4 || VSize<4 )
@@ -648,6 +662,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							ImgSrc = Mip->DataPtr;
 							break;
 
+#if ENGINE_VERSION==227
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
 						case TEXF_RGTC_R:
 						case TEXF_RGTC_R_SIGNED:

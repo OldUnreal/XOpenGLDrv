@@ -1135,6 +1135,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void EndFlash();
 	void SwapControl();
 	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
+	UBOOL SupportsTextureFormat(ETextureFormat Format);
+
 
 	BYTE PushClipPlane(const FPlane& Plane);
 	BYTE PopClipPlane();
