@@ -97,14 +97,14 @@ void UXOpenGLRenderDevice::MapBuffers()
 #endif
 	{
 
-		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLYLIST_SIZE];
+		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
 		DrawGouraudListBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLYLIST_SIZE];
 
-		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
-		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudListBufferRange.VertBuffer, GL_STREAM_DRAW);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
-		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLYLIST_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLYLIST_SIZE * sizeof(float), DrawGouraudListBufferRange.VertBuffer, GL_STREAM_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
+		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 #ifndef __LINUX_ARM__
