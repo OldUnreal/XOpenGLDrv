@@ -1140,7 +1140,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	NumStaticLights = 0;
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
+#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
 	for (TObjectIterator<UTexture> It; It; ++It)
 	{
 		FCachedTexture* FCachedTextureInfo = (FCachedTexture*)It->TextureHandle;

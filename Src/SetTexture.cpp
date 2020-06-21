@@ -113,7 +113,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
+#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
     // avoid lookups by storing information directly into texture. Add bindless information if available.
     // Should save quite some CPU.
     // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
@@ -695,7 +695,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					}
 				}
 				else {
-					appErrorf(TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
+					debugf(TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
 					break;
 				}
                 CHECK_GL_ERROR();
@@ -851,7 +851,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
                 LockBuffer(GlobalUniformTextureHandles, 0);
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
+#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
                 // avoid lookups by storing information directly into texture. Add bindless information if available.
                 // Should save quite some CPU.
                 // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap

@@ -181,6 +181,7 @@ enum DrawSimpleMode
 #ifdef UNREAL_TOURNAMENT_UTPG
 #define PF_AlphaBlend 0x2000
 #define TEXF_RGBA8 TEXF_BGRA8 // stijn: really BGRA8
+#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 0 // stijn: benchmarked on 16 JUN 2020. Has no statistically significant effect in UT469
 
 enum ERenderZTest
 {
@@ -192,6 +193,8 @@ enum ERenderZTest
 	ZTEST_NotEqual,
 	ZTEST_Always
 };
+#else
+#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
 #endif
 
 #ifdef DEBUGGL
