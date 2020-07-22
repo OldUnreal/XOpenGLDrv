@@ -341,19 +341,19 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 #endif
 
 // stijn: This is the UT extended renderer interface. This does not map directly onto DrawGouraudPolyList because DrawGouraudTriangles pushes info out earlier
-#if UNREAL_TOURNAMENT_UTPG
+#if UNREAL_TOURNAMENT_UTPG 
 void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
 {
-	FTransTexture* Tri[3];
 	INT StartOffset = 0;
 	INT i = 0;
 
+	// stijn: flush current polylist buffer even if it doesn't meet the criteria in DrawGouraudPolyList
+	SetProgram(GouraudPolyVertList_Prog);
+	if (DrawGouraudListBufferData.VertSize > 0)
+		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+
 	for (; i < NumPts; i += 3)
 	{
-		Tri[0] = &Pts[i];
-		Tri[1] = &Pts[i + 1];
-		Tri[2] = &Pts[i + 2];
-
 		if (Frame->Mirror == -1.0)
 			Exchange(Pts[i+2], Pts[i]);
 
@@ -403,6 +403,8 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 	// stijn: push the remaining triangles
 	if (i - StartOffset > 0)
 		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
+
+	
 }
 #endif
 
