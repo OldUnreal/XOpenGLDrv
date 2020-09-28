@@ -303,6 +303,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	// Make use of DrawGouraudPolyList for Meshes and leave the clipping up for the rendev. Instead of pushing vert by vert this uses a huge list.
 	SupportsNoClipRender = UseHWClipping;
+#elif UNREAL_TOURNAMENT_OLDUNREAL
+	UseHWClipping = 0;
 #else
 	UseBindlessTextures = 0;
 	UseHWClipping = 0;

@@ -72,7 +72,7 @@
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
 #define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
 #elif UNREAL_TOURNAMENT_OLDUNREAL
-#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 0 // stijn: benchmarked on 16 JUN 2020. This has no statistically significant effect on performance in UT469
+#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1 // stijn: benchmarked on 16 JUN 2020. This has no statistically significant effect on performance in UT469
 #endif
 
 /*-----------------------------------------------------------------------------
