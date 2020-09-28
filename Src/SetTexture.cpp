@@ -566,12 +566,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// RGBA7 -- Well it's actually BGRA and used by light and fogmaps.
 						case TEXF_RGBA7:
-							if ( (CacheType == CID_StaticMap) || (CacheType == CID_DynamicMap) || (CacheType == CID_RenderFogMap) )
+							/*if ( (CacheType == CID_StaticMap) || (CacheType == CID_DynamicMap) || (CacheType == CID_RenderFogMap) )
 							{
 								// Higor: 2x resampling done in shader
 								ImgSrc = Mip->DataPtr;
 								break;
-							}
+							}*/
 							guard(ConvertBGRA7777_RGBA8888);
 							ImgSrc  = Compose;
 							DWORD* Ptr = (DWORD*)Compose;
