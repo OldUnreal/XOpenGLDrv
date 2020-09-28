@@ -328,7 +328,10 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
         FTransTexture* P = &Pts[i];
         BufferGouraudPolygonPoint(&DrawGouraudListBufferRange.Buffer[DrawGouraudListBufferData.BeginOffset + DrawGouraudListBufferData.IndexOffset], P, DrawGouraudListBufferData);
 
-        if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - DrawGouraudStrideSize))
+		// stijn: this was the previous condition but this was all wrong! if we flush the buffer before the triangle we
+		// were pushing is complete, all subsequent triangles we push will be borked as well!!
+		//if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - DrawGouraudStrideSize)) 
+        if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - 3 * DrawGouraudStrideSize) && i%3==2)
         {
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
             debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
@@ -416,7 +419,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	// stijn: push the remaining triangles
 	if (i - StartOffset > 0)
-		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);	
+		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
 }
 #endif
 
