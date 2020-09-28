@@ -51,7 +51,7 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		return;
 
 	SetProgram(Simple_Prog);
-	SetBlend(PF_AlphaBlend, Simple_Prog, false);
+	SetBlend(PF_AlphaBlend, false);
 	CHECK_GL_ERROR();
 
 	clockFast(Stats.Draw2DLine);
@@ -102,7 +102,7 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 	clockFast(Stats.Draw3DLine);
 
 	SetProgram(Simple_Prog);
-	SetBlend(PF_AlphaBlend, Simple_Prog, false);
+	SetBlend(PF_AlphaBlend, false);
 	CHECK_GL_ERROR();
 
 	//Unfortunately this is usually set to 0.
@@ -123,7 +123,7 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		// See if points form a line parallel to our line of sight (i.e. line appears as a dot).
 		if (Abs(P2.X - P1.X) + Abs(P2.Y - P1.Y) >= 0.2f)
 			Draw2DLine( Frame, Color, LineFlags, P1, P2 );
-		else 
+		else if( Frame->Viewport->Actor->OrthoZoom < ORTHO_LOW_DETAIL )
 			Draw2DPoint(Frame, Color, LineFlags&LINE_DepthCued, P1.X - 1.f, P1.Y - 1.f, P1.X + 1.f, P1.Y + 1.f, P1.Z);
 	}
 	else
@@ -175,7 +175,7 @@ void UXOpenGLRenderDevice::EndFlash()
 	if( FlashScale!=FPlane(0.5,0.5,0.5,0) || FlashFog!=FPlane(0,0,0,0) )
 	{
 		SetProgram(Simple_Prog);
-		SetBlend(PF_Highlighted, Simple_Prog, false);
+		SetBlend(PF_Highlighted, false);
 		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0-Min(FlashScale.X*2.f,1.f));
 
 		FLOAT RFX2 = 2.0*RProjZ       /Viewport->SizeX;
@@ -211,7 +211,7 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 		return;
 
 	SetProgram(Simple_Prog);
-	SetBlend(PF_AlphaBlend, Simple_Prog, false);
+	SetBlend(PF_AlphaBlend, false);
 	CHECK_GL_ERROR();
 
 	clockFast(Stats.Draw2DPoint);

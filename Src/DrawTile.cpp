@@ -52,21 +52,24 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		PolyFlags |= PF_Highlighted;
 
 	// stijn: UT draws fonts with PF_Translucent AND PF_Masked set. All of the other rendevs will remove PF_Masked from PF_Translucent tiles, but XOpenGL did not
-	if (PolyFlags & (PF_Translucent|PF_AlphaBlend))
-		PolyFlags &= ~PF_Masked;
+	//if (PolyFlags & (PF_Translucent|PF_AlphaBlend))
+	//	PolyFlags &= ~PF_Masked;
 
-    if(UseBindlessTextures && (DrawTileBufferData.VertSize > 0) && (DrawTileBufferData.PolyFlags != PolyFlags))
+
+    if(UseBindlessTextures && (DrawTileBufferData.VertSize > 0) && (DrawTileBufferData.PrevPolyFlags != PolyFlags))
     {
         // Non 227: to make this work, add missing ComputeRenderSize() in URender::DrawWorld and UGameEngine::Draw for canvas operations.
         DrawTileVerts(DrawTileBufferData);
 	}
+	DrawTileBufferData.PrevPolyFlags = PolyFlags;
 
-	SetBlend(PolyFlags, Tile_Prog, false);
+    DrawTileBufferData.PolyFlags = SetFlags(PolyFlags);
+	SetBlend(PolyFlags, false);
+
     SetTexture(0, Info, PolyFlags, 0, Tile_Prog, NORMALTEX);
     //debugf(TEXT("%ls %ls"), GetTextureFormatString(Info.Format), Info.Texture->GetName());
 
     clockFast(Stats.TileBufferCycles);
-    DrawTileBufferData.PolyFlags = PolyFlags;
 
 	if (GIsEditor)
 	{
@@ -168,6 +171,29 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+58] = Color.W;
         DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+59] = TexInfo[0].TexNum;
 
+#if ENGINE_VERSION==227
+        if (Info.Modifier)
+        {
+            Info.Modifier->TransformPoint(  DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 3],
+                                            DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 4]);
+
+            Info.Modifier->TransformPoint(  DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 13],
+                                            DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 14]);
+
+            Info.Modifier->TransformPoint(  DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 23],
+                                            DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 24]);
+
+            Info.Modifier->TransformPoint(  DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 33],
+                                            DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 34]);
+
+            Info.Modifier->TransformPoint(  DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 43],
+                                            DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 44]);
+
+            Info.Modifier->TransformPoint(  DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 53],
+                                            DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 54]);
+        }
+#endif
+
         DrawTileBufferData.VertSize += 18;
         DrawTileBufferData.IndexOffset += 60;
 	}
@@ -208,7 +234,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	if ( DrawTileBufferData.IndexOffset >= DRAWTILE_SIZE - 60)
     {
         DrawTileVerts(DrawTileBufferData);
-        debugf(NAME_Dev, TEXT("DrawTile overflow!"));
+        debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
     }
     unclockFast(Stats.TileBufferCycles);
 	if (NoBuffering || !UseBindlessTextures || GIsEditor) // No buffering at this time for Editor.

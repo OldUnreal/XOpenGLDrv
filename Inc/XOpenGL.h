@@ -20,6 +20,7 @@
 // Linux/OSX mostly, needs to be set in Windows for SDL2Launch.
 // #define SDL2BUILD 1
 
+
 #ifdef _MSC_VER
 #pragma warning(disable: 4351)
 #endif
@@ -67,6 +68,11 @@
 #if ENGINE_VERSION==436 || ENGINE_VERSION==430
 #define clockFast(Timer)   {Timer -= appCycles();}
 #define unclockFast(Timer) {Timer += appCycles()-34;}
+#elif ENGINE_VERSION==227
+#define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
+#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
+#elif UNREAL_TOURNAMENT_OLDUNREAL
+#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 0 // stijn: benchmarked on 16 JUN 2020. This has no statistically significant effect on performance in UT469
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -177,11 +183,10 @@ enum DrawSimpleMode
 	DrawEndFlashMode    = 4,
 };
 
-// stijn: missing defs in UTPG tree
-#ifdef UNREAL_TOURNAMENT_UTPG
+// stijn: missing defs in UT469 tree
+#ifdef UNREAL_TOURNAMENT_OLDUNREAL
 #define PF_AlphaBlend 0x2000
 #define TEXF_RGBA8 TEXF_BGRA8 // stijn: really BGRA8
-#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 0 // stijn: benchmarked on 16 JUN 2020. Has no statistically significant effect in UT469
 
 enum ERenderZTest
 {
@@ -193,8 +198,6 @@ enum ERenderZTest
 	ZTEST_NotEqual,
 	ZTEST_Always
 };
-#else
-#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
 #endif
 
 #ifdef DEBUGGL
@@ -352,7 +355,7 @@ enum DrawFlags
 -----------------------------------------------------------------------------*/
 
 
-#if UNREAL_TOURNAMENT_UTPG
+#if UNREAL_TOURNAMENT_OLDUNREAL
 class UXOpenGLRenderDevice : public URenderDeviceOldUnreal469
 #else
 class UXOpenGLRenderDevice : public URenderDevice
@@ -362,7 +365,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
 #elif ENGINE_VERSION==430
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
-#elif UNREAL_TOURNAMENT_UTPG
+#elif UNREAL_TOURNAMENT_OLDUNREAL
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDeviceOldUnreal469, CLASS_Config, XOpenGLDrv)
 #elif ENGINE_VERSION>=436 && ENGINE_VERSION < 1100
     DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
@@ -520,6 +523,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     BITFIELD NoDrawSimple;
     BITFIELD UseHWLighting;
     BITFIELD UseHWClipping;
+	BITFIELD UseEnhandedLightmaps;
 
     //OpenGL 4 Config
 	BITFIELD UseBindlessTextures;
@@ -731,6 +735,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint IndexOffset;
 		GLuint BeginOffset;
 		DWORD PolyFlags;
+		DWORD PrevPolyFlags;
 		DrawTileBuffer()
 			: TexCoords(),
 			VertSize(0),
@@ -740,7 +745,8 @@ class UXOpenGLRenderDevice : public URenderDevice
             Index(0),
 			IndexOffset(0),
 			BeginOffset(0),
-			PolyFlags(0)
+			PolyFlags(0),
+            PrevPolyFlags(0)
 		{}
 	}DrawTileBufferData;
 
@@ -751,6 +757,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint IndexOffset;
 		GLuint BeginOffset;
 		DWORD PolyFlags;
+		DWORD PrevPolyFlags;
 		DWORD RendMap;
 		FLOAT TexUMult;
 		FLOAT TexVMult;
@@ -774,6 +781,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			IndexOffset(0),
 			BeginOffset(0),
 			PolyFlags(0),
+			PrevPolyFlags(0),
 			RendMap(0),
 			TexUMult(0.f),
 			TexVMult(0.f),
@@ -794,8 +802,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{}
 	}DrawGouraudBufferData;
 	DrawGouraudBuffer DrawGouraudListBufferData;
-	DWORD		PrevGouraudListPolyFlags;
-	UTexture*	PrevGouraudListTexture;
 
 	struct LightInfo
 	{
@@ -840,6 +846,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BeginOffset;
 		GLuint Iteration;
 		DWORD PolyFlags;
+		DWORD PrevPolyFlags;
 		DWORD RendMap;
 		FPlane DrawColor;
 		GLuint TexNum[8];
@@ -851,6 +858,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			BeginOffset(0),
 			Iteration(0),
 			PolyFlags(0),
+			PrevPolyFlags(0),
 			RendMap(0),
 			DrawColor(0.f, 0.f, 0.f, 0.f),
 			TexNum()
@@ -898,6 +906,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FLOAT StoredOrthoFovAngle;
 	FLOAT StoredOrthoFX;
 	FLOAT StoredOrthoFY;
+	UBOOL StoredbNearZ;
 	bool bIsOrtho;
 
 
@@ -1105,9 +1114,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar);
 	void Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize);
+	void UpdateCoords(FSceneNode* Frame);
 	void SetSceneNode(FSceneNode* Frame);
 	void SetOrthoProjection(FSceneNode* Frame);
-	void SetProjection(FSceneNode* Frame);
+	void SetProjection(FSceneNode* Frame, UBOOL bNearZ);
 	void Unlock(UBOOL Blit);
 	void Flush(UBOOL AllowPrecache);
 	void SetPermanentState();
@@ -1138,16 +1148,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void EndFlash();
 	void SwapControl();
 	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
-	UBOOL SupportsTextureFormat(ETextureFormat Format);
-
 
 	BYTE PushClipPlane(const FPlane& Plane);
 	BYTE PopClipPlane();
 
-	// OldUnreal UT extended interface
-#if UNREAL_TOURNAMENT_UTPG
-	void DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span) ;
-#endif
+#if UNREAL_TOURNAMENT_OLDUNREAL
+	void DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
+	UBOOL SupportsTextureFormat(ETextureFormat Format);
+#endif      
 
 	// Editor
 	void PushHit(const BYTE* Data, INT Count);
@@ -1165,7 +1173,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
-	DWORD SetBlend(DWORD PolyFlags, INT ShaderProg, bool InverseOrder);
+	DWORD SetFlags(DWORD PolyFlags);
+	void SetBlend(DWORD PolyFlags, bool InverseOrder);
 	DWORD SetDepth(DWORD PolyFlags);
 	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode);
 

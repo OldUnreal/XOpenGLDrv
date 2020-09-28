@@ -17,21 +17,25 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-
+#if UNREAL_TOURNAMENT_OLDUNREAL
 UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
 {
 	switch( Format )
 	{
-	case TEXF_P8:
-	case TEXF_RGBA7:
-	case TEXF_RGB8:
-	case TEXF_BGRA8: return true;
-	case TEXF_BC1:
-	case TEXF_BC2:
-	case TEXF_BC3:   return SupportsTC;
-	default:         return false;
+		case TEXF_P8:
+		case TEXF_RGBA7:
+		case TEXF_RGB8:
+		case TEXF_BGRA8:
+			return true;
+		case TEXF_BC1:
+		case TEXF_BC2:
+		case TEXF_BC3:
+			return SupportsTC;
+		default:
+			return false;
 	}
 }
+#endif
 
 void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 {
@@ -149,7 +153,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	Tex.CurrentCacheSlot = CacheSlot;
 	Tex.CurrentCacheID   = Info.CacheID;
 
-	//debugf( TEXT("Tex.CurrentCacheID 0x%08x%08x, Multi %i" ), Tex.CurrentCacheID, Multi );
+	//debugf(NAME_DevGraphics, TEXT("Info.Texture %ls Tex.CurrentCacheID 0x%08x%08x, Multi %i, Bind %i" ),Info.Texture->GetPathName(), Tex.CurrentCacheID, Multi, Bind );
 
 	// Find in cache.
 	if (!Bind)
@@ -214,8 +218,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		#endif
 
 		// Spew warning if we uploaded this texture twice.
-		//if ( ExistingBind )
-		//	debugf( NAME_Warning, TEXT("Unpacking texture %ls a second time as %ls."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
+		if ( ExistingBind )
+			debugf( NAME_DevGraphics, TEXT("Unpacking texture %ls a second time as %ls."), Info.Texture->GetFullName(), CacheSlot ? TEXT("masked") : TEXT("unmasked") );
 
 		ExistingBind = false;
 	}
@@ -353,9 +357,17 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
 				case TEXF_RGB8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
-					SourceFormat   = GL_RGB; 
+#if ENGINE_VERSION==227
+					SourceFormat   = GL_BGR; // Was GL_RGB;
+#else
+					SourceFormat   = GL_RGB;
+#endif
 					break;
+#if ENGINE_VERSION==227
+				case TEXF_RGBA8:
+#else
 				case TEXF_BGRA8:
+#endif					
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_BGRA; // Was GL_RGBA;
 					break;
@@ -408,6 +420,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_DXT3:
                     if (OpenGLVersion == GL_Core)
                     {
@@ -466,6 +479,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
+#endif
 
 #if ENGINE_VERSION==227
 				// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10. Not in GLES it seems.
@@ -647,9 +661,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// RGB8/RGBA8 -- Actually used by Brother Bear.
 						case TEXF_RGB8:
-						case TEXF_BGRA8:
 #if ENGINE_VERSION==227
+						case TEXF_RGBA8:
 						case TEXF_RGBA16:
+#else
+						case TEXF_BGRA8:
 #endif
 							ImgSrc = Mip->DataPtr;
 							break;
@@ -661,6 +677,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							CompImageSize = USize*VSize/2;
 							ImgSrc = Mip->DataPtr;
 							break;
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 						case TEXF_DXT3:
 						case TEXF_DXT5:
 							if ( USize<4 || VSize<4 )
@@ -668,7 +685,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							CompImageSize = USize*VSize;
 							ImgSrc = Mip->DataPtr;
 							break;
-
+#endif
+							
 #if ENGINE_VERSION==227
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
 						case TEXF_RGTC_R:
@@ -702,7 +720,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					}
 				}
 				else {
-					debugf(TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
+					appErrorf(TEXT("Unpacking %i on %ls failed due to invalid data."), Info.Format, Info.Texture->GetFullName() );
 					break;
 				}
                 CHECK_GL_ERROR();
@@ -888,17 +906,17 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         Bind->TexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
-    Tex.TexNum = Bind->TexNum[CacheSlot];
+    if (UseBindlessTextures)
+        Tex.TexNum = Bind->TexNum[CacheSlot];
+    else Tex.TexNum  = 0;
 
     CHECK_GL_ERROR();
 	STAT(unclockFast(Stats.ImageCycles));
 	unguard;
 }
-
-DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool InverseOrder)
+DWORD UXOpenGLRenderDevice::SetFlags(DWORD PolyFlags)
 {
-	guard(UOpenGLRenderDevice::SetBlend);
-	STAT(clockFast(Stats.BlendCycles));
+    guard(UOpenGLRenderDevice::SetFlags);
 
 	if( (PolyFlags & (PF_RenderFog|PF_Translucent))!=PF_RenderFog )
 		PolyFlags &= ~PF_RenderFog;
@@ -908,11 +926,21 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool Inver
 	else if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
 		PolyFlags &= ~PF_Masked;
 
+    return PolyFlags;
+
+    unguard;
+}
+
+void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
+{
+	guard(UOpenGLRenderDevice::SetBlend);
+	STAT(clockFast(Stats.BlendCycles));
+
 	// For UED selection disable any blending.
 	if (HitTesting())
 	{
 		glBlendFunc(GL_ONE, GL_ZERO);
-		return 0;
+		return;
 	}
 
 	// Check to disable culling or other frontface if needed (or more other affecting states yet). Perhaps should add own RenderFlags if so.
@@ -1005,7 +1033,7 @@ DWORD UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, INT ShaderProg, bool Inver
 	}
 	STAT(unclockFast(Stats.BlendCycles));
 
-	return PolyFlags;
+	return;
 
 	CHECK_GL_ERROR();
 	unguard;

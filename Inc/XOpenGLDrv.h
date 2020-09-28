@@ -17,7 +17,7 @@
 #ifdef WIN32
 #include <windows.h>
 #endif
-
+#include <cmath>
 #include "Engine.h"
 #if ENGINE_VERSION==227
 #include "Render.h"

@@ -14,7 +14,7 @@ void UXOpenGLRenderDevice::GetUniformBlockIndex(GLuint &Program, GLuint BlockInd
 	BlockIndex = glGetUniformBlockIndex(Program, Name);
 	if (BlockIndex == GL_INVALID_INDEX)
     {
-		debugf(NAME_Dev, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
             debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
     }
@@ -26,7 +26,7 @@ void UXOpenGLRenderDevice::GetUniformLocation(GLuint &Uniform, GLuint &Program, 
 	Uniform = glGetUniformLocation(Program, Name);
 	if (Uniform == GL_INVALID_INDEX)
     {
-		debugf(NAME_Dev, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
             debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
     }
@@ -45,7 +45,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 
 
 	// VERSION
-	FString GLVersionString = TEXT("#version 300 es\n");
+	FString GLVersionString = TEXT("#version 310 es\n");
 
 	if (OpenGLVersion == GL_Core)
 	{
@@ -436,8 +436,6 @@ void UXOpenGLRenderDevice::InitShaders()
 	*/
 	CHECK_GL_ERROR();
 
-	bInitializedShaders = true;
-
 	unguard;
 }
 
@@ -494,6 +492,5 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 	if (SimpleDepthVao)
 		glDeleteVertexArrays(1, &SimpleDepthVao);
     */
-	bInitializedShaders = false;
 	unguard;
 }

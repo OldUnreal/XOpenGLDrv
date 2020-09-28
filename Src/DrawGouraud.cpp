@@ -101,13 +101,26 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 
 	SetProgram(GouraudPolyVert_Prog);
 
-	if ( (DrawGouraudBufferData.VertSize > 0) && ((!UseBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudBufferData.PolyFlags != PolyFlags)))
+	if (GUglyHackFlags & HACKFLAGS_NoNearZ)
+		SetProjection(Frame, 1);
+
+#if ENGINE_VERSION==227
+	if (Info.Modifier)
+	{
+		FLOAT UM = Info.USize, VM = Info.VSize;
+		for (INT i = 0; i < NumPts; ++i)
+			Info.Modifier->TransformPointUV(Pts[i]->U, Pts[i]->V, UM, VM);
+	}
+#endif
+
+	if ( (DrawGouraudBufferData.VertSize > 0) && ((!UseBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudBufferData.PrevPolyFlags != PolyFlags)))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 	}
 
-	//debugf(TEXT("VertSize %i TexSize %i, ColorSize %i"), VertSize, TexSize, ColorSize); //18/12/24
-	DrawGouraudBufferData.PolyFlags = SetBlend(PolyFlags, GouraudPolyVert_Prog, false);
+	DrawGouraudBufferData.PrevPolyFlags = PolyFlags;
+	DrawGouraudBufferData.PolyFlags = SetFlags(PolyFlags);
+	SetBlend(DrawGouraudBufferData.PolyFlags, false);
 	SetTexture(0, Info, DrawGouraudBufferData.PolyFlags, 0, GouraudPolyVert_Prog, NORMALTEX);
 
     DrawGouraudBufferData.TexNum[0] = TexInfo[0].TexNum;
@@ -188,7 +201,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		if ( DrawGouraudBufferData.IndexOffset >= (DRAWGOURAUDPOLY_SIZE - DrawGouraudStrideSize))
         {
             DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-            debugf(NAME_Dev, TEXT("DrawGouraudPolygon overflow!"));
+            debugf(NAME_DevGraphics, TEXT("DrawGouraudPolygon overflow!"));
         }
     }
     CHECK_GL_ERROR();
@@ -211,7 +224,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	unguard;
 }
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_UTPG
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolyList);
@@ -220,27 +233,28 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	SetProgram(GouraudPolyVertList_Prog);
 
-	if (DrawGouraudListBufferData.VertSize > 0 && (PrevGouraudListPolyFlags != PolyFlags || Info.Texture != PrevGouraudListTexture))
+#if ENGINE_VERSION==227
+	if (Info.Modifier)
+	{
+		FLOAT UM = Info.USize, VM = Info.VSize;
+		for (INT i = 0; i < NumPts; ++i)
+			Info.Modifier->TransformPointUV(Pts[i].U, Pts[i].V, UM, VM);
+	}
+#endif
+
+	if ( (DrawGouraudListBufferData.VertSize > 0) && ((!UseBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 	}
-
-	PrevGouraudListTexture = Info.Texture;
-	PrevGouraudListPolyFlags = PolyFlags;
+    DrawGouraudListBufferData.PrevPolyFlags = PolyFlags;
 
     bool bInverseOrder = false;
-	/*
-	FMeshVertCacheData* MemData = NULL;
-	FVector Scale = FVector(1.f, 1.f, 1.f);
-	if (Owner)// && Owner->MeshDataPtr)
-	{
-		//(FMeshVertCacheData*)Owner->MeshDataPtr;
-		Scale = (Owner->DrawScale*Owner->DrawScale3D);
-		bInverseOrder = ((Scale.X*Scale.Y*Scale.Z)<0.f) && !(PolyFlags & PF_TwoSided);
-	}
-	*/
 
-    DrawGouraudListBufferData.PolyFlags=SetBlend(PolyFlags, GouraudPolyVertList_Prog, bInverseOrder);
+    if (GUglyHackFlags & HACKFLAGS_NoNearZ)
+        SetProjection(Frame, 1);
+
+    DrawGouraudListBufferData.PolyFlags = SetFlags(PolyFlags);
+    SetBlend(DrawGouraudListBufferData.PolyFlags, bInverseOrder);
     DrawGouraudListBufferData.DrawFlags = DF_DiffuseTexture;
 	SetTexture(0, Info, DrawGouraudListBufferData.PolyFlags, 0, GouraudPolyVertList_Prog, NORMALTEX);
 
@@ -317,7 +331,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
         if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - DrawGouraudStrideSize))
         {
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
-            debugf(NAME_Dev, TEXT("DrawGouraudPolyList overflow!"));
+            debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
         }
     }
 
@@ -341,7 +355,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 #endif
 
 // stijn: This is the UT extended renderer interface. This does not map directly onto DrawGouraudPolyList because DrawGouraudTriangles pushes info out earlier
-#if UNREAL_TOURNAMENT_UTPG 
+#if UNREAL_TOURNAMENT_OLDUNREAL
 void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
 {
 	INT StartOffset = 0;
@@ -402,11 +416,10 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	// stijn: push the remaining triangles
 	if (i - StartOffset > 0)
-		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
-
-	
+		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);	
 }
 #endif
+
 
 void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData)
 {

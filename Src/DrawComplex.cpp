@@ -104,13 +104,15 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	//Draw polygons
 	SetProgram(ComplexSurfaceSinglePass_Prog);
 
-	if (DrawComplexBufferData.VertSize > 0 && (DrawComplexBufferData.PolyFlags != Surface.PolyFlags))
+	if (DrawComplexBufferData.VertSize > 0 && (DrawComplexBufferData.PrevPolyFlags != Surface.PolyFlags))
 		DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
 
-	DWORD PolyFlags=SetBlend(Surface.PolyFlags, ComplexSurfaceSinglePass_Prog, false);
-	DrawComplexBufferData.PolyFlags = PolyFlags;
+    DrawComplexBufferData.PrevPolyFlags = Surface.PolyFlags;
 
-    SetTexture(0, *Surface.Texture, Surface.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog,NORMALTEX);
+	DrawComplexBufferData.PolyFlags = SetFlags(Surface.PolyFlags);
+	SetBlend(DrawComplexBufferData.PolyFlags , false);
+
+    SetTexture(0, *Surface.Texture, DrawComplexBufferData.PolyFlags , 0.0, ComplexSurfaceSinglePass_Prog,NORMALTEX);
     TexMaps.TexCoords[0] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
 
     if (UseBindlessTextures)
@@ -118,21 +120,21 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	if (TexMaps.DrawFlags & DF_LightMap) //can not make use of bindless, to many single textures. Determined by Info->Texture.
 	{
-		SetTexture(1, *Surface.LightMap, PolyFlags, -0.5, ComplexSurfaceSinglePass_Prog, LIGHTMAP); //First parameter has to fit the uniform in the fragment shader
+		SetTexture(1, *Surface.LightMap, DrawComplexBufferData.PolyFlags, -0.5, ComplexSurfaceSinglePass_Prog, LIGHTMAP); //First parameter has to fit the uniform in the fragment shader
 		TexMaps.TexCoords[1] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, TexInfo[1].UPan, TexInfo[1].VPan);
         if (UseBindlessTextures)
             DrawComplexBufferData.TexNum[1] = TexInfo[1].TexNum;
 	}
 	if (TexMaps.DrawFlags & DF_DetailTexture)
 	{
-		SetTexture(2, *Surface.DetailTexture, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, DETAILTEX);
+		SetTexture(2, *Surface.DetailTexture, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, DETAILTEX);
 		TexMaps.TexCoords[2] = glm::vec4(TexInfo[2].UMult, TexInfo[2].VMult, TexInfo[2].UPan, TexInfo[2].VPan);
         if (UseBindlessTextures)
             DrawComplexBufferData.TexNum[2] = TexInfo[2].TexNum;
 	}
 	if (TexMaps.DrawFlags & DF_MacroTexture)
 	{
-		SetTexture(3, *Surface.MacroTexture, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
+		SetTexture(3, *Surface.MacroTexture, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
 		TexMaps.TexCoords[3] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
         if (UseBindlessTextures)
             DrawComplexBufferData.TexNum[3] = TexInfo[3].TexNum;
@@ -141,11 +143,11 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (TexMaps.DrawFlags & DF_BumpMap)
 	{
 #if ENGINE_VERSION==227
-		SetTexture(4, *Surface.BumpMap, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
+		SetTexture(4, *Surface.BumpMap, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		TexMaps.TexCoords[4] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
 		TexMaps.TexCoords[12] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->Scale);
 #else
-		SetTexture(4, BumpMapInfo, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
+		SetTexture(4, BumpMapInfo, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		TexMaps.TexCoords[12] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 #endif
         if (UseBindlessTextures)
@@ -161,7 +163,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 #if ENGINE_VERSION==227
 	if (TexMaps.DrawFlags & DF_EnvironmentMap)
 	{
-		SetTexture(6, *Surface.EnvironmentMap, PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, ENVIRONMENTMAP);
+		SetTexture(6, *Surface.EnvironmentMap, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, ENVIRONMENTMAP);
 		TexMaps.TexCoords[6] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
         if (UseBindlessTextures)
             DrawComplexBufferData.TexNum[6] = TexInfo[6].TexNum;

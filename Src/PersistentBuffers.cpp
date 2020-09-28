@@ -61,7 +61,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 {
     guard(UXOpenGLRenderDevice::MapBuffers);
 
-    debugf(NAME_Dev,TEXT("Mapping Buffers"));
+    debugf(NAME_DevGraphics,TEXT("Mapping Buffers"));
 
 	// These arrays are either fixed values or estimated based on logging of values on a couple of maps.
 	// Static set to avoid using new/delete in every render pass. Should be more than sufficient.
@@ -100,11 +100,11 @@ void UXOpenGLRenderDevice::MapBuffers()
 		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
 		DrawGouraudListBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLYLIST_SIZE];
 
-		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
-		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLYLIST_SIZE * sizeof(float), DrawGouraudListBufferRange.VertBuffer, GL_STREAM_DRAW);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
 		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
+		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLYLIST_SIZE * sizeof(float), DrawGouraudListBufferRange.VertBuffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 #ifndef __LINUX_ARM__
@@ -177,7 +177,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 {
 	guard(UXOpenGLRenderDevice::UnMapBuffers);
 
-	debugf(NAME_Dev,TEXT("UnMapping Buffers"));
+	debugf(NAME_DevGraphics,TEXT("UnMapping Buffers"));
 
 	GLint IsMapped = 0;
 
@@ -187,57 +187,46 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 		if (UsePersistentBuffersGouraud)
 		{
 			glGetNamedBufferParameteriv(DrawGouraudVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawGouraudVertBuffer);
-				CHECK_GL_ERROR();
 				DrawGouraudBufferRange.Buffer = 0;
 			}
 
 			glGetNamedBufferParameteriv(DrawGouraudVertListBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawGouraudVertListBuffer);
-				CHECK_GL_ERROR();
 				DrawGouraudListBufferRange.Buffer = 0;
 			}
 		}
 		if (UsePersistentBuffersComplex)
 		{
 			glGetNamedBufferParameteriv(DrawComplexVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawComplexVertBuffer);
-				CHECK_GL_ERROR();
 				DrawComplexSinglePassRange.Buffer = 0;
 			}
 		}
 		if (UsePersistentBuffersTile)
 		{
 			glGetNamedBufferParameteriv(DrawTileVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			CHECK_GL_ERROR();
 			if (IsMapped == GL_TRUE)
 			{
 				glUnmapNamedBuffer(DrawTileVertBuffer);
-				CHECK_GL_ERROR();
 				DrawTileRange.Buffer = 0;
 			}
 		}
 		glGetNamedBufferParameteriv(GlobalTextureHandlesUBO, GL_BUFFER_MAPPED, &IsMapped);
-		CHECK_GL_ERROR();
 		if (IsMapped == GL_TRUE)
 		{
 			glUnmapNamedBuffer(GlobalTextureHandlesUBO);
-			CHECK_GL_ERROR();
 			GlobalUniformTextureHandles.UniformBuffer = 0;
 		}
 #else
         glUnmapBuffer(GL_UNIFORM_BUFFER);
         GlobalUniformTextureHandles.UniformBuffer = 0;
-		CHECK_GL_ERROR();
 #endif
 	}
 	else
