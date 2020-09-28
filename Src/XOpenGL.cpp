@@ -213,7 +213,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #endif
 
 #if __LINUX_ARM__
-    UseBindlessTextures = 0; //Support for this in GL ES seems unfinished and not really usable yet. Disable it for now.
+//    UseBindlessTextures = 0; //Support for this in GL ES seems unfinished and not really usable yet. Disable it for now.
 #endif // __LINUX_ARM__
 
 	// Driver flags.

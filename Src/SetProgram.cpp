@@ -95,10 +95,10 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
                 glBindVertexArray(0);
                 glUseProgram(0);
 
-                #ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
                 if(UseAA && NoAATiles)
                     glDisable(GL_MULTISAMPLE);
-                #endif
+#endif
 
                 glUseProgram(DrawSimpleProg);
                 glBindVertexArray(DrawSimpleGeometryVertsVao);
@@ -113,10 +113,10 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
                 glBindVertexArray(0);
                 glUseProgram(0);
 
-                #ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
                 if(UseAA && NoAATiles)
                     glDisable(GL_MULTISAMPLE);
-                #endif
+#endif
 
                 glUseProgram(DrawTileProg);
                 glBindVertexArray(DrawTileVertsVao);
@@ -136,10 +136,10 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
                     glUseProgram(DrawGouraudProg);
                 }
 
-                #ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
                 if(UseAA && NoAATiles)
                     glEnable(GL_MULTISAMPLE);
-                #endif
+#endif
 
                 glBindVertexArray(DrawGouraudPolyVertsVao);
                 glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
@@ -158,10 +158,10 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
                     glUseProgram(DrawGouraudProg);
                 }
 
-                #ifndef __EMSCRIPTEN__
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
                 if(UseAA && NoAATiles)
                     glEnable(GL_MULTISAMPLE);
-                #endif
+#endif
 
                 glBindVertexArray(DrawGouraudPolyVertListSingleBufferVao);
                 glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
@@ -176,8 +176,10 @@ void UXOpenGLRenderDevice::SetProgram( INT CurrentProgram )
                 glBindVertexArray(0);
                 glUseProgram(0);
 
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
                 if(UseAA)
                     glEnable(GL_MULTISAMPLE);
+#endif
 
                 glUseProgram(DrawComplexProg);
                 glBindVertexArray(DrawComplexVertsSinglePassVao);

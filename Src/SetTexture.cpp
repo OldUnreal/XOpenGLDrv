@@ -726,9 +726,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 CHECK_GL_ERROR();
 
 				// Upload texture.
+///#ifndef __LINUX_ARM__
 				if ( ExistingBind )
 				{
-#ifndef __LINUX_ARM__
 					if ( CompImageSize )
 					{
 					    if (!bBindlessRealtimeChanged)
@@ -744,9 +744,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 						else glTextureSubImage2D(Bind->Ids[CacheSlot], ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
 						CHECK_GL_ERROR();
 					}
-#endif
                 }
 				else
+//#endif
 				{
 					if ( CompImageSize )
 					{
