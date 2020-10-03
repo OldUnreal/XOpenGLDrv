@@ -1485,7 +1485,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	if (bNearZ)
     {
-        zNear = 0.1;
+        zNear = 0.4;
         StoredbNearZ = 1;
     }
 
