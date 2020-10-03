@@ -125,7 +125,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     {
         FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
         if( FCachedTextureInfo && FCachedTextureInfo->TexNum[CacheSlot])
-        {
+        {       	
             if (Info.bRealtimeChanged) //update bindless realtime textures.
             {
                 //debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
@@ -179,6 +179,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		Bind->TexHandle[1]  = 0;
 		Bind->TexNum[0]     = 0;
 		Bind->TexNum[1]     = 0;
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		Bind->RealtimeChangeCount = Info.Texture ? Info.Texture->RealtimeChangeCount : 0;
+#endif
 
 		if (Info.NumMips && !Info.Mips[0])
 		{
@@ -201,7 +204,26 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			}
 		}
 	}
-	else ExistingBind = true;
+	else
+	{
+		ExistingBind = true;
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		if (Info.Texture)
+		{
+			if (Bind->RealtimeChangeCount != Info.Texture->RealtimeChangeCount)
+			{
+				Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
+			}
+			else
+			{
+				Info.bRealtimeChanged = 0;
+# if XOPENGL_BINDLESS_TEXTURE_SUPPORT
+				bBindlessRealtimeChanged = false;
+# endif
+			}
+		}
+#endif
+	}
 
 	if ( Bind->Ids[CacheSlot]==0 )
 	{

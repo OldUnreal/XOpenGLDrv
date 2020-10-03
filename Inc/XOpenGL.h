@@ -421,6 +421,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint Sampler[2];
 		GLuint64 TexHandle[2];
 		GLuint TexNum[2];
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		INT RealtimeChangeCount;
+#endif
 		FCachedTexture()
 			: Ids(),
 			BaseMip(0),
