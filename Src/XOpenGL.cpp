@@ -319,7 +319,10 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 		UsePersistentBuffers = 0;
 
 	if (GIsEditor)
+	{
 		ShareLists = 1;
+		UseBindlessTextures = 0; // stijn: not safe in the editor because we can have multiple rendev instances using the same texturehandles. See utpg-testing #131.
+	}
 
 	EnvironmentMaps = 0; //not yet implemented.
 
