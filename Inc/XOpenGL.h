@@ -1092,6 +1092,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static HGLRC   CurrentGLContext;
 	static HMODULE hModuleGlMain;
 	static HMODULE hModuleGlGdi;
+	FString AllExtensions;
 #endif
 
 	// UObject interface.

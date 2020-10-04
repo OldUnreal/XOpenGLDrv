@@ -17,18 +17,9 @@ Revision history:
 #include "XOpenGL.h"
 
 #ifdef WINBUILD
-    UBOOL UXOpenGLRenderDevice::GLExtensionSupported(FString Extension_Name)
+    UBOOL UXOpenGLRenderDevice::GLExtensionSupported(FString ExtensionName)
     {
-        // pointer to function which returns pointer to string with list of all wgl extensions
-        PFNWGLGETEXTENSIONSSTRINGEXTPROC wglGetExtensionsStringEXT = nullptr;
-
-        // determine pointer to function
-        wglGetExtensionsStringEXT = reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGEXTPROC>(wglGetProcAddress("wglGetExtensionsStringEXT"));
-        if (appStrstr(appFromAnsi(wglGetExtensionsStringEXT()), *Extension_Name) == 0)
-            return 0;
-
-        // extension supported
-        return 1;
+		return AllExtensions.InStr(*FString::Printf(TEXT("%ls;"), *ExtensionName)) != -1;
     }
 #elif SDL2BUILD
     UBOOL UXOpenGLRenderDevice::GLExtensionSupported(FString Extension_Name)

@@ -732,6 +732,8 @@ InitContext:
 		{
 			FString ExtensionString = appFromAnsi((const ANSICHAR *)glGetStringi(GL_EXTENSIONS, i));
 			debugf(NAME_DevLoad, TEXT("GL_EXTENSIONS(%i) : %ls"), i, *ExtensionString);
+			AllExtensions += ExtensionString;
+			AllExtensions += TEXT(";");
 		}
 		if (OpenGLVersion == GL_Core)
 			debugf(NAME_Init, TEXT("OpenGL %i.%i context initialized!"), MajorVersion, MinorVersion);
