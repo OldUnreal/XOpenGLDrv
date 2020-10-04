@@ -150,7 +150,11 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseTrilinear = 1;
 	NoAATiles = 1;
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+	UseBindlessTextures = 1;
+#else
 	UseBindlessTextures = 0;
+#endif
 	UseHWLighting = 0;
 	AlwaysMipmap = 0;
 	NoFiltering = 0;
