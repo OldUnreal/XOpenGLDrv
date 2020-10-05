@@ -610,8 +610,9 @@ void UXOpenGLRenderDevice::DrawGouraudStart()
 		glBindVertexArray(DrawGouraudPolyVertListSingleBufferVao);
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
 	}
-
-	if (!GouraudToGouraudSwitch)
+	
+	// stijn: Mesa wants us to re-enable these after calling glBindVertexArray
+//	if (!GouraudToGouraudSwitch)
 	{
 		glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
 		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
