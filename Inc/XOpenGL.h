@@ -748,6 +748,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BeginOffset;
 		DWORD PolyFlags;
 		DWORD PrevPolyFlags;
+		UTexture* PrevTexture;
 		DrawTileBuffer()
 			: TexCoords(),
 			VertSize(0),
@@ -758,7 +759,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			IndexOffset(0),
 			BeginOffset(0),
 			PolyFlags(0),
-            PrevPolyFlags(0)
+            PrevPolyFlags(0),
+			PrevTexture(nullptr)
 		{}
 	}DrawTileBufferData;
 

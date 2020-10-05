@@ -56,12 +56,16 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	//	PolyFlags &= ~PF_Masked;
 
 
-    if(UsingBindlessTextures && (DrawTileBufferData.VertSize > 0) && (DrawTileBufferData.PrevPolyFlags != PolyFlags))
+    if (DrawTileBufferData.VertSize > 0 &&
+        (DrawTileBufferData.PrevPolyFlags != PolyFlags ||
+            (!UsingBindlessTextures && (Info.Texture != DrawTileBufferData.PrevTexture || Info.bRealtimeChanged)))) // stijn: with this check we can enable tile buffering even for GPUs that don't support bindless textures
     {
         // Non 227: to make this work, add missing ComputeRenderSize() in URender::DrawWorld and UGameEngine::Draw for canvas operations.
         DrawTileVerts(DrawTileBufferData);
-	}
+    }	
+
 	DrawTileBufferData.PrevPolyFlags = PolyFlags;
+    DrawTileBufferData.PrevTexture = Info.Texture;
 
     DrawTileBufferData.PolyFlags = SetFlags(PolyFlags);
 	SetBlend(PolyFlags, false);
@@ -237,7 +241,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
     }
     unclockFast(Stats.TileBufferCycles);
-	if (NoBuffering || !UsingBindlessTextures || GIsEditor) // No buffering at this time for Editor.
+	if (NoBuffering || /*!UsingBindlessTextures ||*/ GIsEditor) // No buffering at this time for Editor.
         DrawTileVerts(DrawTileBufferData);
 
 	unguard;
