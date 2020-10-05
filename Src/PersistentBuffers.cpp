@@ -71,9 +71,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 	EndFlashVertsBuf = new FLOAT[36];
 	DrawLinesVertsBuf = new FLOAT[DRAWSIMPLE_SIZE]; // unexpectedly this size is easy to reach in UED.
 
-
 	GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
-#ifndef __LINUX_ARM__
 	if (UsingPersistentBuffersGouraud)
     {
         // DrawGouraud
@@ -94,7 +92,6 @@ void UXOpenGLRenderDevice::MapBuffers()
 		CHECK_GL_ERROR();
     }
 	else
-#endif
 	{
 
 		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
@@ -107,7 +104,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLYLIST_SIZE * sizeof(float), DrawGouraudListBufferRange.VertBuffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
-#ifndef __LINUX_ARM__
+	
     if (UsingPersistentBuffersComplex)
     {
         // DrawComplexSurface
@@ -122,14 +119,13 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 	else
-#endif
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, DrawComplexVertBuffer);
 		DrawComplexSinglePassRange.Buffer = new FLOAT[DRAWCOMPLEX_SIZE];
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * DRAWCOMPLEX_SIZE, DrawComplexSinglePassRange.Buffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
-#ifndef __LINUX_ARM__
+	
     if (UsingPersistentBuffersTile)
     {
         // DrawComplexSurface
@@ -143,7 +139,6 @@ void UXOpenGLRenderDevice::MapBuffers()
         CHECK_GL_ERROR();
     }
 	else
-#endif
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
 		DrawTileRange.Buffer = new FLOAT[DRAWTILE_SIZE];
@@ -158,11 +153,11 @@ void UXOpenGLRenderDevice::MapBuffers()
 
         glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);
         glBufferStorage(GL_UNIFORM_BUFFER, sizeof(GLuint64) * NUMTEXTURES * 2, 0, PersistentBufferFlags);
-        #ifndef __LINUX_ARM__
+#ifndef __LINUX_ARM__
 		GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapNamedBufferRange(GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * NUMTEXTURES * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
-		#else
+#else
         GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(GLuint64) * NUMTEXTURES * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
-		#endif
+#endif
         if (!GlobalUniformTextureHandles.UniformBuffer)
             GWarn->Logf(TEXT("Mapping of GlobalUniformTextureHandles failed!"));
         CHECK_GL_ERROR();
@@ -181,80 +176,76 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 
 	GLint IsMapped = 0;
 
+	if (UsingPersistentBuffersGouraud)
+	{
+		glGetNamedBufferParameteriv(DrawGouraudVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
+		if (IsMapped == GL_TRUE)
+		{
+			glUnmapNamedBuffer(DrawGouraudVertBuffer);
+			DrawGouraudBufferRange.Buffer = nullptr;
+		}
+
+		glGetNamedBufferParameteriv(DrawGouraudVertListBuffer, GL_BUFFER_MAPPED, &IsMapped);
+		if (IsMapped == GL_TRUE)
+		{
+			glUnmapNamedBuffer(DrawGouraudVertListBuffer);
+			DrawGouraudListBufferRange.Buffer = nullptr;
+		}
+	}
+	else 
+	{
+		delete[] DrawGouraudBufferRange.Buffer;
+		delete[] DrawGouraudListBufferRange.Buffer;
+	}
+	
+	if (UsingPersistentBuffersComplex)
+	{
+		glGetNamedBufferParameteriv(DrawComplexVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
+		if (IsMapped == GL_TRUE)
+		{
+			glUnmapNamedBuffer(DrawComplexVertBuffer);
+			DrawComplexSinglePassRange.Buffer = nullptr;
+		}
+	}
+	else
+	{
+		delete[] DrawComplexSinglePassRange.Buffer;
+	}
+	
+	if (UsingPersistentBuffersTile)
+	{
+		glGetNamedBufferParameteriv(DrawTileVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
+		if (IsMapped == GL_TRUE)
+		{
+			glUnmapNamedBuffer(DrawTileVertBuffer);
+			DrawTileRange.Buffer = nullptr;
+		}
+	}
+	else
+	{		
+		delete[] DrawTileRange.Buffer;
+	}
+
 	if (UsingBindlessTextures)
 	{
 #ifndef __LINUX_ARM__
-		if (UsingPersistentBuffersGouraud)
-		{
-			glGetNamedBufferParameteriv(DrawGouraudVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			if (IsMapped == GL_TRUE)
-			{
-				glUnmapNamedBuffer(DrawGouraudVertBuffer);
-				DrawGouraudBufferRange.Buffer = 0;
-			}
-
-			glGetNamedBufferParameteriv(DrawGouraudVertListBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			if (IsMapped == GL_TRUE)
-			{
-				glUnmapNamedBuffer(DrawGouraudVertListBuffer);
-				DrawGouraudListBufferRange.Buffer = 0;
-			}
-		}
-		if (UsingPersistentBuffersComplex)
-		{
-			glGetNamedBufferParameteriv(DrawComplexVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			if (IsMapped == GL_TRUE)
-			{
-				glUnmapNamedBuffer(DrawComplexVertBuffer);
-				DrawComplexSinglePassRange.Buffer = 0;
-			}
-		}
-		if (UsingPersistentBuffersTile)
-		{
-			glGetNamedBufferParameteriv(DrawTileVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
-			if (IsMapped == GL_TRUE)
-			{
-				glUnmapNamedBuffer(DrawTileVertBuffer);
-				DrawTileRange.Buffer = 0;
-			}
-		}
 		glGetNamedBufferParameteriv(GlobalTextureHandlesUBO, GL_BUFFER_MAPPED, &IsMapped);
 		if (IsMapped == GL_TRUE)
 		{
 			glUnmapNamedBuffer(GlobalTextureHandlesUBO);
-			GlobalUniformTextureHandles.UniformBuffer = 0;
+			GlobalUniformTextureHandles.UniformBuffer = nullptr;
 		}
 #else
-        glUnmapBuffer(GL_UNIFORM_BUFFER);
-        GlobalUniformTextureHandles.UniformBuffer = 0;
+		glUnmapBuffer(GL_UNIFORM_BUFFER);
+		GlobalUniformTextureHandles.UniformBuffer = 0;
 #endif
-	}
-	else
-	{
-		if (DrawTileRange.Buffer)
-			delete[] DrawTileRange.Buffer;
-		if (DrawGouraudBufferRange.Buffer)
-			delete[] DrawGouraudBufferRange.Buffer;
+	}	
 
-	#if ENGINE_VERSION==227
-		if (DrawGouraudListBufferRange.Buffer)
-			delete[] DrawGouraudListBufferRange.Buffer;
-	#endif
-
-		if (DrawComplexSinglePassRange.Buffer)
-			delete[] DrawComplexSinglePassRange.Buffer;
-	}
-
-	if (Draw2DLineVertsBuf)
-		delete[] Draw2DLineVertsBuf;
-	if (Draw2DPointVertsBuf)
-		delete[] Draw2DPointVertsBuf;
-	if (Draw3DLineVertsBuf)
-		delete[] Draw3DLineVertsBuf;
-	if (EndFlashVertsBuf)
-	    delete[] EndFlashVertsBuf;
-	if (DrawLinesVertsBuf)
-		delete[] DrawLinesVertsBuf;
+	delete[] Draw2DLineVertsBuf;
+	delete[] Draw2DPointVertsBuf;
+	delete[] Draw3DLineVertsBuf;
+    delete[] EndFlashVertsBuf;
+	delete[] DrawLinesVertsBuf;
 
 	bMappedBuffers = false;
 
