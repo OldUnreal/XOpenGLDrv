@@ -203,6 +203,7 @@ enum ERenderZTest
 };
 #endif
 
+#define DEBUGGL
 #ifdef DEBUGGL
 #define CHECK_GL_ERROR() CheckGLError(__FILE__, __LINE__)
 #define CLEAR_GL_ERROR() glGetError()
@@ -542,13 +543,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD EnvironmentMaps;
 
     // Internal stuff
-    BITFIELD UsePersistentBuffersGouraud;
-	BITFIELD UsePersistentBuffersComplex;
-	BITFIELD UsePersistentBuffersTile;
-	BITFIELD AMDMemoryInfo;
-	BITFIELD NVIDIAMemoryInfo;
-	BITFIELD SwapControlExt;
-	BITFIELD SwapControlTearExt;
+	bool UsingBindlessTextures;
+	bool UsingPersistentBuffers;
+	bool UsingPersistentBuffersGouraud;
+	bool UsingPersistentBuffersComplex;
+	bool UsingPersistentBuffersTile;
+	bool AMDMemoryInfo;
+	bool NVIDIAMemoryInfo;
+	bool SwapControlExt;
+	bool SwapControlTearExt;
 
 	INT MaxTextureSize;
 	BYTE OpenGLVersion;
@@ -556,7 +559,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool NeedsInit;
 	bool bMappedBuffers;
 	bool bInitializedShaders;
-	BYTE* ScaleByte;
+	BYTE* ScaleByte;	
 
 	#if ENGINE_VERSION==227
 	FLightInfo *FirstLight,*LastLight;
@@ -604,6 +607,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	} TexInfo[8];
 	FLOAT RFX2, RFY2;
 
+	INT PrevProgram;
 	INT ActiveProgram;
 	static DWORD ComposeSize;
 	static BYTE* Compose;
@@ -678,9 +682,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	BufferRange DrawGouraudBufferRange;
 	BufferRange DrawGouraudListBufferRange;
+	INT PrevDrawGouraudBeginOffset;
 
     BufferRange DrawComplexSinglePassRange;
+	INT PrevDrawComplexBeginOffset;
     BufferRange DrawTileRange;
+	INT PrevDrawTileBeginOffset;
 
 	GLuint DrawSimpleVertObject, DrawSimpleGeoObject,DrawSimpleFragObject;
 	GLuint DrawSimpleProg;
@@ -1173,7 +1180,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool HitTesting() { return HitData != NULL; }
 
 	void SetProgram( INT CurrentProgram );
-	void DrawProgram();
 	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
 	void UnsetRes();
 	void MakeCurrent();
@@ -1220,6 +1226,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// OpenGLStats
 	void DrawStats( FSceneNode* Frame );
+	
+private:
+	// Program switching
+	void DrawSimpleEnd(INT NextProgram);
+	void DrawSimpleStart();
+	void DrawComplexEnd(INT NextProgram);
+	void DrawComplexStart();
+	void DrawGouraudEnd(INT NextProgram);
+	void DrawGouraudStart();
+	void DrawTileEnd(INT NextProgram);
+	void DrawTileStart();	
 
 	// Error logging
 	public:

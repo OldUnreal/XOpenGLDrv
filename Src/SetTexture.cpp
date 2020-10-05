@@ -121,7 +121,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     // avoid lookups by storing information directly into texture. Add bindless information if available.
     // Should save quite some CPU.
     // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
-	if (UseBindlessTextures && Info.Texture && Info.Texture->TextureHandle)
+	if (UsingBindlessTextures && Info.Texture && Info.Texture->TextureHandle)
     {
         FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
         if( FCachedTextureInfo && FCachedTextureInfo->TexNum[CacheSlot])
@@ -863,9 +863,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             Info.Unload();
 	}
 
-    if (UseBindlessTextures && Info.Texture && !Unsupported)
+    if (UsingBindlessTextures && Info.Texture && !Unsupported)
     {
-		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UseBindlessTextures.
+		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UsingBindlessTextures.
         {
             Bind->TexNum[CacheSlot]=TexNum;
             #ifdef __LINUX_ARM__
@@ -928,7 +928,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         Bind->TexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
-    if (UseBindlessTextures)
+    if (UsingBindlessTextures)
         Tex.TexNum = Bind->TexNum[CacheSlot];
     else Tex.TexNum  = 0;
 

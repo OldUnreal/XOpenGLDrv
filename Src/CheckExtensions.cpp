@@ -33,10 +33,10 @@ void UXOpenGLRenderDevice::CheckExtensions()
 {
 	guard(UXOpenGLRenderDevice::CheckExtensions);
 
-	if (!GLExtensionSupported(TEXT("GL_ARB_buffer_storage")) && UsePersistentBuffers)
+	if (!GLExtensionSupported(TEXT("GL_ARB_buffer_storage")) && UsingPersistentBuffers)
 	{
 		debugf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. Disabling UsePersistentBuffers."));
-		UsePersistentBuffers = 0;
+		UsingPersistentBuffers = false;
 	}
 
 	if (!GLExtensionSupported(TEXT("GL_ARB_invalidate_subdata")) && UseBufferInvalidation)
@@ -51,23 +51,23 @@ void UXOpenGLRenderDevice::CheckExtensions()
             debugf(TEXT("XOpenGL: GL_EXT_texture_storage not found. Disabling GenerateMipMaps."));
             GenerateMipMaps = 0;
         }
-        if (!GLExtensionSupported(TEXT("GL_IMG_bindless_texture"))  && UseBindlessTextures)
+        if (!GLExtensionSupported(TEXT("GL_IMG_bindless_texture"))  && UsingBindlessTextures)
         {
-            debugf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. Disabling UseBindlessTextures."));
-            UseBindlessTextures = 0;
+            debugf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. Disabling UsingBindlessTextures."));
+			UsingBindlessTextures = false;
         }
-        NVIDIAMemoryInfo = 0; // found no such info available...yet?
-        AMDMemoryInfo = 0;
+        NVIDIAMemoryInfo = false; // found no such info available...yet?
+        AMDMemoryInfo = false;
 	#else
         if (!GLExtensionSupported(TEXT("GL_ARB_texture_storage")) && GenerateMipMaps)
         {
             debugf(TEXT("XOpenGL: GL_ARB_texture_storage not found. Disabling GenerateMipMaps."));
             GenerateMipMaps = 0;
         }
-        if (!GLExtensionSupported(TEXT("GL_ARB_bindless_texture")) && UseBindlessTextures)
+        if (!GLExtensionSupported(TEXT("GL_ARB_bindless_texture")) && UsingBindlessTextures)
         {
-            debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. Disabling UseBindlessTextures."));
-            UseBindlessTextures = 0;
+            debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. Disabling UsingBindlessTextures."));
+			UsingBindlessTextures = false;
         }
         if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
         {
@@ -98,12 +98,12 @@ void UXOpenGLRenderDevice::CheckExtensions()
         glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
         debugf(TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
 	#endif
-	if (UseBindlessTextures && !UsePersistentBuffers)
+	if (UsingBindlessTextures && !UsingPersistentBuffers)
 	{
 		if (!GLExtensionSupported(TEXT("GL_ARB_buffer_storage")))
 		{
-			debugf(TEXT("XOpenGL: Missing GL_ARB_buffer_storage. Disabling UseBindlessTextures."));
-			UseBindlessTextures = 0;
+			debugf(TEXT("XOpenGL: Missing GL_ARB_buffer_storage. Disabling UsingBindlessTextures."));
+			UsingBindlessTextures = false;
 		}
 	}
     if (!GLExtensionSupported(TEXT("GL_KHR_debug")))

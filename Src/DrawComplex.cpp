@@ -115,28 +115,28 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
     SetTexture(0, *Surface.Texture, DrawComplexBufferData.PolyFlags , 0.0, ComplexSurfaceSinglePass_Prog,NORMALTEX);
     TexMaps.TexCoords[0] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
 
-    if (UseBindlessTextures)
+    if (UsingBindlessTextures)
         DrawComplexBufferData.TexNum[0] = TexInfo[0].TexNum;
 
 	if (TexMaps.DrawFlags & DF_LightMap) //can not make use of bindless, to many single textures. Determined by Info->Texture.
 	{
 		SetTexture(1, *Surface.LightMap, DrawComplexBufferData.PolyFlags, -0.5, ComplexSurfaceSinglePass_Prog, LIGHTMAP); //First parameter has to fit the uniform in the fragment shader
 		TexMaps.TexCoords[1] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, TexInfo[1].UPan, TexInfo[1].VPan);
-        if (UseBindlessTextures)
+        if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[1] = TexInfo[1].TexNum;
 	}
 	if (TexMaps.DrawFlags & DF_DetailTexture)
 	{
 		SetTexture(2, *Surface.DetailTexture, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, DETAILTEX);
 		TexMaps.TexCoords[2] = glm::vec4(TexInfo[2].UMult, TexInfo[2].VMult, TexInfo[2].UPan, TexInfo[2].VPan);
-        if (UseBindlessTextures)
+        if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[2] = TexInfo[2].TexNum;
 	}
 	if (TexMaps.DrawFlags & DF_MacroTexture)
 	{
 		SetTexture(3, *Surface.MacroTexture, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
 		TexMaps.TexCoords[3] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
-        if (UseBindlessTextures)
+        if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[3] = TexInfo[3].TexNum;
 		TexMaps.TexCoords[13] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->Scale);
 	}
@@ -150,14 +150,14 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		SetTexture(4, BumpMapInfo, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		TexMaps.TexCoords[12] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 #endif
-        if (UseBindlessTextures)
+        if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[4] = TexInfo[4].TexNum;
 	}
 	if (TexMaps.DrawFlags & DF_FogMap)
 	{
 		SetTexture(5, *Surface.FogMap, PF_AlphaBlend, -0.5, ComplexSurfaceSinglePass_Prog, FOGMAP);
 		TexMaps.TexCoords[5] = glm::vec4(TexInfo[5].UMult, TexInfo[5].VMult, TexInfo[5].UPan, TexInfo[5].VPan);
-        if (UseBindlessTextures)
+        if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[5] = TexInfo[5].TexNum;
 	}
 #if ENGINE_VERSION==227
@@ -165,7 +165,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	{
 		SetTexture(6, *Surface.EnvironmentMap, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, ENVIRONMENTMAP);
 		TexMaps.TexCoords[6] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
-        if (UseBindlessTextures)
+        if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[6] = TexInfo[6].TexNum;
 	}
 #endif
@@ -236,8 +236,10 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 	GLuint TotalSize = BufferData.IndexOffset;
     CHECK_GL_ERROR();
 
+	checkSlow(ActiveProgram == ComplexSurfaceSinglePass_Prog);
+
 	// Data
-	if (!UsePersistentBuffersComplex)
+	if (!UsingPersistentBuffersComplex)
     {
         if (UseBufferInvalidation)
             glInvalidateBufferData(DrawComplexVertBuffer);
@@ -253,14 +255,15 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
     CHECK_GL_ERROR();
 
 	// Gamma
-	glUniform1f(DrawComplexSinglePassGamma,Gamma);
-
-	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glEnableVertexAttribArray(NORMALS_ATTRIB);// SurfNormals
+	glUniform1f(DrawComplexSinglePassGamma,Gamma);	
 
 	GLintptr BeginOffset = BufferData.BeginOffset * sizeof(float);
-	glVertexAttribPointer(VERTEX_COORD_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)BeginOffset);
-	glVertexAttribPointer(NORMALS_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)(	BeginOffset + FloatSize4));
+	if (BeginOffset != PrevDrawComplexBeginOffset)
+	{
+		glVertexAttribPointer(VERTEX_COORD_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)BeginOffset);
+		glVertexAttribPointer(NORMALS_ATTRIB, 4, GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)(BeginOffset + FloatSize4));
+		PrevDrawComplexBeginOffset = BeginOffset;
+	}
 
 	// Tex UVs and more.
 	glUniform4fv(DrawComplexSinglePassTexCoords, 16, (const GLfloat*)TexMaps.TexCoords);
@@ -286,7 +289,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 	glDrawArrays(GL_TRIANGLES, 0, (BufferData.VertSize / FloatsPerVertex));
     CHECK_GL_ERROR();
 
-	if(UsePersistentBuffersComplex)
+	if(UsingPersistentBuffersComplex)
 	{
 		LockBuffer(DrawComplexSinglePassRange, BufferData.Index);
 		BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
@@ -301,9 +304,39 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 	for (INT i = 0; i < ARRAY_COUNT(BufferData.TexNum);i++)
 		BufferData.TexNum[i] = 0;
 
+	CHECK_GL_ERROR();
+}
+
+//
+// Program Switching
+//
+void UXOpenGLRenderDevice::DrawComplexEnd(INT NextProgram)
+{
+	if (DrawComplexBufferData.VertSize > 0)
+		DrawComplexVertsSinglePass(DrawComplexBufferData, TexMaps);
+
+	CHECK_GL_ERROR();
+
 	// Clean up
 	glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
 	glDisableVertexAttribArray(NORMALS_ATTRIB);
+}
+
+void UXOpenGLRenderDevice::DrawComplexStart()
+{
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
+	if (UseAA && PrevProgram != GouraudPolyVertList_Prog && PrevProgram != GouraudPolyVert_Prog)
+		glEnable(GL_MULTISAMPLE);
+#endif
+
+	glUseProgram(DrawComplexProg);
+	glBindVertexArray(DrawComplexVertsSinglePassVao);
+	glBindBuffer(GL_ARRAY_BUFFER, DrawComplexVertBuffer);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(float) * DRAWCOMPLEX_SIZE, 0, GL_STREAM_DRAW);
+
+	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
+	glEnableVertexAttribArray(NORMALS_ATTRIB);// SurfNormals
+	PrevDrawComplexBeginOffset = -1;
 
 	CHECK_GL_ERROR();
 }

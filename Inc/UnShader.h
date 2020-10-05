@@ -49,7 +49,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 
 	if (OpenGLVersion == GL_Core)
 	{
-		if (UseBindlessTextures || UsePersistentBuffers)
+		if (UsingBindlessTextures || UsingPersistentBuffers)
 			GLVersionString = TEXT("#version 450 core\n");
 		else GLVersionString = TEXT("#version 330 core\n");
 	}
@@ -62,7 +62,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
     if (GIsEditor)
 		Definitions += TEXT("#define EDITOR \n");
 
-    if(UseBindlessTextures)
+    if(UsingBindlessTextures)
     {
         Definitions += TEXT("#define BINDLESSTEXTURES \n");
         Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), NUMTEXTURES);
@@ -272,7 +272,7 @@ void UXOpenGLRenderDevice::InitShaders()
 
 
     //Global texture handles for bindless.
-    if (UseBindlessTextures)
+    if (UsingBindlessTextures)
     {
         GetUniformBlockIndex(DrawSimpleProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawSimpleProg"));
         GetUniformBlockIndex(DrawTileProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawTileProg"));
@@ -369,7 +369,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	CHECK_GL_ERROR();
 
 	// Global bindless textures.
-	if (UseBindlessTextures)
+	if (UsingBindlessTextures)
     {
         glGenBuffers(1, &GlobalTextureHandlesUBO);
         glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);

@@ -34,7 +34,7 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 
     CHECK_GL_ERROR();
 	GLuint64 WaitDuration = 0;
-	GLenum WaitReturn = GL_UNSIGNALED;
+	GLenum WaitReturn;
 	if (Buffer.Sync[Index])
     {
         while (1)
@@ -50,7 +50,7 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
                 return;
             }
             //GWarn->Logf(TEXT("Wait! Count %i, %f %x"), Count, appSeconds().GetFloat(),WaitReturn);
-            Stats.StallCount++;
+            //Stats.StallCount++;
 			WaitDuration = 500000;
         }
     }
@@ -74,7 +74,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 
 	GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 #ifndef __LINUX_ARM__
-	if (UsePersistentBuffersGouraud)
+	if (UsingPersistentBuffersGouraud)
     {
         // DrawGouraud
         debugf(TEXT("Mapping persistent DrawGouraudBuffer"));
@@ -108,7 +108,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 #ifndef __LINUX_ARM__
-    if (UsePersistentBuffersComplex)
+    if (UsingPersistentBuffersComplex)
     {
         // DrawComplexSurface
         debugf(TEXT("Mapping persistent DrawComplexSurfaceBuffer"));
@@ -130,7 +130,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 #ifndef __LINUX_ARM__
-    if (UsePersistentBuffersTile)
+    if (UsingPersistentBuffersTile)
     {
         // DrawComplexSurface
         debugf(TEXT("Mapping persistent DrawTileBuffer"));
@@ -152,7 +152,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 	}
 
     //Bindless textures
-    if (UseBindlessTextures)
+    if (UsingBindlessTextures)
     {
         debugf(TEXT("Mapping persistent BindlessTexturesBuffer"));
 
@@ -181,10 +181,10 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 
 	GLint IsMapped = 0;
 
-	if (UseBindlessTextures)
+	if (UsingBindlessTextures)
 	{
 #ifndef __LINUX_ARM__
-		if (UsePersistentBuffersGouraud)
+		if (UsingPersistentBuffersGouraud)
 		{
 			glGetNamedBufferParameteriv(DrawGouraudVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
 			if (IsMapped == GL_TRUE)
@@ -200,7 +200,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 				DrawGouraudListBufferRange.Buffer = 0;
 			}
 		}
-		if (UsePersistentBuffersComplex)
+		if (UsingPersistentBuffersComplex)
 		{
 			glGetNamedBufferParameteriv(DrawComplexVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
 			if (IsMapped == GL_TRUE)
@@ -209,7 +209,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 				DrawComplexSinglePassRange.Buffer = 0;
 			}
 		}
-		if (UsePersistentBuffersTile)
+		if (UsingPersistentBuffersTile)
 		{
 			glGetNamedBufferParameteriv(DrawTileVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
 			if (IsMapped == GL_TRUE)
@@ -231,35 +231,21 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 	}
 	else
 	{
-		if (DrawTileRange.Buffer)
-			delete[] DrawTileRange.Buffer;
-
-		if (DrawGouraudBufferRange.Buffer)
-			delete[] DrawGouraudBufferRange.Buffer;
+		delete[] DrawTileRange.Buffer;
+		delete[] DrawGouraudBufferRange.Buffer;
 
 	#if ENGINE_VERSION==227
-		if (DrawGouraudListBufferRange.Buffer)
-			delete[] DrawGouraudListBufferRange.Buffer;
+		delete[] DrawGouraudListBufferRange.Buffer;
 	#endif
 
-		if (DrawComplexSinglePassRange.Buffer)
-			delete[] DrawComplexSinglePassRange.Buffer;
+		delete[] DrawComplexSinglePassRange.Buffer;
 	}
 
-	if (Draw2DLineVertsBuf)
-        delete[] Draw2DLineVertsBuf;
-
- 	if (Draw2DPointVertsBuf)
-        delete[] Draw2DPointVertsBuf;
-
-	if (Draw3DLineVertsBuf)
-        delete[] Draw3DLineVertsBuf;
-
-	if (EndFlashVertsBuf)
-        delete[] EndFlashVertsBuf;
-
-	if (DrawLinesVertsBuf)
-        delete[]  DrawLinesVertsBuf;
+    delete[] Draw2DLineVertsBuf;
+    delete[] Draw2DPointVertsBuf;
+    delete[] Draw3DLineVertsBuf;
+    delete[] EndFlashVertsBuf;
+    delete[] DrawLinesVertsBuf;
 
 	bMappedBuffers = false;
 

@@ -113,7 +113,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	}
 #endif
 
-	if ( (DrawGouraudBufferData.VertSize > 0) && ((!UseBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudBufferData.PrevPolyFlags != PolyFlags)))
+	if ( (DrawGouraudBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudBufferData.PrevPolyFlags != PolyFlags)))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 	}
@@ -189,7 +189,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	clockFast(Stats.GouraudPolyCycles);
     CHECK_GL_ERROR();
 
-    if (UsePersistentBuffersGouraud && DrawGouraudBufferRange.Sync[DrawGouraudBufferData.Index])
+    if (UsingPersistentBuffersGouraud && DrawGouraudBufferRange.Sync[DrawGouraudBufferData.Index])
         WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
     CHECK_GL_ERROR();
 
@@ -242,7 +242,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	}
 #endif
 
-	if ( (DrawGouraudListBufferData.VertSize > 0) && ((!UseBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
+	if ( (DrawGouraudListBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 	}
@@ -320,7 +320,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	//debugf(TEXT("PolyList: VertSize %i TexSize %i, ColorSize %i"), VertSize, TexSize, ColorSize); // VertSize 12288 TexSize 8192, ColorSize 16384
 
 	clockFast(Stats.GouraudPolyListCycles);
-    if (UsePersistentBuffersGouraud && DrawGouraudListBufferRange.Sync[DrawGouraudListBufferData.Index])
+    if (UsingPersistentBuffersGouraud && DrawGouraudListBufferRange.Sync[DrawGouraudListBufferData.Index])
         WaitBuffer(DrawGouraudListBufferRange, DrawGouraudListBufferData.Index);
 
     for (INT i = 0; i < NumPts; i++)
@@ -366,8 +366,6 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	// stijn: flush current polylist buffer even if it doesn't meet the criteria in DrawGouraudPolyList
 	SetProgram(GouraudPolyVertList_Prog);
-	if (DrawGouraudListBufferData.VertSize > 0)
-		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 
 	for (; i < NumPts; i += 3)
 	{
@@ -428,11 +426,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 {
 	// Using one huge buffer instead of 3, interleaved data.
 	// This is to reduce overhead by reducing API calls.
-
 	GLuint TotalSize = BufferData.IndexOffset;
 	CHECK_GL_ERROR();
 
-	if(!UsePersistentBuffersGouraud)
+	checkSlow(ActiveProgram == GouraudPolyVertList_Prog || ActiveProgram == GouraudPolyVert_Prog);
+
+	if(!UsingPersistentBuffersGouraud)
 	{
 	    if (UseBufferInvalidation)
         {
@@ -467,28 +466,23 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	}
 */
 
-	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-	glEnableVertexAttribArray(NORMALS_ATTRIB);
-	glEnableVertexAttribArray(COLOR_ATTRIB);
-	glEnableVertexAttribArray(FOGMAP_COORD_ATTRIB);//here for VertexFogColor
-	glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
-	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
-	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
-	glEnableVertexAttribArray(TEXTURE_ATTRIB);
-
 	GLintptr BeginOffset = BufferData.BeginOffset * sizeof(float);
 
-	glVertexAttribPointer(VERTEX_COORD_ATTRIB,		3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)	BeginOffset);
-	glVertexAttribPointer(TEXTURE_COORD_ATTRIB,		2, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3));
-	glVertexAttribPointer(NORMALS_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2));
-	glVertexAttribPointer(COLOR_ATTRIB,				4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4));
-	glVertexAttribPointer(FOGMAP_COORD_ATTRIB,		4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4));
-	glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB,	3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4));
-	glVertexAttribPointer(TEXTURE_COORD_ATTRIB2,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4_3));// Tex U/V Mult, MacroTex U/V Mult
-	glVertexAttribPointer(TEXTURE_COORD_ATTRIB3,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4_3_4));// DetailTex U/V Mult, Texture Format, DrawFlags
-	glVertexAttribPointer(TEXTURE_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset + FloatSize3_2_4_4_4_3_4_4));// Additional texture information
-	CHECK_GL_ERROR();
+	if (BeginOffset != PrevDrawGouraudBeginOffset)
+	{
+		glVertexAttribPointer(VERTEX_COORD_ATTRIB,		3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)	BeginOffset);
+		glVertexAttribPointer(TEXTURE_COORD_ATTRIB,		2, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3));
+		glVertexAttribPointer(NORMALS_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2));
+		glVertexAttribPointer(COLOR_ATTRIB,				4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4));
+		glVertexAttribPointer(FOGMAP_COORD_ATTRIB,		4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4));
+		glVertexAttribPointer(BINDLESS_TEXTURE_ATTRIB,	3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4));
+		glVertexAttribPointer(TEXTURE_COORD_ATTRIB2,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4_3));// Tex U/V Mult, MacroTex U/V Mult
+		glVertexAttribPointer(TEXTURE_COORD_ATTRIB3,	4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ FloatSize3_2_4_4_4_3_4));// DetailTex U/V Mult, Texture Format, DrawFlags
+		glVertexAttribPointer(TEXTURE_ATTRIB,			4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset + FloatSize3_2_4_4_4_3_4_4));// Additional texture information
+		CHECK_GL_ERROR();
+
+		PrevDrawGouraudBeginOffset = BeginOffset;
+	}
 
     //PolyFlags
 	glUniform1ui(DrawGouraudPolyFlags, BufferData.PolyFlags);
@@ -521,7 +515,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	// Draw
 	glDrawArrays(Mode, 0, (BufferData.VertSize / FloatsPerVertex));
 
-	if(UsePersistentBuffersGouraud)
+	if(UsingPersistentBuffersGouraud)
 	{
 		if (ActiveProgram == GouraudPolyVertList_Prog)
 		{
@@ -537,18 +531,6 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 		CHECK_GL_ERROR();
 	}
 
-	// Clean up
-	glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-	glDisableVertexAttribArray(NORMALS_ATTRIB);
-	glDisableVertexAttribArray(COLOR_ATTRIB);
-	glDisableVertexAttribArray(FOGMAP_COORD_ATTRIB);
-	glDisableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
-	glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
-	glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
-	glDisableVertexAttribArray(TEXTURE_ATTRIB);
-	CHECK_GL_ERROR();
-
     BufferData.VertSize = 0;
     BufferData.IndexOffset = 0;
     BufferData.PolyFlags = 0;
@@ -556,6 +538,97 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	for (INT i = 0; i < ARRAY_COUNT(BufferData.TexNum);i++)
 		BufferData.TexNum[i] = 0;
 }
+
+//
+// Program Switching
+//
+void UXOpenGLRenderDevice::DrawGouraudEnd(INT NextProgram)
+{
+	const bool GouraudToGouraudSwitch = 
+		(ActiveProgram == GouraudPolyVert_Prog && NextProgram == GouraudPolyVertList_Prog) ||
+		(ActiveProgram == GouraudPolyVertList_Prog && NextProgram == GouraudPolyVert_Prog);	
+	
+	if (ActiveProgram == GouraudPolyVert_Prog)
+	{
+		if (DrawGouraudBufferData.VertSize > 0)
+		{
+			if (DrawGouraudBufferRange.Sync[DrawGouraudBufferData.Index])
+				WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
+			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
+		}
+	}
+	else// if (ActiveProgram == GouraudPolyVertList_Prog)
+	{
+		if (DrawGouraudListBufferData.VertSize > 0)
+		{
+			// stijn: was this intentionally missing?
+			// if (DrawGouraudListBufferRange.Sync[DrawGouraudListBufferData.Index])
+			//     WaitBuffer(DrawGouraudListBufferRange, DrawGouraudListBufferData.Index);
+			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+		}
+	}
+
+	CHECK_GL_ERROR();
+
+	if (!GouraudToGouraudSwitch)
+	{
+		// Clean up
+		glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
+		glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+		glDisableVertexAttribArray(NORMALS_ATTRIB);
+		glDisableVertexAttribArray(COLOR_ATTRIB);
+		glDisableVertexAttribArray(FOGMAP_COORD_ATTRIB);
+		glDisableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+		glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
+		glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
+		glDisableVertexAttribArray(TEXTURE_ATTRIB);
+		CHECK_GL_ERROR();
+	}
+}
+
+void UXOpenGLRenderDevice::DrawGouraudStart()
+{
+	const bool GouraudToGouraudSwitch =
+		(ActiveProgram == GouraudPolyVert_Prog && PrevProgram == GouraudPolyVertList_Prog) ||
+		(ActiveProgram == GouraudPolyVertList_Prog && PrevProgram == GouraudPolyVert_Prog);
+
+	if (!GouraudToGouraudSwitch)
+		glUseProgram(DrawGouraudProg);
+
+#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
+	if (UseAA && NoAATiles && PrevProgram != ComplexSurfaceSinglePass_Prog && !GouraudToGouraudSwitch)
+		glEnable(GL_MULTISAMPLE);
+#endif
+
+	if (ActiveProgram == GouraudPolyVert_Prog)
+	{
+		glBindVertexArray(DrawGouraudPolyVertsVao);
+		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
+	}
+	else
+	{
+		glBindVertexArray(DrawGouraudPolyVertListSingleBufferVao);
+		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
+	}
+
+	if (!GouraudToGouraudSwitch)
+	{
+		glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
+		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+		glEnableVertexAttribArray(NORMALS_ATTRIB);
+		glEnableVertexAttribArray(COLOR_ATTRIB);
+		glEnableVertexAttribArray(FOGMAP_COORD_ATTRIB);//here for VertexFogColor
+		glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
+		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
+		glEnableVertexAttribArray(TEXTURE_ATTRIB);
+	}
+
+	PrevDrawGouraudBeginOffset = -1;
+
+	CHECK_GL_ERROR();
+}
+
 /*-----------------------------------------------------------------------------
 	The End.
 -----------------------------------------------------------------------------*/

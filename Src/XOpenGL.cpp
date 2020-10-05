@@ -216,10 +216,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	#endif // ENGINE_VERSION
 #endif
 
-#if __LINUX_ARM__
-//    UseBindlessTextures = 0; //Support for this in GL ES seems unfinished and not really usable yet. Disable it for now.
-#endif // __LINUX_ARM__
-
 	// Driver flags.
 	FullscreenOnly = 0;
 	SpanBased = 0;
@@ -234,12 +230,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	// Extensions & other inits.
 	ActiveProgram = -1;
-	AMDMemoryInfo = 0;
-	NVIDIAMemoryInfo = 0;
+	AMDMemoryInfo = false;
+	NVIDIAMemoryInfo = false;
 	BufferCount = 0;
 	TexNum = 1;
-	SwapControlExt = 0;
-	SwapControlTearExt = 0;
+	SwapControlExt = false;
+	SwapControlTearExt = false;
 
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
@@ -307,22 +303,33 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	// Make use of DrawGouraudPolyList for Meshes and leave the clipping up for the rendev. Instead of pushing vert by vert this uses a huge list.
 	SupportsNoClipRender = UseHWClipping;
-#elif UNREAL_TOURNAMENT_OLDUNREAL
-	UseHWClipping = 0;
 #else
-	UseBindlessTextures = 0;
 	UseHWClipping = 0;
 #endif
-	UseMeshBuffering = 0;
-
-	if (NoBuffering)
-		UsePersistentBuffers = 0;
+	UseMeshBuffering = 0;	
 
 	if (GIsEditor)
 	{
 		ShareLists = 1;
-		UseBindlessTextures = 0; // stijn: not safe in the editor because we can have multiple rendev instances using the same texturehandles. See utpg-testing #131.
+		UsingBindlessTextures = false;
+		UsingPersistentBuffers = false;
 	}
+	else
+	{
+#if __LINUX_ARM__
+		UsingBindlessTextures = false; //Support for this in GL ES seems unfinished and not really usable yet. Disable it for now.
+		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
+#elif ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+		UsingBindlessTextures = UseBindlessTextures ? true : false;
+		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
+#else
+		UsingBindlessTextures = false;
+		UsingPersistentBuffers = false;
+#endif // __LINUX_ARM__
+	}
+
+	if (NoBuffering)
+		UsePersistentBuffers = false;
 
 	EnvironmentMaps = 0; //not yet implemented.
 
@@ -382,9 +389,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Identity
 	modelMat = glm::mat4(1.0f);
 
-	UsePersistentBuffersTile = 0;
-	UsePersistentBuffersComplex = 0;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
-	UsePersistentBuffersGouraud = UsePersistentBuffers;
+	UsingPersistentBuffersTile = false;
+	UsingPersistentBuffersComplex = false;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
+	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
 
 	// Init shaders
 	InitShaders();
@@ -484,7 +491,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		MajorVersion = 3;
 		MinorVersion = 1;
 	}
-	else if (UseBindlessTextures || UsePersistentBuffers)
+	else if (UsingBindlessTextures || UsingPersistentBuffers)
 	{
 		MajorVersion = 4;
 		MinorVersion = 5;
@@ -751,7 +758,7 @@ InitContext:
 	{
 		if (OpenGLVersion == GL_Core)
 		{
-			if (UseBindlessTextures || UsePersistentBuffers)
+			if (UsingBindlessTextures || UsingPersistentBuffers)
 			{
 				if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
 				{
@@ -764,10 +771,10 @@ InitContext:
 					MajorVersion = 3;
 					MinorVersion = 3;
 
-					UseBindlessTextures = 0;
-					UsePersistentBuffers = 0;
+					UsingBindlessTextures = false;
+					UsePersistentBuffers = false;
 
-					debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UseBindlessTextures and UsePersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
+					debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
 
 					goto InitContext;
 				}
@@ -1172,10 +1179,10 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 			glDeleteSamplers(1, &It.Value().Sampler[i]);
 
 			#ifdef __LINUX_ARM__
-			if (UseBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
+			if (UsingBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
 				glMakeTextureHandleNonResidentNV(It.Value().TexHandle[i]);
             #else
-            if (UseBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentARB(It.Value().TexHandle[i]))
+            if (UsingBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentARB(It.Value().TexHandle[i]))
                 glMakeTextureHandleNonResidentARB(It.Value().TexHandle[i]);
             #endif
 			It.Value().TexHandle[i] = 0;
@@ -1399,7 +1406,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	CHECK_GL_ERROR();
 
 	//Flush Buffers.
-	DrawProgram();
+	SetProgram(No_Prog);
 
 #if ENGINE_VERSION==227
 	if (bFogEnabled)
@@ -1494,7 +1501,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	if (bNearZ)
     {
-        zNear = 0.4;
+        zNear = 0.4f;
         StoredbNearZ = 1;
     }
 
@@ -1599,7 +1606,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #ifdef SDL2BUILD
 	if (Blit)
 	{
-		DrawProgram();
+		SetProgram(No_Prog);
 		SDL_GL_SwapWindow(Window);
 
 		/*
@@ -1613,11 +1620,11 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #else
 	if (Blit)
 	{
-        DrawProgram();
+		SetProgram(No_Prog);
 		verify(SwapBuffers(hDC));
 	}
 #endif
-	appSleep(0);
+	//appSleep(0);
 	--LockCount;
 
 	// Hits.
@@ -2031,7 +2038,7 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 		glGetError();
 	}
 #endif
-	if (UseBindlessTextures)
+	if (UsingBindlessTextures)
 	{
 		Canvas->CurX = 400;
 		Canvas->CurY = (CurY += 12);
