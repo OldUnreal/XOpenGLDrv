@@ -355,10 +355,10 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
     glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
     glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
     glDisableVertexAttribArray(COLOR_ATTRIB);
+	
     if (OpenGLVersion == GL_Core)
     {
-        //glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-        glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
+        glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
         glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
     }
 
@@ -377,22 +377,19 @@ void UXOpenGLRenderDevice::DrawTileStart()
     glBindVertexArray(DrawTileVertsVao);
     glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
 
-    if (OpenGLVersion == GL_ES)
+	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
+	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+	glEnableVertexAttribArray(COLOR_ATTRIB);
+	
+    if (OpenGLVersion == GL_Core)
     {
-        glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-        glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-        glEnableVertexAttribArray(COLOR_ATTRIB);
-        glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
-    }
-    else
-    {
-        glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-        glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
         glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
         glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
-        glEnableVertexAttribArray(COLOR_ATTRIB);
-        glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
     }
+	
+	if (UsingBindlessTextures)
+		glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+
 
     PrevDrawTileBeginOffset = -1;
 
