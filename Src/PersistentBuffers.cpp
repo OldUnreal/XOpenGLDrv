@@ -231,21 +231,30 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 	}
 	else
 	{
-		delete[] DrawTileRange.Buffer;
-		delete[] DrawGouraudBufferRange.Buffer;
+		if (DrawTileRange.Buffer)
+			delete[] DrawTileRange.Buffer;
+		if (DrawGouraudBufferRange.Buffer)
+			delete[] DrawGouraudBufferRange.Buffer;
 
 	#if ENGINE_VERSION==227
-		delete[] DrawGouraudListBufferRange.Buffer;
+		if (DrawGouraudListBufferRange.Buffer)
+			delete[] DrawGouraudListBufferRange.Buffer;
 	#endif
 
-		delete[] DrawComplexSinglePassRange.Buffer;
+		if (DrawComplexSinglePassRange.Buffer)
+			delete[] DrawComplexSinglePassRange.Buffer;
 	}
 
-    delete[] Draw2DLineVertsBuf;
-    delete[] Draw2DPointVertsBuf;
-    delete[] Draw3DLineVertsBuf;
-    delete[] EndFlashVertsBuf;
-    delete[] DrawLinesVertsBuf;
+	if (Draw2DLineVertsBuf)
+		delete[] Draw2DLineVertsBuf;
+	if (Draw2DPointVertsBuf)
+		delete[] Draw2DPointVertsBuf;
+	if (Draw3DLineVertsBuf)
+		delete[] Draw3DLineVertsBuf;
+	if (EndFlashVertsBuf)
+	    delete[] EndFlashVertsBuf;
+	if (DrawLinesVertsBuf)
+		delete[] DrawLinesVertsBuf;
 
 	bMappedBuffers = false;
 
