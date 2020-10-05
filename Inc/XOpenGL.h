@@ -203,7 +203,6 @@ enum ERenderZTest
 };
 #endif
 
-#define DEBUGGL
 #ifdef DEBUGGL
 #define CHECK_GL_ERROR() CheckGLError(__FILE__, __LINE__)
 #define CLEAR_GL_ERROR() glGetError()
