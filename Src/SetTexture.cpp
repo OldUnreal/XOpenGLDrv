@@ -411,12 +411,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
-					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
-					{
-						GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
-						Unsupported = 1;
-						break;
-					}
 					NoAlpha = CacheSlot;
                     if (OpenGLVersion == GL_Core)
                     {
