@@ -379,29 +379,36 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
 				case TEXF_RGB8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
-#if ENGINE_VERSION==227
-					SourceFormat   = GL_BGR; // Was GL_RGB;
+#if UNREAL_TOURNAMENT_OLDUNREAL
+					SourceFormat = GL_RGB;
 #else
-					SourceFormat   = GL_RGB;
+					SourceFormat   = GL_BGR; // Was GL_RGB;
 #endif
 					break;
-#if ENGINE_VERSION==227
-				case TEXF_RGBA8:
-#else
+				
+#if UNREAL_TOURNAMENT_OLDUNREAL
+				case TEXF_RGBA8_:
+					SourceFormat = GL_RGBA;
+					break;				
+#endif
+				
+#if UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_BGRA8:
+#else
+				case TEXF_RGBA8:
 #endif					
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_BGRA; // Was GL_RGBA;
 					break;
-#if ENGINE_VERSION==227
-    #ifndef __LINUX_ARM__
+				
+#if ENGINE_VERSION==227 && !defined(__LINUX_ARM__)
 				case TEXF_RGBA16:
 					InternalFormat = GL_RGBA16;
 					SourceFormat = GL_RGBA;
 					SourceType = GL_UNSIGNED_SHORT;
 					break;
-    #endif
 #endif
+				
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
 					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
@@ -442,6 +449,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
+				
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_DXT3:
                     if (OpenGLVersion == GL_Core)
@@ -472,6 +480,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
+				
 				case TEXF_DXT5:
                     if (OpenGLVersion == GL_Core)
                     {
@@ -501,9 +510,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
-#endif
 
-#if ENGINE_VERSION==227
 				// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10. Not in GLES it seems.
 				case TEXF_RGTC_R:
 					InternalFormat = GL_COMPRESSED_RED_RGTC1;
@@ -517,6 +524,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				case TEXF_RGTC_RG_SIGNED:
 					InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
 					break;
+				
 				// BPTC Core since 4.2. BC6H and BC7 in D3D11.
 #ifndef __LINUX_ARM__
 				case TEXF_BPTC_RGB_SF:
@@ -588,12 +596,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// RGBA7 -- Well it's actually BGRA and used by light and fogmaps.
 						case TEXF_RGBA7:
-							/*if ( (CacheType == CID_StaticMap) || (CacheType == CID_DynamicMap) || (CacheType == CID_RenderFogMap) )
-							{
-								// Higor: 2x resampling done in shader
-								ImgSrc = Mip->DataPtr;
-								break;
-							}*/
 							guard(ConvertBGRA7777_RGBA8888);
 							ImgSrc  = Compose;
 							DWORD* Ptr = (DWORD*)Compose;
@@ -683,58 +685,33 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// RGB8/RGBA8 -- Actually used by Brother Bear.
 						case TEXF_RGB8:
-#if ENGINE_VERSION==227
 						case TEXF_RGBA8:
+#if UNREAL_TOURNAMENT_OLDUNREAL
+						case TEXF_RGBA8_:
+#elif ENGINE_VERSION==227
 						case TEXF_RGBA16:
-#else
-						case TEXF_BGRA8:
 #endif
 							ImgSrc = Mip->DataPtr;
 							break;
 
 						// S3TC -- Ubiquitous Extension.
-						case TEXF_DXT1:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize/2;
-							ImgSrc = Mip->DataPtr;
-							break;
+						case TEXF_DXT1:							
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 						case TEXF_DXT3:
 						case TEXF_DXT5:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize;
-							ImgSrc = Mip->DataPtr;
-							break;
-#endif
-							
-#if ENGINE_VERSION==227
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
 						case TEXF_RGTC_R:
 						case TEXF_RGTC_R_SIGNED:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize  = USize*VSize/2;
-							ImgSrc = Mip->DataPtr;
-							break;
 						case TEXF_RGTC_RG:
 						case TEXF_RGTC_RG_SIGNED:
-							if ( USize<4 || VSize<4 )
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize;
-							ImgSrc = Mip->DataPtr;
-							break;
 						case TEXF_BPTC_RGBA:
 						case TEXF_BPTC_RGB_SF:
 						case TEXF_BPTC_RGB_UF:
-							if (USize<4 || VSize<4)
-								goto FinishedUnpack;
-							CompImageSize = USize*VSize;
+							CompImageSize = FTextureBytes(Info.Format, USize, VSize);
 							ImgSrc = Mip->DataPtr;
 							break;
-
 #endif
+						
 						// Should not happen (TM).
 						default:
 							appErrorf( TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
@@ -816,9 +793,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				if (GenerateMipMaps)
 					break;
 			}
-
-			// DXT1 textures contain mip maps until 1x1.
-			FinishedUnpack:
 
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
