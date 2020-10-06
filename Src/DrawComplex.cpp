@@ -138,17 +138,17 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		TexMaps.TexCoords[3] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
         if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[3] = TexInfo[3].TexNum;
-		TexMaps.TexCoords[13] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->Scale);
+		TexMaps.TexCoords[13] = glm::vec4(GET_DIFFUSE(Surface.MacroTexture->Texture), Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->Scale);
 	}
 	if (TexMaps.DrawFlags & DF_BumpMap)
 	{
 #if ENGINE_VERSION==227
 		SetTexture(4, *Surface.BumpMap, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		TexMaps.TexCoords[4] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
-		TexMaps.TexCoords[12] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->Scale);
+		TexMaps.TexCoords[12] = glm::vec4(GET_DIFFUSE(Surface.BumpMap->Texture), Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->Scale);
 #else
 		SetTexture(4, BumpMapInfo, DrawComplexBufferData.PolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
-		TexMaps.TexCoords[12] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
+		TexMaps.TexCoords[12] = glm::vec4(GET_DIFFUSE(BumpMapInfo.Texture), BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 #endif
         if (UsingBindlessTextures)
             DrawComplexBufferData.TexNum[4] = TexInfo[4].TexNum;
@@ -175,7 +175,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	TexMaps.TexCoords[8] = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, 0.f);
 	TexMaps.TexCoords[9] = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, 0.f);
 	TexMaps.TexCoords[10] = glm::vec4(Facet.MapCoords.Origin.X, Facet.MapCoords.Origin.Y, Facet.MapCoords.Origin.Z, 0.f);
-	TexMaps.TexCoords[11] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->Scale);
+	TexMaps.TexCoords[11] = glm::vec4(GET_DIFFUSE(Surface.Texture->Texture), Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->Scale);
 
 	 //*(INT*)&TexMaps.TexCoords[11].w = (INT)Surface.Texture->Format;
 

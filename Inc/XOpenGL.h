@@ -186,6 +186,13 @@ enum DrawSimpleMode
 	DrawEndFlashMode    = 4,
 };
 
+// stijn: nothing in UT ever used diffuse so XOpenGL should assume the value is 1.f
+#ifdef UNREAL_TOURNAMENT_OLDUNREAL
+# define GET_DIFFUSE(tex) 1.f
+#else
+# define GET_DIFFUSE(tex) tex->Diffuse
+#endif
+
 // stijn: missing defs in UT469 tree
 #ifdef UNREAL_TOURNAMENT_OLDUNREAL
 #define PF_AlphaBlend 0x2000

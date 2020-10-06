@@ -125,7 +125,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 
     DrawGouraudBufferData.TexNum[0] = TexInfo[0].TexNum;
 	DrawGouraudBufferData.Alpha = Info.Texture->Alpha;
-	DrawGouraudBufferData.TextureDiffuse = Info.Texture->Diffuse;
+	DrawGouraudBufferData.TextureDiffuse = GET_DIFFUSE(Info.Texture);
 	DrawGouraudBufferData.TexUMult = TexInfo[0].UMult;
 	DrawGouraudBufferData.TexVMult = TexInfo[0].VMult;
 
@@ -260,7 +260,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
     DrawGouraudListBufferData.TexNum[0] = TexInfo[0].TexNum;
 	DrawGouraudListBufferData.Alpha = Info.Texture->Alpha;
-	DrawGouraudListBufferData.TextureDiffuse = Info.Texture->Diffuse;
+	DrawGouraudListBufferData.TextureDiffuse = GET_DIFFUSE(Info.Texture);
 	DrawGouraudListBufferData.TexUMult = TexInfo[0].UMult;
 	DrawGouraudListBufferData.TexVMult = TexInfo[0].VMult;
 
