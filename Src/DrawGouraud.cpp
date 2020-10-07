@@ -535,8 +535,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
     BufferData.IndexOffset = 0;
     BufferData.PolyFlags = 0;
 	BufferData.Alpha = 0.f;
-	for (INT i = 0; i < ARRAY_COUNT(BufferData.TexNum);i++)
-		BufferData.TexNum[i] = 0;
+	
 }
 
 //
