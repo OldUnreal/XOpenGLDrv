@@ -243,7 +243,12 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
     {
         if (UseBufferInvalidation)
             glInvalidateBufferData(DrawComplexVertBuffer);
+#ifdef __LINUX_ARM__
+		// stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
+		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * TotalSize, DrawComplexSinglePassRange.Buffer, GL_DYNAMIC_DRAW);
+#else
 		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(float) * TotalSize, DrawComplexSinglePassRange.Buffer);
+#endif
     }
 
     // PolyFlags
