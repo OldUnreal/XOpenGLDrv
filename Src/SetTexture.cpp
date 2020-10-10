@@ -125,7 +125,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     {
         FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
         if( FCachedTextureInfo && FCachedTextureInfo->TexNum[CacheSlot])
-        {       	
+        {
             if (Info.bRealtimeChanged) //update bindless realtime textures.
             {
                 //debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
@@ -356,8 +356,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					SourceFormat   = GL_RGBA;
 					break;
 
-				// RGBA7 -- Well it's actually BGRA and used for FogMaps.
-				case TEXF_RGBA7:
+				// TEXF_BGRA8_LM used for Light and FogMaps.
+				case TEXF_BGRA8_LM:
 					MinComposeSize = Info.Mips[Bind->BaseMip]->USize*Info.Mips[Bind->BaseMip]->VSize*4;
 					InternalFormat = GL_RGBA8;
 					if (OpenGLVersion == GL_Core)
@@ -367,7 +367,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 					break;
 #if ENGINE_VERSION==227
-                // RGB10A2_LM. Used for Lightmaps.
+                // RGB10A2_LM. Used for HDLightmaps.
 				case TEXF_RGB10A2_LM:
 					MinComposeSize = Info.Mips[Bind->BaseMip]->USize*Info.Mips[Bind->BaseMip]->VSize*4;
 					InternalFormat = GL_RGB10_A2;
@@ -385,22 +385,22 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					SourceFormat   = GL_BGR; // Was GL_RGB;
 #endif
 					break;
-				
+
 #if UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_RGBA8_:
 					SourceFormat = GL_RGBA;
-					break;				
+					break;
 #endif
-				
+
 #if UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_BGRA8:
 #else
 				case TEXF_RGBA8:
-#endif					
+#endif
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_BGRA; // Was GL_RGBA;
 					break;
-				
+
 #if ENGINE_VERSION==227 && !defined(__LINUX_ARM__)
 				case TEXF_RGBA16:
 					InternalFormat = GL_RGBA16;
@@ -408,9 +408,15 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					SourceType = GL_UNSIGNED_SHORT;
 					break;
 #endif
-				
+
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
+					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
+					{
+						GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
+						Unsupported = 1;
+						break;
+					}
 					NoAlpha = CacheSlot;
                     if (OpenGLVersion == GL_Core)
                     {
@@ -443,7 +449,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
-				
+
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_DXT3:
                     if (OpenGLVersion == GL_Core)
@@ -474,7 +480,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
-				
+
 				case TEXF_DXT5:
                     if (OpenGLVersion == GL_Core)
                     {
@@ -518,7 +524,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				case TEXF_RGTC_RG_SIGNED:
 					InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
 					break;
-				
+
 				// BPTC Core since 4.2. BC6H and BC7 in D3D11.
 #ifndef __LINUX_ARM__
 				case TEXF_BPTC_RGB_SF:
@@ -588,8 +594,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							unguard;
 							break;
 
-						// RGBA7 -- Well it's actually BGRA and used by light and fogmaps.
-						case TEXF_RGBA7:
+						// TEXF_BGRA8_LM used by light and fogmaps.
+						case TEXF_BGRA8_LM:
 							guard(ConvertBGRA7777_RGBA8888);
 							ImgSrc  = Compose;
 							DWORD* Ptr = (DWORD*)Compose;
@@ -636,42 +642,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                         // RGB9.
                         case TEXF_RGB10A2_LM:
                             guard(TEXF_RGB10A2_LM);
-                            ImgSrc  = Compose;
-                            DWORD* Ptr = (DWORD*)Compose;
-							INT ULimit = Min(USize,Info.UClamp); // Implicit assumes NumMips==1.
-							INT VLimit = Min(VSize,Info.VClamp);
-
-                            // Do resampling. The area outside of the clamp gets filled up with the last valid values
-                            // to emulate GL_CLAMP_TO_EDGE behaviour. This is done to avoid using NPOT textures.
-                            for ( INT v=0; v<VLimit; v++ )
-                            {
-                                // The AND 0x1FF7FDFF is used to eliminate the top bit as this was used internally by the LightManager.
-                                for ( INT u=0; u<ULimit; u++ )
-                                    *Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x1FF7FDFF);
-
-                                if ( ULimit>0 )
-                                {
-                                    // Copy last valid value until end of line.
-                                    DWORD LastValidValue = Ptr[-1];
-                                    for ( INT ux=ULimit; ux<USize; ux++ )
-                                        *Ptr++ = LastValidValue;
-                                }
-                                else
-                                {
-                                    // If we had no valid value just memzero.
-                                    appMemzero( Ptr, USize*sizeof(DWORD) );
-                                    Ptr += USize;
-                                }
-                            }
-                            if ( VLimit>0 )
-                            {
-                                // Copy last valid line until reaching the bottom.
-                                BYTE* LastValidLine = Compose + (VLimit-1)*USize*sizeof(DWORD); // Compose is BYTE*.
-                                for ( INT vx=VLimit; vx<VSize; vx++ )
-                                    appMemcpy( Compose + vx*USize*sizeof(DWORD), LastValidLine, USize*sizeof(DWORD) );
-                            }
-                            else // If we had no valid lines just memzero.
-                                appMemzero( Compose, USize*VSize*sizeof(DWORD) );
+                            ImgSrc = Mip->DataPtr;
+                            break;
 
                             unguard;
                             break;
@@ -689,7 +661,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							break;
 
 						// S3TC -- Ubiquitous Extension.
-						case TEXF_DXT1:							
+						case TEXF_DXT1:
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 						case TEXF_DXT3:
 						case TEXF_DXT5:
@@ -705,7 +677,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							ImgSrc = Mip->DataPtr;
 							break;
 #endif
-						
+
 						// Should not happen (TM).
 						default:
 							appErrorf( TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );

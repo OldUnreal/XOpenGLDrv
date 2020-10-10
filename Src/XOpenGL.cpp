@@ -173,7 +173,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #else
 	OpenGLVersion = GL_Core;
 #endif
-	UseVSync = VS_Off;
+	UseVSync = VS_Adaptive;
 
 	UseOpenGLDebug = 0;
 	DebugLevel = 2;
@@ -306,7 +306,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #else
 	UseHWClipping = 0;
 #endif
-	UseMeshBuffering = 0;	
+	UseMeshBuffering = 0;
 
 	if (GIsEditor)
 	{
@@ -555,6 +555,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
 	debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
 
+	glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
 	for (INT i = 0; i<NumberOfExtensions; i++)
 	{
 		FString ExtensionString = appFromAnsi((const ANSICHAR *)glGetStringi(GL_EXTENSIONS, i));
@@ -896,7 +897,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::SetRes);
-	debugf(NAME_DevGraphics, TEXT("XOpenGL: SetRes %s"), GetFullName());
+	debugf(NAME_DevGraphics, TEXT("XOpenGL: SetRes %ls"), GetFullName());
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 #ifdef SDL2BUILD
@@ -1218,7 +1219,12 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	CurrentPolyFlags = 0;
 	CurrentAdditionalPolyFlags = 0;
 
-	SetProgram(No_Prog);
+    SetProgram(No_Prog);
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+    glUseProgram(0);
+
 	glClear(GL_COLOR_BUFFER_BIT);
 	glFlush();
 
@@ -1577,7 +1583,12 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags&LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
 	CHECK_GL_ERROR();
 
+#if ENGINE_VERSION==227
+	LastZMode = 255;
+	SetZTestMode(ZTEST_LessEqual);
+#else
 	glDepthFunc(GL_LEQUAL);
+#endif
 
 	// Remember stuff.
 	FlashScale = InFlashScale;

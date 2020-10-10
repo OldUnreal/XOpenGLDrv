@@ -42,11 +42,15 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	*/
 	SetProgram(Tile_Prog);
 
-    if (PolyFlags & PF_RenderHint)//Using PF_RenderHint internally for CW/CCW switch.
-		PolyFlags &= ~PF_RenderHint;
+#if ENGINE_VERSION==227
+    if (PolyFlags & (PF_AlphaBlend | PF_Translucent | PF_Modulated)) // Make sure occlusion is correctly set.
+#else
+    if (PolyFlags & (PF_Translucent | PF_Modulated))
+#endif
+        PolyFlags &= ~PF_Occlude;
+    else PolyFlags |= PF_Occlude;
 
-    if (PolyFlags & PF_Unlit)//Of no relevance here.
-		PolyFlags &= ~PF_Unlit;
+	PolyFlags &= ~(PF_RenderHint | PF_Unlit); // Using PF_RenderHint internally for CW/CCW switch.
 
     if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags&PF_Translucent))
 		PolyFlags |= PF_Highlighted;
@@ -62,7 +66,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
     {
         // Non 227: to make this work, add missing ComputeRenderSize() in URender::DrawWorld and UGameEngine::Draw for canvas operations.
         DrawTileVerts(DrawTileBufferData);
-    }	
+    }
 
 	DrawTileBufferData.PrevPolyFlags = PolyFlags;
     DrawTileBufferData.PrevTexture = Info.Texture;
@@ -282,9 +286,16 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
         {
             if (UseBufferInvalidation)
                 glInvalidateBufferData(DrawTileVertBuffer);
-            glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_STREAM_DRAW);
+            #ifdef __LINUX_ARM__
+                    // stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
+                    glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_DYNAMIC_DRAW);
+            #else
+                    glBufferSubData(GL_ARRAY_BUFFER, 0, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
+            #endif
+
+
             CHECK_GL_ERROR();
-        }		
+        }
 
         if (PrevDrawTileBeginOffset != BeginOffset)
         {
@@ -297,7 +308,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
             CHECK_GL_ERROR();
             PrevDrawTileBeginOffset = BeginOffset;
         }
-	}    
+	}
 
     // Color
     if (GIsEditor && HitTesting()) // UED selecting support.
@@ -355,10 +366,10 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
     glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
     glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
     glDisableVertexAttribArray(COLOR_ATTRIB);
-	
     if (OpenGLVersion == GL_Core)
     {
-        glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
+        //glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+        glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
         glDisableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
     }
 
@@ -377,19 +388,22 @@ void UXOpenGLRenderDevice::DrawTileStart()
     glBindVertexArray(DrawTileVertsVao);
     glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
 
-	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
-	glEnableVertexAttribArray(COLOR_ATTRIB);
-	
-    if (OpenGLVersion == GL_Core)
+    if (OpenGLVersion == GL_ES)
     {
+        glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
+        glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
+        glEnableVertexAttribArray(COLOR_ATTRIB);
+        glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+    }
+    else
+    {
+        glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
+        glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
         glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB2);
         glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB3);
+        glEnableVertexAttribArray(COLOR_ATTRIB);
+        glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
     }
-	
-	if (UsingBindlessTextures)
-		glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
-
 
     PrevDrawTileBeginOffset = -1;
 

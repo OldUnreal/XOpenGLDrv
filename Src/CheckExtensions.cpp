@@ -33,61 +33,104 @@ void UXOpenGLRenderDevice::CheckExtensions()
 {
 	guard(UXOpenGLRenderDevice::CheckExtensions);
 
-	if (!GLExtensionSupported(TEXT("GL_ARB_buffer_storage")) && UsingPersistentBuffers)
+	if (GLExtensionSupported(TEXT("GL_ARB_buffer_storage")) && UsingPersistentBuffers)
 	{
-		debugf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. Disabling UsePersistentBuffers."));
+		debugf(TEXT("XOpenGL: GL_ARB_buffer_storage found."));
+    }
+	else
+    {
+        debugf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. Disabling UsePersistentBuffers."));
 		UsingPersistentBuffers = false;
-	}
+    }
 
-	if (!GLExtensionSupported(TEXT("GL_ARB_invalidate_subdata")) && UseBufferInvalidation)
+	if (GLExtensionSupported(TEXT("GL_ARB_invalidate_subdata")) && UseBufferInvalidation)
 	{
-		debugf(TEXT("XOpenGL: GL_ARB_invalidate_subdata not found. Disabling UseBufferInvalidation."));
-		UseBufferInvalidation = 0;
+		debugf(TEXT("XOpenGL: GL_ARB_invalidate_subdata found."));
 	}
+	else
+    {
+        debugf(TEXT("XOpenGL: GL_ARB_invalidate_subdata not found. Disabling UseBufferInvalidation."));
+		UseBufferInvalidation = 0;
+    }
 
 	#ifdef __LINUX_ARM__
-        if (!GLExtensionSupported(TEXT("GL_EXT_texture_storage"))  && GenerateMipMaps)
+        if (GLExtensionSupported(TEXT("GL_EXT_texture_storage"))  && GenerateMipMaps)
+        {
+            debugf(TEXT("XOpenGL: GL_EXT_texture_storage found."));
+        }
+        else
         {
             debugf(TEXT("XOpenGL: GL_EXT_texture_storage not found. Disabling GenerateMipMaps."));
             GenerateMipMaps = 0;
         }
-        if (!GLExtensionSupported(TEXT("GL_IMG_bindless_texture"))  && UsingBindlessTextures)
+
+        if (GLExtensionSupported(TEXT("GL_IMG_bindless_texture"))  && UsingBindlessTextures)
+        {
+            debugf(TEXT("XOpenGL: GL_IMG_bindless_texture found."));
+			UsingBindlessTextures = false;
+        }
+        else
         {
             debugf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. Disabling UsingBindlessTextures."));
-			UsingBindlessTextures = false;
+            UsingBindlessTextures = false;
         }
         NVIDIAMemoryInfo = false; // found no such info available...yet?
         AMDMemoryInfo = false;
 	#else
-        if (!GLExtensionSupported(TEXT("GL_ARB_texture_storage")) && GenerateMipMaps)
+        if (GLExtensionSupported(TEXT("GL_ARB_texture_storage")) && GenerateMipMaps)
+        {
+            debugf(TEXT("XOpenGL: GL_ARB_texture_storage found."));
+        }
+        else
         {
             debugf(TEXT("XOpenGL: GL_ARB_texture_storage not found. Disabling GenerateMipMaps."));
             GenerateMipMaps = 0;
         }
-        if (!GLExtensionSupported(TEXT("GL_ARB_bindless_texture")) && UsingBindlessTextures)
+
+        if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")) && UsingBindlessTextures)
+        {
+            debugf(TEXT("XOpenGL: GL_ARB_bindless_texture found."));
+        }
+        else
         {
             debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. Disabling UsingBindlessTextures."));
-			UsingBindlessTextures = false;
+            UsingBindlessTextures = false;
         }
+
         if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
         {
             debugf(TEXT("XOpenGL: GL_NVX_gpu_memory_info found."));
-            NVIDIAMemoryInfo = 1;
+            NVIDIAMemoryInfo = true;
         }
+        else NVIDIAMemoryInfo = false;
+
         if (GLExtensionSupported(TEXT("GL_ATI_meminfo")))
         {
             debugf(TEXT("XOpenGL: GL_ATI_meminfo found."));
-            AMDMemoryInfo = 1;
+            AMDMemoryInfo = true;
         }
+        else AMDMemoryInfo = false;
+
         if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))
         {
             debugf(TEXT("XOpenGL: WGL_EXT_swap_control found."));
-            SwapControlExt = 1;
+            SwapControlExt = true;
         }
+        else
+        {
+            debugf(TEXT("XOpenGL: WGL_EXT_swap_control found. Can't set VSync options."));
+            SwapControlExt = false;
+        }
+
         if (GLExtensionSupported(TEXT("WGL_EXT_swap_control_tear")))
         {
             debugf(TEXT("XOpenGL: WGL_EXT_swap_control_tear found."));
-            SwapControlTearExt = 1;
+            SwapControlTearExt = true;
+        }
+        else
+        {
+            debugf(TEXT("WGL_EXT_swap_control_tear is not supported by device."));
+            SwapControlTearExt = false;
         }
 
         INT MaxTextureImageUnits = 0;
@@ -102,13 +145,22 @@ void UXOpenGLRenderDevice::CheckExtensions()
 	{
 		if (!GLExtensionSupported(TEXT("GL_ARB_buffer_storage")))
 		{
+			debugf(TEXT("XOpenGL: GL_ARB_buffer_storage found."));
+		}
+		else
+		{
 			debugf(TEXT("XOpenGL: Missing GL_ARB_buffer_storage. Disabling UsingBindlessTextures."));
 			UsingBindlessTextures = false;
 		}
 	}
-    if (!GLExtensionSupported(TEXT("GL_KHR_debug")))
+
+    if (GLExtensionSupported(TEXT("GL_KHR_debug")) && UseOpenGLDebug)
     {
-        GWarn->Logf(TEXT("OpenGL debugging extension not found!"));
+        GWarn->Logf(TEXT("OpenGL debugging extension found!"));
+    }
+    else if (UseOpenGLDebug)
+    {
+        GWarn->Logf(TEXT("OpenGL debugging extension not found! Disabling UseOpenGLDebug"));
         UseOpenGLDebug = 0;
     }
 

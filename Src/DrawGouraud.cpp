@@ -125,7 +125,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 
     DrawGouraudBufferData.TexNum[0] = TexInfo[0].TexNum;
 	DrawGouraudBufferData.Alpha = Info.Texture->Alpha;
-	DrawGouraudBufferData.TextureDiffuse = GET_DIFFUSE(Info.Texture);
+	DrawGouraudBufferData.TextureDiffuse = Info.Texture->Diffuse;
 	DrawGouraudBufferData.TexUMult = TexInfo[0].UMult;
 	DrawGouraudBufferData.TexVMult = TexInfo[0].VMult;
 
@@ -231,7 +231,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	if (NumPts < 3 || Frame->Recursion > MAX_FRAME_RECURSION || NoDrawGouraudList)		//reject invalid.
 		return;
 
-	SetProgram(GouraudPolyVertList_Prog);
+    SetProgram(GouraudPolyVertList_Prog);
 
 #if ENGINE_VERSION==227
 	if (Info.Modifier)
@@ -260,7 +260,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
     DrawGouraudListBufferData.TexNum[0] = TexInfo[0].TexNum;
 	DrawGouraudListBufferData.Alpha = Info.Texture->Alpha;
-	DrawGouraudListBufferData.TextureDiffuse = GET_DIFFUSE(Info.Texture);
+	DrawGouraudListBufferData.TextureDiffuse = Info.Texture->Diffuse;
 	DrawGouraudListBufferData.TexUMult = TexInfo[0].UMult;
 	DrawGouraudListBufferData.TexVMult = TexInfo[0].VMult;
 
@@ -330,7 +330,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 		// stijn: this was the previous condition but this was all wrong! if we flush the buffer before the triangle we
 		// were pushing is complete, all subsequent triangles we push will be borked as well!!
-		//if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - DrawGouraudStrideSize)) 
+		//if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - DrawGouraudStrideSize))
         if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLYLIST_SIZE - 3 * DrawGouraudStrideSize) && i%3==2)
         {
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
@@ -441,11 +441,20 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
                 glInvalidateBufferData(DrawGouraudVertBuffer);
             CHECK_GL_ERROR();
         }
+        #ifdef __LINUX_ARM__
+            if (ActiveProgram == GouraudPolyVertList_Prog)
+                glBufferData(GL_ARRAY_BUFFER, sizeof(float) * TotalSize, DrawGouraudListBufferRange.Buffer, GL_DYNAMIC_DRAW);
+            else if (ActiveProgram == GouraudPolyVert_Prog)
+                glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer, GL_DYNAMIC_DRAW);
+        #else
+            if (ActiveProgram == GouraudPolyVertList_Prog)
+                glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudListBufferRange.Buffer);
+            else if (ActiveProgram == GouraudPolyVert_Prog)
+                glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer);
+        #endif
 
-        if (ActiveProgram == GouraudPolyVertList_Prog)
-			glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudListBufferRange.Buffer);
-        else if (ActiveProgram == GouraudPolyVert_Prog)
-			glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer);
+
+
 
 		// GL > 4.5 for later use maybe.
 		/*
@@ -535,7 +544,6 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
     BufferData.IndexOffset = 0;
     BufferData.PolyFlags = 0;
 	BufferData.Alpha = 0.f;
-	
 }
 
 //
@@ -543,10 +551,10 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 //
 void UXOpenGLRenderDevice::DrawGouraudEnd(INT NextProgram)
 {
-	const bool GouraudToGouraudSwitch = 
+	const bool GouraudToGouraudSwitch =
 		(ActiveProgram == GouraudPolyVert_Prog && NextProgram == GouraudPolyVertList_Prog) ||
-		(ActiveProgram == GouraudPolyVertList_Prog && NextProgram == GouraudPolyVert_Prog);	
-	
+		(ActiveProgram == GouraudPolyVertList_Prog && NextProgram == GouraudPolyVert_Prog);
+
 	if (ActiveProgram == GouraudPolyVert_Prog)
 	{
 		if (DrawGouraudBufferData.VertSize > 0)
@@ -609,9 +617,9 @@ void UXOpenGLRenderDevice::DrawGouraudStart()
 		glBindVertexArray(DrawGouraudPolyVertListSingleBufferVao);
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
 	}
-	
+
 	// stijn: Mesa wants us to re-enable these after calling glBindVertexArray
-//	if (!GouraudToGouraudSwitch)
+    //	if (!GouraudToGouraudSwitch)
 	{
 		glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
 		glEnableVertexAttribArray(TEXTURE_COORD_ATTRIB);
