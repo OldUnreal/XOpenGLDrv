@@ -103,7 +103,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #if ENGINE_VERSION==227
 	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
-	new(GetClass(), TEXT("UseEnhandedLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseEnhandedLightmaps), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseEnhancedLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseEnhancedLightmaps), TEXT("Options"), CPF_Config);
 	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
 #endif
 
@@ -162,7 +162,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	EnvironmentMaps = 0;
 	GenerateMipMaps = 0;
 	//EnableShadows = 0;
-	UseEnhandedLightmaps = 0;
+	UseEnhancedLightmaps = 0;
 
 	SyncToDraw = 0;
 	MaxTextureSize = 4096;
@@ -225,7 +225,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SupportsLazyTextures = 0;
 	PrefersDeferredLoad = 0;
 #if ENGINE_VERSION==227
-	SupportsHDLightmaps = UseEnhandedLightmaps;
+	SupportsHDLightmaps = UseEnhancedLightmaps;
 #endif
 
 	// Extensions & other inits.
@@ -308,26 +308,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #endif
 	UseMeshBuffering = 0;
 
-	if (GIsEditor)
-	{
-		ShareLists = 1;
-		UsingBindlessTextures = false;
-		UsingPersistentBuffers = false;
-	}
-	else
-	{
-#if __LINUX_ARM__
-		UsingBindlessTextures = false; //Support for this in GL ES seems unfinished and not really usable yet. Disable it for now.
-		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
-#elif ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-		UsingBindlessTextures = UseBindlessTextures ? true : false;
-		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
-#else
-		UsingBindlessTextures = false;
-		UsingPersistentBuffers = false;
-#endif // __LINUX_ARM__
-	}
-
 	if (NoBuffering)
 		UsePersistentBuffers = false;
 
@@ -367,6 +347,24 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	{
 		GWarn->Logf(TEXT("XOpenGL: SetRes failed!"));
 		return 0;
+	}
+
+	if (GIsEditor)
+	{
+		ShareLists = 1;
+		UsingBindlessTextures = false;
+		UsingPersistentBuffers = false;
+	}
+	else
+	{
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+        // Doing after extensions have been checked.
+		UsingBindlessTextures = UseBindlessTextures ? true : false;
+		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
+#else
+		UsingBindlessTextures = false;
+		UsingPersistentBuffers = false;
+#endif
 	}
 
 	LogLevel = DebugLevel;
@@ -491,7 +489,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		MajorVersion = 3;
 		MinorVersion = 1;
 	}
-	else if (UsingBindlessTextures || UsingPersistentBuffers)
+	else if (UseBindlessTextures || UsePersistentBuffers)
 	{
 		MajorVersion = 4;
 		MinorVersion = 5;
@@ -501,6 +499,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 
 
 #ifdef SDL2BUILD
+InitContext:
 
 	// Tell SDL what kind of context we want
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
@@ -529,7 +528,38 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		glContext = SDL_GL_CreateContext(Window);
 
 	if (glContext == NULL)
-		appErrorf(TEXT("XOpenGL: Error failed creating SDL_GL_CreateContext: %ls"), appFromAnsi(SDL_GetError()));
+	{
+        if (OpenGLVersion == GL_Core)
+        {
+            if (UseBindlessTextures || UsePersistentBuffers)
+            {
+                if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
+                {
+                    appErrorf(TEXT("XOpenGL: Failed to init OpenGL %i.%i context. SDL_GL_CreateContext: %ls"), MajorVersion, MinorVersion, appFromAnsi(SDL_GetError()));
+                    return 0;
+                }
+                else
+                {
+                    //Try with lower context, disable 4.5 features.
+                    MajorVersion = 3;
+                    MinorVersion = 3;
+
+                    UseBindlessTextures = false;
+                    UsePersistentBuffers = false;
+
+                    debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
+
+                    goto InitContext;
+                }
+            }
+            return 0;
+        }
+        else
+        {
+            appErrorf(TEXT("XOpenGL: No OpenGL ES %i.%i context support."), MajorVersion, MinorVersion);
+            return 0;
+        }
+	}
 
 	MakeCurrent();
 
@@ -741,15 +771,28 @@ InitContext:
 		debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
 		debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
 
-		int NumberOfExtensions = 0;
-		glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
-		for (INT i = 0; i<NumberOfExtensions; i++)
+		AllExtensions = appFromAnsi((const ANSICHAR *)glGetString(GL_EXTENSIONS));
+
+		// Extension list does not necessarily contain (all) wglExtensions !!
+		PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = nullptr;
+		wglGetExtensionsStringARB = reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(wglGetProcAddress("wglGetExtensionsStringARB"));
+
+		if (wglGetExtensionsStringARB)
+			AllExtensions += appFromAnsi(wglGetExtensionsStringARB(hDC));
+
+		FString ExtensionString = AllExtensions;
+		FString SplitString;
+		INT i = 0;
+		while (ExtensionString.Split(TEXT(" "), &SplitString, &ExtensionString, 0))
 		{
-			FString ExtensionString = appFromAnsi((const ANSICHAR *)glGetStringi(GL_EXTENSIONS, i));
-			debugf(NAME_DevLoad, TEXT("GL_EXTENSIONS(%i) : %ls"), i, *ExtensionString);
-			AllExtensions += ExtensionString;
-			AllExtensions += TEXT(";");
+			if (SplitString.Len())
+			{
+				debugf(NAME_DevLoad, TEXT("GL_EXTENSIONS(%i): %ls"),i, *SplitString);
+				i++;
+			}
 		}
+		NumberOfExtensions = i;
+
 		if (OpenGLVersion == GL_Core)
 			debugf(NAME_Init, TEXT("OpenGL %i.%i context initialized!"), MajorVersion, MinorVersion);
 		else
@@ -759,7 +802,7 @@ InitContext:
 	{
 		if (OpenGLVersion == GL_Core)
 		{
-			if (UsingBindlessTextures || UsingPersistentBuffers)
+			if (UseBindlessTextures || UsePersistentBuffers)
 			{
 				if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
 				{
@@ -772,7 +815,7 @@ InitContext:
 					MajorVersion = 3;
 					MinorVersion = 3;
 
-					UsingBindlessTextures = false;
+					UseBindlessTextures = false;
 					UsePersistentBuffers = false;
 
 					debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
@@ -1105,36 +1148,36 @@ void UXOpenGLRenderDevice::SwapControl()
 		{
 		case VS_On:
 			if (wglSwapIntervalEXT(1) != 1)
-				debugf(TEXT("XOpenGL: Setting VSync on has failed."));
-			else  debugf(TEXT("XOpenGL: Setting VSync: On"));
+				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
+			else  debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
 			break;
 		case VS_Off:
 			if (wglSwapIntervalEXT(0) != 1)
-				debugf(TEXT("XOpenGL: Setting VSync off has failed."));
-			else debugf(TEXT("XOpenGL: Setting VSync: Off"));
+				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+			else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
 			break;
 
 		case VS_Adaptive:
 			if (!SwapControlTearExt)
 			{
-				debugf(TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
+				debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
 				if (wglSwapIntervalEXT(0) != 1)
-					debugf(TEXT("XOpenGL: Setting VSync off has failed."));
-				else debugf(TEXT("XOpenGL: Setting VSync: Off"));
+					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
 				break;
 			}
 			if (wglSwapIntervalEXT(-1) != 1)
-				debugf(TEXT("XOpenGL: Setting VSync adaptive has failed."));
-			else debugf(TEXT("XOpenGL: Setting VSync: Adaptive"));
+				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed."));
+			else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
 			break;
 		default:
 			if (wglSwapIntervalEXT(0) != 1)
-				debugf(TEXT("XOpenGL: Setting VSync off has failed."));
-			else debugf(TEXT("XOpenGL: Setting VSync: Off (default)"));
+				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+			else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
 		}
 	}
 	else
-		debugf(TEXT("XOpenGL: WGL_EXT_swap_control is not supported."));
+		debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control is not supported."));
 	unguard;
 #endif // SDL2BUILD
 }
@@ -1360,7 +1403,16 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		{
 			AActor* Actor = Level->Actors(i);
 			if (Actor && !Actor->bDeleteMe && (Actor->bStatic || (Actor->bNoDelete && !Actor->bMovable)) && Actor->LightBrightness>0 && Actor->LightType && Actor->LightRadius)
-				StaticLightList.AddItem(Actor);
+            {
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+                StaticLightList.AddItem(Actor);
+#else
+                if (UseHWLighting)
+                    StaticLightList.AddItem(Actor);
+                else if (Actor->NormalLightRadius) //for normal mapping only add lights with normallightradius set. Needs performance tests if not.
+                    StaticLightList.AddItem(Actor);
+#endif
+            }
 		}
 		NumStaticLights = StaticLightList.Num();
 
@@ -1969,7 +2021,11 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	INT CurY = 48;
 	UCanvas* Canvas = Frame->Viewport->Canvas;
 
+#if ENGINE_VERSION<400
+	Canvas->DrawColor = FColor(255, 255, 255);
+#else
 	Canvas->Color = FColor(255, 255, 255);
+#endif
 	Canvas->CurX = 392;
 	Canvas->CurY = CurY;
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("[XOpenGL]"));

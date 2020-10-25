@@ -37,6 +37,7 @@
 		#include "glad.h"
 		}
 		#include "glext.h" // from https://khronos.org/registry/OpenGL/index_gl.php
+		#define WGL_WGLEXT_PROTOTYPES
 		#include "wglext.h"
 	#endif
 
@@ -75,7 +76,7 @@
 // stijn: benchmarked on 16 JUN 2020. This has no statistically significant effect on performance in UT469
 // stijn: benchmarked again on 04 OCT 2020 after realizing XOpenGL's extension check didn't work on Windows.
 // Avg FPS gain in CityIntro is ~10% with bindless textures, but this obviously isn't much of a stress test.
-#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1 
+#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -90,7 +91,12 @@ Globals.
 #define DRAWGOURAUDPOLYLIST_SIZE 262144
 #define NUMBUFFERS 6
 #define NUMTEXTURES 4096
-#define MAX_LIGHTS 256
+
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+			#define MAX_LIGHTS 256
+#else
+			#define MAX_LIGHTS 512
+#endif
 
 #define GL_DEBUG_SOURCE_API 0x8246
 #define GL_DEBUG_SOURCE_WINDOW_SYSTEM 0x8247
@@ -529,7 +535,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     BITFIELD NoDrawSimple;
     BITFIELD UseHWLighting;
     BITFIELD UseHWClipping;
-	BITFIELD UseEnhandedLightmaps;
+	BITFIELD UseEnhancedLightmaps;
 
     //OpenGL 4 Config
 	BITFIELD UseBindlessTextures;
@@ -558,7 +564,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool NeedsInit;
 	bool bMappedBuffers;
 	bool bInitializedShaders;
-	BYTE* ScaleByte;	
+	BYTE* ScaleByte;
 
 	#if ENGINE_VERSION==227
 	FLightInfo *FirstLight,*LastLight;
@@ -1103,8 +1109,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static HGLRC   CurrentGLContext;
 	static HMODULE hModuleGlMain;
 	static HMODULE hModuleGlGdi;
-	FString AllExtensions;
 #endif
+
+    FString AllExtensions;
 
 	// UObject interface.
 	void StaticConstructor();
@@ -1170,7 +1177,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	void DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
 	UBOOL SupportsTextureFormat(ETextureFormat Format);
-#endif      
+#endif
 
 	// Editor
 	void PushHit(const BYTE* Data, INT Count);
@@ -1227,7 +1234,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// OpenGLStats
 	void DrawStats( FSceneNode* Frame );
-	
+
 private:
 	// Program switching
 	void DrawSimpleEnd(INT NextProgram);
@@ -1237,7 +1244,7 @@ private:
 	void DrawGouraudEnd(INT NextProgram);
 	void DrawGouraudStart();
 	void DrawTileEnd(INT NextProgram);
-	void DrawTileStart();	
+	void DrawTileStart();
 
 	// Error logging
 	public:

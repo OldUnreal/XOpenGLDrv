@@ -379,24 +379,14 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
 				case TEXF_RGB8:
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
-#if UNREAL_TOURNAMENT_OLDUNREAL
-					SourceFormat = GL_RGB;
-#else
-					SourceFormat   = GL_BGR; // Was GL_RGB;
-#endif
+					SourceFormat   = GL_RGB; // stijn: was GL_RGB, then became GL_BGR, then turned back into GL_RGB after a discussion with Han on 25 OCT 2020. Brother bear definitely uses the GL_RGB pixel format for this one.
 					break;
-
-#if UNREAL_TOURNAMENT_OLDUNREAL
 				case TEXF_RGBA8_:
 					SourceFormat = GL_RGBA;
 					break;
-#endif
 
-#if UNREAL_TOURNAMENT_OLDUNREAL
+				// stijn: this was case TEXF_RGBA8 before, but TEXF_RGBA8 is a synonym for TEXF_BGRA8. The pixel format is actually BGRA8, though, so we might as well use that
 				case TEXF_BGRA8:
-#else
-				case TEXF_RGBA8:
-#endif
 					InternalFormat = UnpackSRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 					SourceFormat   = GL_BGRA; // Was GL_RGBA;
 					break;
@@ -411,16 +401,22 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 				// S3TC -- Ubiquitous Extension.
 				case TEXF_DXT1:
-
-					// stijn: no reason not to support these. GL handles them just fine and we need them in UT (e.g., to support the animated textures on the Liandri tower in CityIntro)
-					/*
-					if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
-					{
-						GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
-						Unsupported = 1;
-						break;
-					}
-					*/
+					//
+					// stijn: please, please, for the love of god, do not bring this check back.
+					// I'm leaving it here commented out so you can see why it's gone.
+					// "Undersized" DXT1 mips are fine and we have them in UT99 (e.g., the 2x128 animated texture on the liandri tower).
+					// All gl drivers can unpack them with no issues whatsoever.
+					// The only trouble with undersized textures and DXT1 is that you have to pad the mips _BEFORE_ you compress them.
+					// 
+					// FYI: Han originally added this check, but he told me on several occasions that it wasn't necessary.
+					// Last time we discussed this was on 06 OCT 2020.
+					// 
+					//if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
+					//{
+					//	GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
+					//	Unsupported = 1;
+					//	break;
+					//}
 					NoAlpha = CacheSlot;
                     if (OpenGLVersion == GL_Core)
                     {
@@ -545,7 +541,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 				// Default: Mark as unsupported.
 				default:
-					GWarn->Logf( TEXT("Unknown texture format %i on texture %ls."), Info.Format, Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("Unknown texture format %ls on texture %ls."), *FTextureFormatString(Info.Format), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
 			}
@@ -655,10 +651,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// RGB8/RGBA8 -- Actually used by Brother Bear.
 						case TEXF_RGB8:
-						case TEXF_RGBA8:
-#if UNREAL_TOURNAMENT_OLDUNREAL
 						case TEXF_RGBA8_:
-#elif ENGINE_VERSION==227
+						case TEXF_BGRA8:
+#if ENGINE_VERSION==227
 						case TEXF_RGBA16:
 #endif
 							ImgSrc = Mip->DataPtr;
@@ -684,12 +679,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// Should not happen (TM).
 						default:
-							appErrorf( TEXT("Unpacking unknown format %i on %ls."), Info.Format, Info.Texture->GetFullName() );
+							appErrorf( TEXT("Unpacking unknown format %ls on %ls."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
 							break;
 					}
 				}
 				else {
-					appErrorf(TEXT("Unpacking %i on %ls failed due to invalid data."), Info.Format, Info.Texture->GetFullName() );
+					appErrorf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
 					break;
 				}
                 CHECK_GL_ERROR();
