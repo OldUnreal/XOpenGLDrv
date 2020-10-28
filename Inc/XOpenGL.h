@@ -194,7 +194,7 @@ enum DrawSimpleMode
 
 // stijn: missing defs in UT469 tree
 #ifdef UNREAL_TOURNAMENT_OLDUNREAL
-#define PF_AlphaBlend 0x2000
+#define PF_AlphaBlend 0x20000
 #define TEXF_RGBA8 TEXF_BGRA8 // stijn: really BGRA8
 
 enum ERenderZTest
