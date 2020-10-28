@@ -771,7 +771,14 @@ InitContext:
 		debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
 		debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
 
-		AllExtensions = appFromAnsi((const ANSICHAR *)glGetString(GL_EXTENSIONS));
+		int NumberOfExtensions = 0;
+		glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
+		for (INT i = 0; i < NumberOfExtensions; i++)
+		{
+			FString ExtensionString = appFromAnsi((const ANSICHAR*)glGetStringi(GL_EXTENSIONS, i));
+			AllExtensions += ExtensionString;
+			AllExtensions += TEXT(" ");
+		}
 
 		// Extension list does not necessarily contain (all) wglExtensions !!
 		PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = nullptr;
@@ -779,6 +786,8 @@ InitContext:
 
 		if (wglGetExtensionsStringARB)
 			AllExtensions += appFromAnsi(wglGetExtensionsStringARB(hDC));
+
+		
 
 		FString ExtensionString = AllExtensions;
 		FString SplitString;
@@ -940,8 +949,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::SetRes);
-	debugf(NAME_DevGraphics, TEXT("XOpenGL: SetRes %ls"), GetFullName());
-
+	
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 #ifdef SDL2BUILD
 	if (glContext && CurrentGLContext && glContext == CurrentGLContext)
@@ -1004,8 +1012,9 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		dma.dmBitsPerPel = dmw.dmBitsPerPel = NewColorBytes * 8;
 		dma.dmFields = dmw.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_POSITION;// | DM_BITSPERPEL;
 
-
+# if !UNREAL_TOURNAMENT_OLDUNREAL
 		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, NewX, NewY, SWP_SHOWWINDOW);
+# endif
 
 		debugf(TEXT("XOpenGL: Fullscreen NewX %i NewY %i"), NewX, NewY);
 
