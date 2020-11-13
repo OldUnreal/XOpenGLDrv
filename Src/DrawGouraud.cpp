@@ -375,6 +375,9 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 	// stijn: flush current polylist buffer even if it doesn't meet the criteria in DrawGouraudPolyList
 	SetProgram(GouraudPolyVertList_Prog);
 
+	if (Frame->NearClip.W != 0.0)
+		PushClipPlane(Frame->NearClip);
+
 	for (; i < NumPts; i += 3)
 	{
 		if (Frame->Mirror == -1.0)
@@ -426,6 +429,13 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 	// stijn: push the remaining triangles
 	if (i - StartOffset > 0)
 		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
+
+	if (Frame->NearClip.W != 0.0)
+	{
+		if (DrawGouraudListBufferData.VertSize > 0)
+			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+		PopClipPlane();
+	}
 }
 #endif
 
