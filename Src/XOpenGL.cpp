@@ -544,8 +544,8 @@ InitContext:
                     MajorVersion = 3;
                     MinorVersion = 3;
 
-                    UseBindlessTextures = false;
-                    UsePersistentBuffers = false;
+                    UsingBindlessTextures = false;
+                    UsingPersistentBuffers = false;
 
                     debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
 
@@ -824,8 +824,8 @@ InitContext:
 					MajorVersion = 3;
 					MinorVersion = 3;
 
-					UseBindlessTextures = false;
-					UsePersistentBuffers = false;
+					UsingBindlessTextures = false;
+					UsingPersistentBuffers = false;
 
 					debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
 

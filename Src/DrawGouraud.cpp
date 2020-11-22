@@ -113,11 +113,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	}
 #endif
 
-#if UNREAL_TOURNAMENT_OLDUNREAL // stijn: idk why but we have an issue with vanishing meshes when using bindless textures...
-	if ((DrawGouraudListBufferData.VertSize > 0) && (TexInfo[0].CurrentCacheID != Info.CacheID || DrawGouraudListBufferData.PrevPolyFlags != PolyFlags))
-#else
-	if ((DrawGouraudListBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
-#endif
+	if ((DrawGouraudBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 	}
@@ -222,7 +218,6 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
     if (DrawGouraudBufferData.DrawFlags & DF_MacroTexture)
 		Info.Texture->MacroTexture->Unlock(MacroTextureInfo);
 
-
 	CHECK_GL_ERROR();
 	unclockFast(Stats.GouraudPolyCycles);
 	unguard;
@@ -246,11 +241,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	}
 #endif
 
-#if UNREAL_TOURNAMENT_OLDUNREAL // stijn: idk why but we have an issue with vanishing meshes when using bindless textures... see https://www.youtube.com/watch?v=TdxPz5jhCl0
-	if ((DrawGouraudListBufferData.VertSize > 0) && (TexInfo[0].CurrentCacheID != Info.CacheID || DrawGouraudListBufferData.PrevPolyFlags != PolyFlags))
-#else
 	if ( (DrawGouraudListBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
-#endif
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 	}
