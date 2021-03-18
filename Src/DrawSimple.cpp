@@ -76,12 +76,6 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 	{
 		DrawSimpleGeometryVerts(Draw2DLineMode, 6, GL_LINES, LineFlags, Color, false);
 	}
-	else if (HitTesting())
-	{
-		if (DrawLinesBufferData.VertSize > 0)
-			DrawSimpleGeometryVerts(DrawLineMode, DrawLinesBufferData.VertSize, GL_LINES, DrawLinesBufferData.LineFlags, DrawLinesBufferData.DrawColor, true);
-		DrawSimpleGeometryVerts(Draw2DLineMode, 6, GL_LINES, LineFlags, HitColor, false);
-	}
 	else
 	{
 		BufferLines(&DrawLinesVertsBuf[DrawLinesBufferData.VertSize], Draw2DLineVertsBuf);
@@ -146,12 +140,6 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		if (NoBuffering)
 		{
   			DrawSimpleGeometryVerts(Draw3DLineMode, 6, GL_LINES, LineFlags, Color, false);
-		}
-		else if (HitTesting())
-		{
-			if (DrawLinesBufferData.VertSize > 0)
-				DrawSimpleGeometryVerts(DrawLineMode, DrawLinesBufferData.VertSize, GL_LINES, DrawLinesBufferData.LineFlags, DrawLinesBufferData.DrawColor, true);
-			DrawSimpleGeometryVerts(Draw3DLineMode, 6, GL_LINES, LineFlags, HitColor, false);
 		}
 		else
 		{
