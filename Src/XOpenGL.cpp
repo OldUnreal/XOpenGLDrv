@@ -1481,9 +1481,9 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 #endif // ENGINE_VERSION
 
 	//avoid some overhead, only calculate and set again if something was really changed.
-	if (Frame->Viewport->IsOrtho() && (GIsEditor || !bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || StoredOrthoFY != Frame->FY))
+	if (Frame->Viewport->IsOrtho() && (!bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || StoredOrthoFY != Frame->FY))
 		SetOrthoProjection(Frame);
-	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || GIsEditor || StoredbNearZ)
+	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || StoredbNearZ)
 		SetProjection(Frame, 0);
 	/*
 	else

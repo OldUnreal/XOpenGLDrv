@@ -245,7 +245,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
     }
     unclockFast(Stats.TileBufferCycles);
-	if (NoBuffering || /*!UsingBindlessTextures ||*/ GIsEditor) // No buffering at this time for Editor.
+	if (NoBuffering) // No buffering at this time for Editor.
         DrawTileVerts(DrawTileBufferData);
 
 	unguard;
