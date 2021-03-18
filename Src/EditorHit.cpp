@@ -20,7 +20,7 @@
 void UXOpenGLRenderDevice::PushHit(const BYTE* Data, INT Count)
 {
 	guard(UXOpenGLRenderDevice::PushHit);
-
+	
 	// Save the passed info on the working stack.
 	INT Index = HitStack.Add(Count);
 	appMemcpy(&HitStack(Index), Data, Count);
@@ -47,20 +47,20 @@ void UXOpenGLRenderDevice::PushHit(const BYTE* Data, INT Count)
 	HitColor.Y = (((Seed & 0x00000FC0) >> 4) | 1) / 255.f;
 	HitColor.Z = (((Seed & 0x0003F000) >> 10) | 1) / 255.f;
 	HitColor.W = 1.f;
-
+	
 	unguard;
 }
 
 void UXOpenGLRenderDevice::PopHit(INT Count, UBOOL bForce)
 {
 	guard(UXOpenGLRenderDevice::PopHit);
-
+	
 	check(Count <= HitStack.Num());
 
 	// Force end buffing polygons. This makes sure we won't
 	// draw the buffered polygones under the wrong name.
 	SetProgram(No_Prog);
-	glFinish();
+	//glFinish();
 
 	// Handle Force hit.
 	if (bForce)
@@ -79,13 +79,14 @@ void UXOpenGLRenderDevice::PopHit(INT Count, UBOOL bForce)
 
 	// Remove the passed info from the working stack.
 	HitStack.Remove(HitStack.Num() - Count, Count);
+	
 	unguard;
 }
 // Called at the end of UXOpenGLRenderDevice::Lock().
 void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 {
 	guard(UXOpenGLRenderDevice::LockHit);
-
+	
 	HitCount = 0;
 	HitData = InHitData;
 	HitSize = InHitSize;
@@ -109,7 +110,7 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 		HitMem.Empty();
 		HitMemOffs.Empty();
 	}
-
+	
 	unguard;
 }
 
@@ -117,7 +118,7 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 void UXOpenGLRenderDevice::UnlockHit(UBOOL Blit)
 {
 	guard(UOpenGLRenderDevice::UnlockHit);
-
+	
 	check(HitStack.Num() == 0);
 
 	if (HitTesting())
