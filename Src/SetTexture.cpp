@@ -134,7 +134,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             else
             {
                 Tex.TexNum = FCachedTextureInfo->TexNum[CacheSlot];
-                //debugf(TEXT("Unchanged: %ls %i 0x%08x%08x"),Info.Texture->GetFullName(),Tex.TexNum, FCachedTextureInfo->TexHandle[CacheSlot]);
+                //debugf(TEXT("Unchanged: %ls %i 0x%016lx"),Info.Texture->GetFullName(),Tex.TexNum, FCachedTextureInfo->TexHandle[CacheSlot]);
                 STAT(unclockFast(Stats.BindCycles));
                 return;
             }
@@ -807,11 +807,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UsingBindlessTextures.
         {
             Bind->TexNum[CacheSlot]=TexNum;
-            #ifdef __LINUX_ARM__
+#ifdef __LINUX_ARM__
             Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleNV(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
-            #else
+#else
 			Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleARB(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
-			#endif // __Linux_ARM
+#endif // __Linux_ARM
             CHECK_GL_ERROR();
 
             if (!Bind->TexHandle[CacheSlot])
@@ -823,11 +823,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             else
             {
                 //debugf(TEXT("Making %ls with TexNum %i resident 0x%08x%08x"),Info.Texture->GetFullName(),FCachedTextureInfo->TexNum[CacheSlot], FCachedTextureInfo->TexHandle[CacheSlot]);
-                #ifdef __LINUX_ARM__
+#ifdef __LINUX_ARM__
                 glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
-                #else
+#else
                 glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
-                #endif
+#endif
                 CHECK_GL_ERROR();
 
                 if (GlobalUniformTextureHandles.Sync[0])
@@ -835,7 +835,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
                 GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
 
-                LockBuffer(GlobalUniformTextureHandles, 0);
+                LockBuffer(GlobalUniformTextureHandles, 0);				
 
 #if XOPENGL_BINDLESS_TEXTURE_SUPPORT
                 // avoid lookups by storing information directly into texture. Add bindless information if available.
@@ -851,7 +851,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 FCachedTextureInfo->MaxLevel = Bind->MaxLevel;
                 FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
                 FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
-                FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
+				FCachedTextureInfo->TexNum[CacheSlot] = TexNum;//Bind->TexNum[CacheSlot];
 
                 Info.Texture->TextureHandle = FCachedTextureInfo;
 #endif

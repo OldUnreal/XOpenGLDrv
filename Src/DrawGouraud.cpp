@@ -256,13 +256,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
     SetBlend(DrawGouraudListBufferData.PolyFlags, bInverseOrder);
     DrawGouraudListBufferData.DrawFlags = DF_DiffuseTexture;
 	SetTexture(0, Info, DrawGouraudListBufferData.PolyFlags, 0, GouraudPolyVertList_Prog, NORMALTEX);
-
+	
     DrawGouraudListBufferData.TexNum[0] = TexInfo[0].TexNum;
 	DrawGouraudListBufferData.Alpha = Info.Texture->Alpha;
 	DrawGouraudListBufferData.TextureDiffuse = Info.Texture->Diffuse;
 	DrawGouraudListBufferData.TexUMult = TexInfo[0].UMult;
 	DrawGouraudListBufferData.TexVMult = TexInfo[0].VMult;
-
 
 	if (GIsEditor)
 	{
@@ -305,13 +304,13 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
         if (Info.Texture->MacroTexture && MacroTextures)
         {
             Info.Texture->MacroTexture->Lock(MacroTextureInfo, Frame->Viewport->CurrentTime, -1, this);
-            DrawGouraudBufferData.DrawFlags |= DF_MacroTexture;
-
+            DrawGouraudListBufferData.DrawFlags |= DF_MacroTexture;
+			
             SetTexture(3, MacroTextureInfo, Info.Texture->MacroTexture->PolyFlags, 0.0, GouraudPolyVertList_Prog, MACROTEX);
-            DrawGouraudBufferData.TexNum[3] = TexInfo[3].TexNum;
+            DrawGouraudListBufferData.TexNum[3] = TexInfo[3].TexNum;
 
-            DrawGouraudBufferData.MacroTexUMult = TexInfo[3].UMult;
-            DrawGouraudBufferData.MacroTexVMult = TexInfo[3].VMult;
+            DrawGouraudListBufferData.MacroTexUMult = TexInfo[3].UMult;
+            DrawGouraudListBufferData.MacroTexVMult = TexInfo[3].VMult;
         }
     }
 
@@ -421,10 +420,11 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 	if (i - StartOffset > 0)
 		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
 
+	if (DrawGouraudListBufferData.VertSize > 0)
+		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+
 	if (Frame->NearClip.W != 0.0)
 	{
-		if (DrawGouraudListBufferData.VertSize > 0)
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 		PopClipPlane();
 	}
 }
@@ -450,17 +450,17 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
                 glInvalidateBufferData(DrawGouraudVertBuffer);
             CHECK_GL_ERROR();
         }
-        #ifdef __LINUX_ARM__
+#ifdef __LINUX_ARM__
             if (ActiveProgram == GouraudPolyVertList_Prog)
                 glBufferData(GL_ARRAY_BUFFER, sizeof(float) * TotalSize, DrawGouraudListBufferRange.Buffer, GL_DYNAMIC_DRAW);
             else if (ActiveProgram == GouraudPolyVert_Prog)
                 glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer, GL_DYNAMIC_DRAW);
-        #else
-            if (ActiveProgram == GouraudPolyVertList_Prog)
-                glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudListBufferRange.Buffer);
-            else if (ActiveProgram == GouraudPolyVert_Prog)
-                glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer);
-        #endif
+#else
+		if (ActiveProgram == GouraudPolyVertList_Prog)
+			glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudListBufferRange.Buffer);
+		else if (ActiveProgram == GouraudPolyVert_Prog)
+			glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer);
+#endif
 
 
 

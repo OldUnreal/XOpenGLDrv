@@ -424,23 +424,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Information about a cached texture.
 	struct FCachedTexture
 	{
-		GLuint Ids[2]; // 0:Unmasked, 1:Masked.
-		INT BaseMip;
-		INT MaxLevel;
-		GLuint Sampler[2];
-		GLuint64 TexHandle[2];
-		GLuint TexNum[2];
+		GLuint Ids[2]{}; // 0:Unmasked, 1:Masked.
+		INT BaseMip{};
+		INT MaxLevel{};
+		GLuint Sampler[2]{};
+		GLuint64 TexHandle[2]{};
+		GLuint TexNum[2]{};
 #if UNREAL_TOURNAMENT_OLDUNREAL
-		INT RealtimeChangeCount;
+		INT RealtimeChangeCount{};
 #endif
-		FCachedTexture()
-			: Ids(),
-			BaseMip(0),
-			MaxLevel(0),
-			Sampler(),
-			TexHandle(),
-			TexNum()
-		{}
 	};
 	/*
 	// Information about a Mesh
@@ -599,7 +591,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FLOAT VMult;
 		FLOAT UPan;
 		FLOAT VPan;
-		FLOAT TexNum;
+		INT TexNum;
 	FTexInfo()
 		:CurrentCacheID(0),
 		CurrentCacheSlot(0),
@@ -607,7 +599,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		VMult(0),
 		UPan(0),
 		VPan(0),
-		TexNum(0.f)
+		TexNum(0)
 		{}
 	} TexInfo[8];
 	FLOAT RFX2, RFY2;
