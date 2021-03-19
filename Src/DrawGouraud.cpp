@@ -113,7 +113,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	}
 #endif
 
-	if ((DrawGouraudBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
+	if ((DrawGouraudBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudBufferData.PrevPolyFlags != PolyFlags)))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 	}
@@ -424,7 +424,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 
 	if (Frame->NearClip.W != 0.0)
-	{
+	{		
 		PopClipPlane();
 	}
 }
