@@ -60,15 +60,27 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 
     // ADD DEFINITIONS
     if (GIsEditor)
-		Definitions += TEXT("#define EDITOR \n");
+		Definitions += TEXT("#define EDITOR 1\n");
 
     if(UsingBindlessTextures)
     {
-        Definitions += TEXT("#define BINDLESSTEXTURES \n");
+        Definitions += TEXT("#define BINDLESSTEXTURES 1\n");
         Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), NUMTEXTURES);
     }
 	if (UseHWLighting)
-		Definitions += TEXT("#define HARDWARELIGHTS \n");
+		Definitions += TEXT("#define HARDWARELIGHTS 1\n");
+	if (BumpMaps)
+		Definitions += TEXT("#define BUMPMAPS 1\n");
+	if (DetailTextures)
+		Definitions += TEXT("#define DETAILTEXTURES 1\n");
+	if (MacroTextures)
+		Definitions += TEXT("#define MACROTEXTURES 1\n");
+
+#if XOPENGL_DRAWCOMPLEX_NORMALS
+	Definitions += TEXT("#define DRAWCOMPLEX_NORMALS 1\n");
+#endif
+
+	Definitions += *FString::Printf(TEXT("#define ENGINE_VERSION %d\n"), ENGINE_VERSION);
 
     Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
 
