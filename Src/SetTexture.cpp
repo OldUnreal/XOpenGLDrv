@@ -233,11 +233,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			glGenSamplers(1, &Bind->Sampler[CacheSlot]);
 
 		CHECK_GL_ERROR();
-		#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode);
-		#else
+#else
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
-		#endif
+#endif
 
 		// Spew warning if we uploaded this texture twice.
 		if ( ExistingBind )
@@ -259,17 +259,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			break;
 		}
 		case GouraudPolyVert_Prog:
-		{
-			glUniform1i(DrawGouraudTexture[Multi], Multi);
-			CHECK_GL_ERROR();
-			break;
-		}
 		case GouraudPolyVertList_Prog:
 		{
 			glUniform1i(DrawGouraudTexture[Multi], Multi);
 			CHECK_GL_ERROR();
 			break;
-		}
+		}		
 		case ComplexSurfaceSinglePass_Prog:
 		{
 			glUniform1i(DrawComplexSinglePassTexture[Multi], Multi);
@@ -364,7 +359,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                         SourceFormat   = GL_BGRA; // Was GL_RGBA;
 					else
                         SourceFormat   = GL_RGBA; // ES prefers RGBA...
-
 					break;
 #if ENGINE_VERSION==227
                 // RGB10A2_LM. Used for HDLightmaps.
