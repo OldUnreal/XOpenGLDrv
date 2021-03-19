@@ -72,11 +72,14 @@
 #elif ENGINE_VERSION==227
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
 #define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
+#define XOPENGL_DRAWCOMPLEX_NORMALS 1
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 // stijn: benchmarked on 16 JUN 2020. This has no statistically significant effect on performance in UT469
 // stijn: benchmarked again on 04 OCT 2020 after realizing XOpenGL's extension check didn't work on Windows.
 // Avg FPS gain in CityIntro is ~10% with bindless textures, but this obviously isn't much of a stress test.
 #define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
+// stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
+#define XOPENGL_DRAWCOMPLEX_NORMALS 0
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -648,7 +651,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
 	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
+#if XOPENGL_DRAWCOMPLEX_NORMALS
 	GLuint DrawComplexStrideSize	= FloatSize4_4;
+#else
+	GLuint DrawComplexStrideSize	= FloatSize4;
+#endif
 	GLuint DrawGouraudStrideSize	= FloatSize3_2_4_4_4_3_4_4_4;
 
 
@@ -683,6 +690,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
     BufferRange DrawComplexSinglePassRange;
 	INT PrevDrawComplexBeginOffset;
+
+	GLint MultiDrawPolyStartArray[1500];
+	GLsizei MultiDrawPointCountArray[1500];
+	INT MultiDrawPolyCount;
+	
     BufferRange DrawTileRange;
 	INT PrevDrawTileBeginOffset;
 
@@ -851,8 +863,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	struct DrawComplexBuffer
 	{
-		GLuint VertSize;
-		GLuint TexSize;
 		GLuint Index;
 		GLuint IndexOffset;
 		GLuint BeginOffset;
@@ -863,9 +873,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FPlane DrawColor;
 		GLuint TexNum[8];
 		DrawComplexBuffer()
-			: VertSize(0),
-			TexSize(0),
-			Index(0),
+			: Index(0),
 			IndexOffset(0),
 			BeginOffset(0),
 			Iteration(0),
@@ -1144,7 +1152,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void CheckExtensions();
 
 	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
-	void BufferComplexSurfacePoint( FLOAT* DrawComplexTemp, FTransform* P, DrawComplexTexMaps TexMaps, DrawComplexBuffer& BufferData );
 	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);
 	void BufferGouraudPolygonPoint(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer );
@@ -1184,6 +1191,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void UnsetRes();
 	void MakeCurrent();
 
+#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
+	static INT GetBindlessTexNum(UTexture* Texture, DWORD PolyFlags);
+#endif
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
 	DWORD SetFlags(DWORD PolyFlags);

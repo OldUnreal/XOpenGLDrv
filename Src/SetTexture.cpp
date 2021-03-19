@@ -17,6 +17,25 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
+#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
+INT UXOpenGLRenderDevice::GetBindlessTexNum(UTexture* Texture, DWORD PolyFlags)
+{
+	INT CacheSlot = ((PolyFlags & PF_Masked) && (Texture->Format == TEXF_P8)) ? 1 : 0;
+	FCachedTexture* CachedTex = (FCachedTexture*)Texture->TextureHandle;
+	if (CachedTex)
+	{
+		if (Texture->bRealtimeChanged
+# if UNREAL_TOURNAMENT_OLDUNREAL
+			&& Texture->RealtimeChangeCount != CachedTex->RealtimeChangeCount
+# endif
+			)
+			return -1;
+		return CachedTex->TexNum[CacheSlot];
+	}
+	return 0;
+}
+#endif
+
 #if UNREAL_TOURNAMENT_OLDUNREAL
 UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
 {
@@ -126,13 +145,24 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
         if( FCachedTextureInfo && FCachedTextureInfo->TexNum[CacheSlot])
         {
-            if (Info.bRealtimeChanged) //update bindless realtime textures.
+            if (Info.bRealtimeChanged
+# if UNREAL_TOURNAMENT_OLDUNREAL
+				&& Info.Texture->RealtimeChangeCount != FCachedTextureInfo->RealtimeChangeCount
+# endif
+				
+				) //update bindless realtime textures.
             {
+# if UNREAL_TOURNAMENT_OLDUNREAL
+				FCachedTextureInfo->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
+# endif
                 //debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
                 bBindlessRealtimeChanged = true;
             }
             else
             {
+# if UNREAL_TOURNAMENT_OLDUNREAL
+				Info.bRealtimeChanged = 0;
+# endif
                 Tex.TexNum = FCachedTextureInfo->TexNum[CacheSlot];
                 //debugf(TEXT("Unchanged: %ls %i 0x%016lx"),Info.Texture->GetFullName(),Tex.TexNum, FCachedTextureInfo->TexHandle[CacheSlot]);
                 STAT(unclockFast(Stats.BindCycles));
@@ -207,22 +237,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	else
 	{
 		ExistingBind = true;
-#if UNREAL_TOURNAMENT_OLDUNREAL
-		if (Info.Texture)
-		{
-			if (Bind->RealtimeChangeCount != Info.Texture->RealtimeChangeCount)
-			{
-				Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
-			}
-			else
-			{
-				Info.bRealtimeChanged = 0;
-# if XOPENGL_BINDLESS_TEXTURE_SUPPORT
-				bBindlessRealtimeChanged = false;
-# endif
-			}
-		}
-#endif
 	}
 
 	if ( Bind->Ids[CacheSlot]==0 )
@@ -276,6 +290,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			break;
 		}
 	}
+
 	if (!bBindlessRealtimeChanged)
     {
         CHECK_GL_ERROR();
@@ -845,7 +860,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 FCachedTextureInfo->MaxLevel = Bind->MaxLevel;
                 FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
                 FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
-				FCachedTextureInfo->TexNum[CacheSlot] = TexNum;//Bind->TexNum[CacheSlot];
+				FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
 
                 Info.Texture->TextureHandle = FCachedTextureInfo;
 #endif

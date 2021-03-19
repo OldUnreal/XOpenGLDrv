@@ -241,7 +241,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	}
 #endif
 
-	if ( (DrawGouraudListBufferData.VertSize > 0) && ((!UsingBindlessTextures && (TexInfo[0].CurrentCacheID != Info.CacheID)) || (DrawGouraudListBufferData.PrevPolyFlags != PolyFlags)))
+	bool TextureChanged = 
+		(!UsingBindlessTextures && TexInfo[0].CurrentCacheID != Info.CacheID) ||
+		(UsingBindlessTextures && GetBindlessTexNum(Info.Texture, PolyFlags) != TexInfo[0].TexNum);
+
+	if ( DrawGouraudListBufferData.VertSize > 0 && 
+		(TextureChanged || DrawGouraudListBufferData.PrevPolyFlags != PolyFlags))
 	{
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 	}
@@ -284,7 +289,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
             DrawGouraudListBufferData.DrawFlags |= DF_DetailTexture;
 
             SetTexture(1, DetailTextureInfo, Info.Texture->DetailTexture->PolyFlags, 0.0, GouraudPolyVertList_Prog, DETAILTEX);
-            DrawGouraudListBufferData.TexNum[1] =TexInfo[1].TexNum;
+            DrawGouraudListBufferData.TexNum[1] = TexInfo[1].TexNum;
 
             DrawGouraudListBufferData.DetailTexUMult = TexInfo[1].UMult;
             DrawGouraudListBufferData.DetailTexVMult = TexInfo[1].VMult;
@@ -418,13 +423,12 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	// stijn: push the remaining triangles
 	if (i - StartOffset > 0)
-		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
-
-	if (DrawGouraudListBufferData.VertSize > 0)
-		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
+		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);	
 
 	if (Frame->NearClip.W != 0.0)
-	{		
+	{
+		if (DrawGouraudListBufferData.VertSize > 0)
+			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
 		PopClipPlane();
 	}
 }
