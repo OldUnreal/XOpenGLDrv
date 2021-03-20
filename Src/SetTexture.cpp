@@ -564,7 +564,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		INT MaxLevel = -1;
 		if ( !Unsupported )
 		{
-			BYTE CacheType = Info.CacheID & 0xFF;
 			for ( INT MipIndex=Bind->BaseMip; MipIndex<Info.NumMips; MipIndex++ )
 			{
 				// Convert the mipmap.
@@ -765,7 +764,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		{
 			check(Compose);
 			check(ComposeSize>=64*64*4);
-			DWORD Palette[16] =
+			DWORD PaletteBM[16] =
 			{
 				0x00000000u, 0x000000FFu, 0x0000FF00u, 0x0000FFFFu,
 				0x00FF0000u, 0x00FF00FFu, 0x00FFFF00u, 0x00FFFFFFu,
@@ -775,7 +774,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			MaxLevel = 0;
 			DWORD* Ptr = (DWORD*)Compose;
 			for ( INT i=0;i <(256*256); i++ )
-				*Ptr++ = Palette[(i/16+i/(256*16))%16]; //
+				*Ptr++ = PaletteBM[(i/16+i/(256*16))%16]; //
 
 			guard(glTexImage2D);
 			glTexImage2D( GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, Compose );

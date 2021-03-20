@@ -433,7 +433,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Information about a cached texture.
 	struct FCachedTexture
 	{
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
 		FCachedTexture* Next;
+#endif
 		GLuint Ids[2]; // 0:Unmasked, 1:Masked.
 		INT BaseMip;
 		INT MaxLevel;
