@@ -55,9 +55,6 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
 	        }
         }
 
-        if (SyncToDraw)
-            glFinish();
-
     	// Switch and initialize the new program
         PrevProgram = ActiveProgram;
         ActiveProgram = NextProgram;        
