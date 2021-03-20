@@ -19,10 +19,13 @@
 
 UXOpenGLRenderDevice::FCachedTexture* UXOpenGLRenderDevice::GetBindlessCachedTexture(FTextureInfo& Info)
 {
+	if (!Info.Texture)
+		return NULL;
+	
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
 	FCachedTexture* CachedTex = (FCachedTexture*)Info.Texture->TextureHandle;
 #else
-	FCachedTexture* CachedTex = TextureCacheMap.FindRef(Info.CacheId);
+	FCachedTexture* CachedTex = TextureCacheMap.FindRef(Info.CacheID);
 #endif
 	return CachedTex;
 }

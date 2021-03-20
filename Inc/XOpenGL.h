@@ -75,15 +75,19 @@
 // another crash during cleanup. This would change your crash message and hide the original
 // cause of the crash.
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
-// stijn: Does the game support handles stored in UTextures?
-#define XOPENGL_TEXTUREHANDLE_SUPPORT 1
+// stijn: Should the game store bindless info in the UTexture::TextureHandle field?
+// Note: This has limited use. It can help you avoid a TMap lookup, but that lookup is pretty fast anyway.
+// Moreover, if you store bindless info in a UTexture, you will most likely see glitches or perf issues in cases where multiple rendevs coexist (e.g., UED)
+#define XOPENGL_TEXTUREHANDLE_SUPPORT 0
 // stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
 #define XOPENGL_DRAWCOMPLEX_NORMALS 1
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 // stijn: Just do what other devices do!
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
-// stijn: Does the game support handles stored in UTextures? 
-#define XOPENGL_TEXTUREHANDLE_SUPPORT 1
+// stijn: Should the game store bindless info in the UTexture::TextureHandle field?
+// Note: This has limited use. It can help you avoid a TMap lookup, but that lookup is pretty fast anyway.
+// Moreover, if you store bindless info in a UTexture, you will most likely see glitches or perf issues in cases where multiple rendevs coexist (e.g., UED)
+#define XOPENGL_TEXTUREHANDLE_SUPPORT 0
 // stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
 #define XOPENGL_DRAWCOMPLEX_NORMALS 0
 #endif
@@ -1206,7 +1210,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void UnsetRes();
 	void MakeCurrent();
 
-	static FCachedTexture* GetBindlessCachedTexture(FTextureInfo& Info);
+	FCachedTexture* GetBindlessCachedTexture(FTextureInfo& Info);
 	static BOOL GetBindlessRealtimeChanged(FTextureInfo& Info, FCachedTexture* Texture);
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
