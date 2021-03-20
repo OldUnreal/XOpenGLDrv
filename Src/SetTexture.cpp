@@ -72,13 +72,20 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 {
 	guard(UOpenGLRenderDevice::SetSampler);
 	CHECK_GL_ERROR();
+
 	// Set texture sampler state.
-	if (NoFiltering)
-        return;
-
-	else if (!(PolyFlags & PF_NoSmooth))
+	if (PolyFlags & PF_NoSmooth)
 	{
-
+		// "PF_NoSmooth" implies that the worst filter method is used, so have to do this (even when NoFiltering is set) in order to get the expected results.
+		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_NEAREST : GL_NEAREST_MIPMAP_NEAREST);
+		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		CHECK_GL_ERROR();
+	}
+	else
+	{
+		if (NoFiltering)
+			return;
+		
 		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_LINEAR : (UseTrilinear ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_NEAREST));
 		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -89,12 +96,6 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 			glSamplerParameteri(Sampler, GL_TEXTURE_LOD_BIAS_EXT, LODBias);
 		CHECK_GL_ERROR();
 
-	}
-	else
-	{
-		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_NEAREST : GL_NEAREST_MIPMAP_NEAREST);
-		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		CHECK_GL_ERROR();
 	}
 
 	// TODO: check, just stumbled across it.
