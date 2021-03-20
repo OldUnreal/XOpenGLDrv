@@ -234,6 +234,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	PrefersDeferredLoad = 0;
 #if ENGINE_VERSION==227
 	SupportsHDLightmaps = UseEnhancedLightmaps;
+	UnsupportHDLightFlags = 0;
 #endif
 
 	// Extensions & other inits.
