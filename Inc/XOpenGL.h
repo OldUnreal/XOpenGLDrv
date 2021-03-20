@@ -539,7 +539,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     BITFIELD BumpMaps;
     BITFIELD NoAATiles;
     BITFIELD GenerateMipMaps;
-    BITFIELD SyncToDraw;
+    //BITFIELD SyncToDraw; // stijn: removed! this kills buffering
     BITFIELD UseOpenGLDebug;
     BITFIELD NoBuffering;
     BITFIELD NoDrawComplexSurface;

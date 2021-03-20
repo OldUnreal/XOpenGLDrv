@@ -97,9 +97,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("BumpMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(BumpMaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NoAATiles"), RF_Public)UBoolProperty(CPP_PROPERTY(NoAATiles), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GenerateMipMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(GenerateMipMaps), TEXT("Options"), CPF_Config);
-	new(GetClass(), TEXT("SyncToDraw"), RF_Public)UBoolProperty(CPP_PROPERTY(SyncToDraw), TEXT("Options"), CPF_Config);
-
-
+	
 #if ENGINE_VERSION==227
 	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
@@ -168,7 +166,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	//EnableShadows = 0;
 	UseEnhancedLightmaps = 0;
 
-	SyncToDraw = 0;
 	MaxTextureSize = 4096;
 #ifdef __EMSCRIPTEN__
 	OpenGLVersion = GL_ES;
@@ -279,7 +276,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("NoAATiles %i"), NoAATiles);
 	debugf(NAME_DevLoad, TEXT("GenerateMipMaps %i"), GenerateMipMaps);
 	//debugf(NAME_DevLoad, TEXT("EnableShadows %i"), EnableShadows);
-	debugf(NAME_DevLoad, TEXT("SyncToDraw %i"), SyncToDraw);
 
 	debugf(NAME_DevLoad, TEXT("DetailTextures %i"), DetailTextures);
 	debugf(NAME_DevLoad, TEXT("DescFlags %i"), DescFlags);
@@ -1317,10 +1313,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	if (bMappedBuffers)
         ResetFog();
 
-	if (SyncToDraw)
-		debugf(TEXT("XOpenGL: SyncToDraw enabled"));
-	else debugf(TEXT("XOpenGL: SyncToDraw disabled"));
-
 	CHECK_GL_ERROR();
 	unguard;
 }
@@ -1960,7 +1952,6 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("SyncToDraw"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(SyncToDraw)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBufferInvalidation"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBufferInvalidation)));
