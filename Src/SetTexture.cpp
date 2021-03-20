@@ -282,9 +282,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 	if (!bBindlessRealtimeChanged)
     {
-		if (TextureType == LIGHTMAP)
-			debugf(TEXT("Lightmap for %ls bound"), *FObjectPathName(Info.Texture));
-		
         CHECK_GL_ERROR();
         glActiveTexture(GL_TEXTURE0 + Multi);
         CHECK_GL_ERROR();
@@ -802,7 +799,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             Info.Unload();
 	}
 
-    if (UsingBindlessTextures && Info.Texture && !Unsupported)
+    if (UsingBindlessTextures
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
+		&& Info.Texture
+#endif
+		&& !Unsupported)
     {
 		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UsingBindlessTextures.
         {
@@ -865,8 +866,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
 				FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
                 TexNum++;
-            	if (TextureType == LIGHTMAP)
-				debugf(TEXT("Lightmap for %ls bindless texnum %d"), *FObjectPathName(Info.Texture), Bind->TexNum[CacheSlot]);
             }
 
             if (TexNum > NUMTEXTURES)
@@ -875,8 +874,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     }
     else
     {
-		if (TextureType == LIGHTMAP)
-			debugf(TEXT("Unsupported bindless"));
         Bind->TexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
