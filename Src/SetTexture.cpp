@@ -799,11 +799,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             Info.Unload();
 	}
 
-    if (UsingBindlessTextures
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-		&& Info.Texture
+    if (UsingBindlessTextures && (Info.Texture 
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		|| (TextureType == LIGHTMAP && GAtlasManager.Enabled)
 #endif
-		&& !Unsupported)
+		) && !Unsupported)
     {
 		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UsingBindlessTextures.
         {
