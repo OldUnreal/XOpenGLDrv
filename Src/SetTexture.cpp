@@ -17,24 +17,30 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
-INT UXOpenGLRenderDevice::GetBindlessTexNum(UTexture* Texture, DWORD PolyFlags)
+UXOpenGLRenderDevice::FCachedTexture* UXOpenGLRenderDevice::GetBindlessCachedTexture(FTextureInfo& Info)
 {
-	INT CacheSlot = ((PolyFlags & PF_Masked) && (Texture->Format == TEXF_P8)) ? 1 : 0;
-	FCachedTexture* CachedTex = (FCachedTexture*)Texture->TextureHandle;
-	if (CachedTex)
-	{
-		if (Texture->bRealtimeChanged
-# if UNREAL_TOURNAMENT_OLDUNREAL
-			&& Texture->RealtimeChangeCount != CachedTex->RealtimeChangeCount
-# endif
-			)
-			return -1;
-		return CachedTex->TexNum[CacheSlot];
-	}
-	return 0;
-}
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
+	FCachedTexture* CachedTex = (FCachedTexture*)Info.Texture->TextureHandle;
+#else
+	FCachedTexture* CachedTex = TextureCacheMap.FindRef(Info.CacheId);
 #endif
+	return CachedTex;
+}
+
+BOOL UXOpenGLRenderDevice::GetBindlessRealtimeChanged(FTextureInfo& Info, FCachedTexture* Texture)
+{
+	if (Info.bRealtimeChanged)
+	{
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		// hasn't really changed
+		if (Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
+			return FALSE;
+		Info.bRealtimeChanged = FALSE;
+#endif
+		return TRUE;
+	}
+	return FALSE;
+}
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
 UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
@@ -137,42 +143,21 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
-#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
-    // avoid lookups by storing information directly into texture. Add bindless information if available.
-    // Should save quite some CPU.
-    // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
-	if (UsingBindlessTextures && Info.Texture && Info.Texture->TextureHandle)
+	
+	if (UsingBindlessTextures && 
+		(Bind = GetBindlessCachedTexture(Info)) != NULL &&
+		Bind->TexNum[CacheSlot])
     {
-        FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
-        if( FCachedTextureInfo && FCachedTextureInfo->TexNum[CacheSlot])
+        if (!GetBindlessRealtimeChanged(Info, Bind))
         {
-            if (Info.bRealtimeChanged
-# if UNREAL_TOURNAMENT_OLDUNREAL
-				&& Info.Texture->RealtimeChangeCount != FCachedTextureInfo->RealtimeChangeCount
-# endif
-				
-				) //update bindless realtime textures.
-            {
-# if UNREAL_TOURNAMENT_OLDUNREAL
-				FCachedTextureInfo->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
-# endif
-                //debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
-                bBindlessRealtimeChanged = true;
-            }
-            else
-            {
-# if UNREAL_TOURNAMENT_OLDUNREAL
-				Info.bRealtimeChanged = 0;
-# endif
-                Tex.TexNum = FCachedTextureInfo->TexNum[CacheSlot];
-                //debugf(TEXT("Unchanged: %ls %i 0x%016lx"),Info.Texture->GetFullName(),Tex.TexNum, FCachedTextureInfo->TexHandle[CacheSlot]);
-                STAT(unclockFast(Stats.BindCycles));
-                return;
-            }
-            Bind = FCachedTextureInfo;
+			Tex.TexNum = Bind->TexNum[CacheSlot];
+			STAT(unclockFast(Stats.BindCycles));
+			return;
         }
+
+		//debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
+		bBindlessRealtimeChanged = true;
     }
-#endif
 
 	if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
     {
@@ -847,14 +832,26 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
                 LockBuffer(GlobalUniformTextureHandles, 0);				
 
-#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
                 // avoid lookups by storing information directly into texture. Add bindless information if available.
                 // Should save quite some CPU.
                 // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
                 FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
+#else
+				FCachedTexture* FCachedTextureInfo = TextureCacheMap.FindRef(Info.CacheID);
+#endif
 
-                if (!FCachedTextureInfo)
-                    FCachedTextureInfo = new (FCachedTexture);
+				if (!FCachedTextureInfo)
+				{
+					FCachedTextureInfo = new (TEXT("XOpenGL")) FCachedTexture;
+
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
+					Info.Texture->TextureHandle = FCachedTextureInfo;
+					// Marco: Hookup for linked list for mem cleanup later.
+					FCachedTextureInfo->Next = BindList;
+					BindList = FCachedTextureInfo;
+#endif
+				}
 
                 FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
                 FCachedTextureInfo->BaseMip = Bind->BaseMip;
@@ -862,9 +859,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
                 FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
 				FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
-
-                Info.Texture->TextureHandle = FCachedTextureInfo;
-#endif
                 TexNum++;
             }
 

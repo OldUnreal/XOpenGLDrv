@@ -245,6 +245,10 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SwapControlExt = false;
 	SwapControlTearExt = false;
 
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
+	BindList = NULL;
+#endif
+
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
 
@@ -1221,15 +1225,25 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	NumStaticLights = 0;
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+	guard(CleanupBindless);
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
 	for (TObjectIterator<UTexture> It; It; ++It)
-	{
-		FCachedTexture* FCachedTextureInfo = (FCachedTexture*)It->TextureHandle;
-		if (FCachedTextureInfo)
-			delete FCachedTextureInfo;
 		It->TextureHandle = NULL;
+
+	// Marco using linked list here because UTexture may be garbage collected before the Flush call, thus causes memleak.
+	FCachedTexture* Next;
+	for (FCachedTexture* T = BindList; T; T = Next)
+	{
+		Next = T->Next;
+		delete T;
 	}
-#endif // ENGINE_VERSION
+	BindList = NULL;	
+#else
+	for (TMap<QWORD, FCachedTexture*>::TIterator It(TextureCacheMap); It; ++It)
+		delete It.Value();
+	TextureCacheMap.Empty();
+#endif
+	unguard;
 
 	TArray<GLuint> Binds;
 	for (TOpenGLMap<QWORD, FCachedTexture>::TIterator It(*BindMap); It; ++It)
@@ -1239,13 +1253,13 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		{
 			glDeleteSamplers(1, &It.Value().Sampler[i]);
 
-			#ifdef __LINUX_ARM__
+#ifdef __LINUX_ARM__
 			if (UsingBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
 				glMakeTextureHandleNonResidentNV(It.Value().TexHandle[i]);
-            #else
+#else
             if (UsingBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentARB(It.Value().TexHandle[i]))
                 glMakeTextureHandleNonResidentARB(It.Value().TexHandle[i]);
-            #endif
+#endif
 			It.Value().TexHandle[i] = 0;
 			It.Value().TexNum[i] = 1;
 			if (It.Value().Ids[i])

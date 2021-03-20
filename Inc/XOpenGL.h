@@ -70,14 +70,20 @@
 #define clockFast(Timer)   {Timer -= appCycles();}
 #define unclockFast(Timer) {Timer += appCycles()-34;}
 #elif ENGINE_VERSION==227
+// stijn: Do we want to release resources (e.g., bound textures) if the game crashes?
+// None of the original renderer or audio devices did this because you can easily trigger
+// another crash during cleanup. This would change your crash message and hide the original
+// cause of the crash.
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
-#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
+// stijn: Does the game support handles stored in UTextures?
+#define XOPENGL_TEXTUREHANDLE_SUPPORT 1
+// stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
 #define XOPENGL_DRAWCOMPLEX_NORMALS 1
 #elif UNREAL_TOURNAMENT_OLDUNREAL
-// stijn: benchmarked on 16 JUN 2020. This has no statistically significant effect on performance in UT469
-// stijn: benchmarked again on 04 OCT 2020 after realizing XOpenGL's extension check didn't work on Windows.
-// Avg FPS gain in CityIntro is ~10% with bindless textures, but this obviously isn't much of a stress test.
-#define XOPENGL_BINDLESS_TEXTURE_SUPPORT 1
+// stijn: Just do what other devices do!
+#define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
+// stijn: Does the game support handles stored in UTextures? 
+#define XOPENGL_TEXTUREHANDLE_SUPPORT 1
 // stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
 #define XOPENGL_DRAWCOMPLEX_NORMALS 0
 #endif
@@ -427,16 +433,23 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Information about a cached texture.
 	struct FCachedTexture
 	{
-		GLuint Ids[2]{}; // 0:Unmasked, 1:Masked.
-		INT BaseMip{};
-		INT MaxLevel{};
-		GLuint Sampler[2]{};
-		GLuint64 TexHandle[2]{};
-		GLuint TexNum[2]{};
+		FCachedTexture* Next;
+		GLuint Ids[2]; // 0:Unmasked, 1:Masked.
+		INT BaseMip;
+		INT MaxLevel;
+		GLuint Sampler[2];
+		GLuint64 TexHandle[2];
+		GLuint TexNum[2];
 #if UNREAL_TOURNAMENT_OLDUNREAL
 		INT RealtimeChangeCount{};
 #endif
 	};
+
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
+	FCachedTexture* BindList;
+#else
+	TMap<QWORD, FCachedTexture*> TextureCacheMap;
+#endif
 	/*
 	// Information about a Mesh
 	struct UMeshBufferData
@@ -1191,9 +1204,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void UnsetRes();
 	void MakeCurrent();
 
-#if XOPENGL_BINDLESS_TEXTURE_SUPPORT
-	static INT GetBindlessTexNum(UTexture* Texture, DWORD PolyFlags);
-#endif
+	static FCachedTexture* GetBindlessCachedTexture(FTextureInfo& Info);
+	static BOOL GetBindlessRealtimeChanged(FTextureInfo& Info, FCachedTexture* Texture);
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
 	DWORD SetFlags(DWORD PolyFlags);
