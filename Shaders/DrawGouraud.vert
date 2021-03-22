@@ -62,9 +62,6 @@ out mat4 vviewMat;
 
 void main(void)
 {
-	mat4 modelviewMat = modelMat * viewMat;
-	mat4 modelviewprojMat = projMat * viewMat * modelMat;
-
 #ifdef GL_ES
 
 	gEyeSpacePos = modelviewMat*vec4(Coords, 1.0);

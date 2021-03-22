@@ -76,10 +76,6 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	if (MacroTextures)
 		Definitions += TEXT("#define MACROTEXTURES 1\n");
 
-#if XOPENGL_DRAWCOMPLEX_NORMALS
-	Definitions += TEXT("#define DRAWCOMPLEX_NORMALS 1\n");
-#endif
-
 	Definitions += *FString::Printf(TEXT("#define ENGINE_VERSION %d\n"), ENGINE_VERSION);
 
     Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
@@ -149,6 +145,11 @@ void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint &Shade
         GLchar* linker_log = new GLchar[blen + 1];
         glGetProgramInfoLog(ShaderProg, blen, &slen, linker_log);
         debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
+
+    	FILE* Err = fopen("C:\\GameDev\\utpg\\XOpenGLerr.txt", "wb");
+		fwrite(linker_log, 1, blen, Err);
+		fclose(Err);
+    	
         delete[] linker_log;
     }
     else debugf(TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);
@@ -329,7 +330,6 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	//DrawComplexSinglePass vars.
 	FString DrawComplexSinglePass = TEXT("DrawComplexSinglePass");
-	GetUniformLocation(DrawComplexSinglePassPolyFlags, DrawComplexProg, "PolyFlags", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassRendMap, DrawComplexProg, "RendMap", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassbHitTesting, DrawComplexProg, "bHitTesting", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassDrawColor, DrawComplexProg, "DrawColor", DrawComplexSinglePass);
@@ -338,11 +338,11 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformLocation(DrawComplexSinglePassFogEnd, DrawComplexProg, "FogParams.FogEnd", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassFogDensity, DrawComplexProg, "FogParams.FogDensity", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassFogMode, DrawComplexProg, "FogParams.FogMode", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassGamma, DrawComplexProg, "Gamma", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassLightPos, DrawComplexProg, "LightPos", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassTexCoords, DrawComplexProg, "TexCoords", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassFogMode, DrawComplexProg, "FogMode", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassTexNum, DrawComplexProg, "TexNum", DrawComplexSinglePass);
+	GetUniformLocation(DrawComplexSinglePassDrawParams, DrawComplexProg, "DrawParams", DrawComplexSinglePass);
 	// Multitextures in DrawComplexProg
 	for (INT i = 0; i < 8; i++)
         GetUniformLocation(DrawComplexSinglePassTexture[i], DrawComplexProg, (char*) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawComplexSinglePass);

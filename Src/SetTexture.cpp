@@ -802,6 +802,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     if (UsingBindlessTextures && (Info.Texture 
 #if UNREAL_TOURNAMENT_OLDUNREAL
 		|| (TextureType == LIGHTMAP && GAtlasManager.Enabled)
+		|| TextureType == FOGMAP
 #endif
 		) && !Unsupported)
     {

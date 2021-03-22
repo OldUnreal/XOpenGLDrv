@@ -79,8 +79,6 @@
 // Note: This has limited use. It can help you avoid a TMap lookup, but that lookup is pretty fast anyway.
 // Moreover, if you store bindless info in a UTexture, you will most likely see glitches or perf issues in cases where multiple rendevs coexist (e.g., UED)
 #define XOPENGL_TEXTUREHANDLE_SUPPORT 0
-// stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
-#define XOPENGL_DRAWCOMPLEX_NORMALS 1
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 // stijn: Just do what other devices do!
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
@@ -88,8 +86,6 @@
 // Note: This has limited use. It can help you avoid a TMap lookup, but that lookup is pretty fast anyway.
 // Moreover, if you store bindless info in a UTexture, you will most likely see glitches or perf issues in cases where multiple rendevs coexist (e.g., UED)
 #define XOPENGL_TEXTUREHANDLE_SUPPORT 0
-// stijn: the surface normals we push to the drawcomplex shaders do not get used currently...
-#define XOPENGL_DRAWCOMPLEX_NORMALS 0
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -364,11 +360,11 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
 enum DrawFlags
 {
 	DF_DiffuseTexture	= 0x00000001,
-	DF_DetailTexture	= 0x00000002,
-	DF_MacroTexture	 	= 0x00000004,
-	DF_BumpMap			= 0x00000008,
-	DF_LightMap         = 0x00000010,
-	DF_FogMap          	= 0x00000020,
+	DF_LightMap         = 0x00000002,
+	DF_FogMap          	= 0x00000004,
+	DF_DetailTexture	= 0x00000008,
+	DF_MacroTexture	 	= 0x00000010,
+	DF_BumpMap			= 0x00000020,	
 	DF_EnvironmentMap   = 0x00000040,
 };
 
@@ -670,11 +666,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
 	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
-#if XOPENGL_DRAWCOMPLEX_NORMALS
-	GLuint DrawComplexStrideSize	= FloatSize4_4;
-#else
-	GLuint DrawComplexStrideSize	= FloatSize4;
-#endif
+	GLuint DrawComplexStrideSize    = FloatSize4_4;
 	GLuint DrawGouraudStrideSize	= FloatSize3_2_4_4_4_3_4_4_4;
 
 
@@ -872,11 +864,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 TexCoords[16];
 		FCoords MapCoords;
 		GLuint DrawFlags;
+		GLuint TextureFormat;
 		DrawComplexTexMaps()
 			: SurfNormal(0.f, 0.f, 0.f, 0.f),
 			TexCoords(),
 			MapCoords(),
-			DrawFlags(0)
+			DrawFlags(0),
+			TextureFormat(0)
 		{}
 	}TexMaps;
 
@@ -1024,19 +1018,18 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// PolyFlags for shaders.
 	GLuint DrawTilePolyFlags;
-	GLuint DrawComplexSinglePassPolyFlags;
 	GLuint DrawGouraudPolyFlags;
+	GLuint DrawComplexSinglePassDrawParams;
 
 	// TexNum for bindless textures in shaders.
 	GLuint DrawTileTexNum;
-	GLuint DrawComplexSinglePassTexNum;
+	GLuint DrawComplexSinglePassTexNum;	
 	GLuint DrawGouraudTexNum;
 
 	// Gamma handling
 	static FLOAT Gamma;
 	GLuint DrawSimpleGamma;
 	GLuint DrawTileGamma;
-	GLuint DrawComplexSinglePassGamma;
 	GLuint DrawGouraudGamma;
 
 	//Vertices
@@ -1170,6 +1163,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL GLExtensionSupported(FString Extension_Name);
 	void CheckExtensions();
 
+	void BufferComplexSurfaceVert(FLOAT* VertexBuf);
 	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
 	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);

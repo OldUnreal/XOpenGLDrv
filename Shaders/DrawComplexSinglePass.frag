@@ -5,31 +5,45 @@
 		* Created by Smirftsch
 =============================================================================*/
 
+#if !BINDLESSTEXTURES
 uniform sampler2D Texture0;	//Base Texture
 uniform sampler2D Texture1;	//Lightmap
-uniform sampler2D Texture2;	//DetailTexture
-uniform sampler2D Texture3;	//MacroTexture
-uniform sampler2D Texture4;	//BumpMap
-uniform sampler2D Texture5;	//FogMap
+uniform sampler2D Texture2;	//Fogmap
+uniform sampler2D Texture3;	//Detail Texture
+uniform sampler2D Texture4;	//Macro Texture
+uniform sampler2D Texture5;	//BumpMap
 uniform sampler2D Texture6;	//EnvironmentMap
+#else
+// stijn: we need the lightmap sampler for now because 227 doesn't have the atlas code yet
+uniform sampler2D Texture1;	//Lightmap
+uniform sampler2D Texture2;	//Fogmap
+#endif
 
-uniform bool FogChanged;
-uniform bool bHitTesting;
-uniform uint PolyFlags;
-uniform uint RendMap;
-uniform uint TexNum[8];
-uniform float AlphaThreshold;
-uniform float Gamma;
-uniform vec4 DrawColor;
 uniform vec4 TexCoords[16];
-//TexCoords[11]; TextureInfo Diffuse, Specular, Alpha, Scale
-//TexCoords[12]; BumpTextureInfo Diffuse, Specular, Alpha, Scale
-//TexCoords[13]; MacroTextureInfo Diffuse, Specular, Alpha, Scale for MacroTex / Parallax
-//TexCoords[14]; unused
-//TexCoords[15]; unused, unused, Texture Format, DrawFlags.
+uniform uint TexNum[8];
+uniform uint DrawParams[3];
+
+//uniform bool FogChanged;
+#if EDITOR
+uniform bool bHitTesting;
+uniform uint RendMap;
+uniform vec4 DrawColor;
+#endif
+//uniform float AlphaThreshold;
+
+in vec3 vCoords;
+in vec3 vNormals;
+#if EDITOR
+in vec3 Surface_Normal;
+#endif
+#if ENGINE_VERSION==227 || BUMPMAPS
+in vec4 vEyeSpacePos;
+in mat3 TBNMat;
+#endif
 
 in vec2 vTexCoords;
 in vec2 vLightMapCoords;
+in vec2 vFogMapCoords;
 #if DETAILTEXTURES
 in vec2 vDetailTexCoords;
 #endif
@@ -39,20 +53,8 @@ in vec2 vMacroTexCoords;
 #if BUMPMAPS
 in vec2 vBumpTexCoords;
 #endif
-in vec2 vFogMapCoords;
 #if ENGINE_VERSION==227
 in vec2 vEnvironmentTexCoords;
-#endif
-in vec3 vCoords;
-#if DRAWCOMPLEX_NORMALS
-in vec3 vNormals;
-#endif
-#if EDITOR
-in vec3 Surface_Normal;
-#endif
-in vec4 vEyeSpacePos;
-#if ENGINE_VERSION==227 || BUMPMAPS
-in mat3 TBNMat;
 #endif
 
 #ifdef GL_ES
@@ -85,7 +87,7 @@ vec3 hsv2rgb(vec3 c)
 #if ENGINE_VERSION==227
 vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeight) //http://sunandblackcat.com/tipFullView.php?topicid=28
 {
-   float parallaxScale = TexCoords[13].w;
+   float parallaxScale = TexCoords[IDX_MACRO_TEXINFO].w;
    // determine required number of layers
    const float minLayers = 10.0;
    const float maxLayers = 45.0;
@@ -104,14 +106,11 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
    // depth from heightmap
    float heightFromTexture = 0.f;
 
-   #ifdef BINDLESSTEXTURES
-		if (TexNum[3] > uint(0))
-			heightFromTexture = -texture(Textures[TexNum[3]], currentTextureCoords).r;
-		else
-			heightFromTexture = -texture(Texture3, currentTextureCoords).r;
-	#else
-	heightFromTexture = -texture(Texture3, currentTextureCoords).r;
-	#endif
+# ifdef BINDLESSTEXTURES
+   heightFromTexture = -texture(Textures[TexNum[5]], currentTextureCoords).r;
+# else
+	heightFromTexture = -texture(Texture5, currentTextureCoords).r;
+# endif
 
    // while point is above surface
    while(heightFromTexture > currentLayerHeight)
@@ -121,14 +120,11 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
       // shift texture coordinates along V
       currentTextureCoords -= dtex;
       // new depth from heightmap
-      #ifdef BINDLESSTEXTURES
-	  if (TexNum[3] > uint(0))
-	  heightFromTexture = -texture(Textures[TexNum[3]], currentTextureCoords).r;
-	  else
-		heightFromTexture = -texture(Texture3, currentTextureCoords).r;
-	  #else
-	  heightFromTexture = -texture(Texture3, currentTextureCoords).r;
-	  #endif
+# ifdef BINDLESSTEXTURES
+      heightFromTexture = -texture(Textures[TexNum[5]], currentTextureCoords).r;
+# else
+	  heightFromTexture = -texture(Texture5, currentTextureCoords).r;
+# endif
    }
 
    ///////////////////////////////////////////////////////////
@@ -151,14 +147,11 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
       deltaHeight /= 2.0;
 
       // new depth from heightmap
-      #ifdef BINDLESSTEXTURES
-	  if (TexNum[3] > uint(0))
-	  heightFromTexture = -texture(Textures[TexNum[3]], currentTextureCoords).r;
-	  else
-		heightFromTexture = -texture(Texture3, currentTextureCoords).r;
-	  #else
-	  heightFromTexture = -texture(Texture3, currentTextureCoords).r;
-	  #endif
+# ifdef BINDLESSTEXTURES
+      heightFromTexture = -texture(Textures[TexNum[5]], currentTextureCoords).r;
+# else
+	  heightFromTexture = -texture(Texture5, currentTextureCoords).r;
+# endif
 
       // shift along or agains vector V
       if(heightFromTexture > currentLayerHeight) // below the surface
@@ -179,18 +172,22 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
 }
 #endif
 
+
+#if 1
 void main (void)
 {
 	vec4 TotalColor = vec4(0.0,0.0,0.0,0.0);
+	uint DrawFlags  = DrawParams[0];
+	uint PolyFlags  = DrawParams[2];
 
-	int NumLights = int(LightData4[0].y);
+#if HARDWARELIGHTS || BUMPMAPS
+    int NumLights = int(LightData4[0].y);
 	mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
-	mat3 InFrameUncoords =  mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
+#endif
+
+//	mat3 InFrameUncoords =  mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
 	vec2 texCoords = vTexCoords;
-
-	uint DrawFlags = uint(TexCoords[15].w);
-	uint TextureFormat = uint(TexCoords[15].z);
 
 #if ENGINE_VERSION==227
 	bool UseHeightMap = ((PolyFlags&PF_HeightMap) == PF_HeightMap);
@@ -210,20 +207,20 @@ void main (void)
 
     vec4 Color;
 #ifdef BINDLESSTEXTURES
-    if (TexNum[0] > uint(0))
-        Color = texture(Textures[TexNum[0]], texCoords);
-    else Color = texture(Texture0, texCoords);
+    Color = texture(Textures[TexNum[0]], texCoords);
 #else
     Color = texture(Texture0, texCoords);
 #endif
 
-    if (TexCoords[11].x > 0.0)
-        Color *= TexCoords[11].x; // Diffuse factor.
+	float BaseDiffuse = TexCoords[IDX_DIFFUSE_INFO].x;
+    if (BaseDiffuse > 0.0)
+        Color *= BaseDiffuse; // Diffuse factor.
 
-	if (TexCoords[11].z > 0.0)
-		Color.a *= TexCoords[11].z; // Alpha.
+	float BaseAlpha = TexCoords[IDX_DIFFUSE_INFO].z;
+	if (BaseAlpha > 0.0)
+		Color.a *= BaseAlpha; // Alpha.
 
-    if ( TextureFormat == TEXF_BC5) //BC5 (GL_COMPRESSED_RG_RGTC2) compression
+    if ( DrawParams[2] == TEXF_BC5) //BC5 (GL_COMPRESSED_RG_RGTC2) compression
         Color.b = sqrt(1.0 - Color.r*Color.r + Color.g*Color.g);
 
 	// Handle PF_Masked.
@@ -243,6 +240,7 @@ void main (void)
 */
 
 	TotalColor=Color;
+
 
 #ifdef HARDWARELIGHTS
 		float LightAdd = 0.0f;
@@ -277,13 +275,14 @@ void main (void)
 		if ((DrawFlags & DF_LightMap) == DF_LightMap)
 		{
 			vec4 LightColor;
-			#ifdef BINDLESSTEXTURES
-			if (TexNum[1] > uint(0))
-				LightColor = texture(Textures[TexNum[1]], vLightMapCoords);
-			else LightColor = texture(Texture1, vLightMapCoords);
-			#else
+# ifdef BINDLESSTEXTURES
+			if (TexNum[1] > 0)
+                LightColor = texture(Textures[TexNum[1]], vLightMapCoords);
+			else
+				LightColor = texture(Texture1, vLightMapCoords);
+# else
 			LightColor = texture(Texture1, vLightMapCoords);
-			#endif
+# endif
 # ifdef GL_ES
 			TotalColor*=vec4(LightColor.bgr,1.0);
 # else
@@ -291,6 +290,7 @@ void main (void)
 # endif
 			TotalColor=clamp(TotalColor*2.0,0.0,1.0); //saturate.
 		}
+
 #endif
 
 	// DetailTextures
@@ -299,13 +299,11 @@ void main (void)
 	if (((DrawFlags & DF_DetailTexture) == DF_DetailTexture) && bNear > 0.0)
 	{
 	    vec4 DetailTexColor;
-        #ifdef BINDLESSTEXTURES
-        if (TexNum[2] > uint(0))
-            DetailTexColor = texture(Textures[TexNum[2]], vDetailTexCoords);
-        else DetailTexColor = texture(Texture2, vDetailTexCoords);
-        #else
-		DetailTexColor = texture(Texture2, vDetailTexCoords);
-		#endif
+# ifdef BINDLESSTEXTURES
+        DetailTexColor = texture(Textures[TexNum[3]], vDetailTexCoords);
+# else
+		DetailTexColor = texture(Texture3, vDetailTexCoords);
+# endif
 
 		vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
 		hsvDetailTex.b += (DetailTexColor.r - 0.1);
@@ -325,14 +323,11 @@ void main (void)
 # endif
 	{
 		vec4 MacrotexColor;
-		#ifdef BINDLESSTEXTURES
-		if (TexNum[3] > uint(0))
-			MacrotexColor = texture(Textures[TexNum[3]], vMacroTexCoords);
-		else
-			MacrotexColor = texture(Texture3, vMacroTexCoords);
-		#else
-		MacrotexColor = texture(Texture3, vMacroTexCoords);
-		#endif
+# ifdef BINDLESSTEXTURES
+ 		MacrotexColor = texture(Textures[TexNum[4]], vMacroTexCoords);
+# else
+		MacrotexColor = texture(Texture4, vMacroTexCoords);
+# endif
 
 		if ( (PolyFlags&PF_Masked) == PF_Masked )
         {
@@ -359,14 +354,11 @@ void main (void)
 		//normal from normal map
 		vec3 TextureNormal;
 		vec3 TextureNormal_tangentspace;
-        #ifdef BINDLESSTEXTURES
-            if (TexNum[4] > uint(0))
-                TextureNormal = texture(Textures[TexNum[4]], vBumpTexCoords).rgb * 2.0 - 1.0;
-            else
-                TextureNormal = texture(Texture4, vBumpTexCoords).rgb * 2.0 - 1.0;
-        #else
-            TextureNormal = texture(Texture4, vBumpTexCoords).rgb * 2.0 - 1.0;
-		#endif
+# ifdef BINDLESSTEXTURES
+        TextureNormal = texture(Textures[TexNum[5]], vBumpTexCoords).rgb * 2.0 - 1.0;
+# else
+        TextureNormal = texture(Texture5, vBumpTexCoords).rgb * 2.0 - 1.0;
+# endif
 
         TextureNormal.b = sqrt(1.0 - TextureNormal.r*TextureNormal.r + TextureNormal.g*TextureNormal.g);
 
@@ -419,8 +411,8 @@ void main (void)
 			vec3 LightColor = vec3(LightData1[i].x,LightData1[i].y,LightData1[i].z);
 			vec3 MaterialAmbientColor = vec3(0.1,0.1,0.1) * Color.xyz;
 
-			if (TexCoords[12].y > 0.0) // Specular
-				TotalBumpColor +=  (MaterialAmbientColor + Color.xyz * LightColor * cosTheta * pow(cosAlpha,TexCoords[12].y)) * attenuation;
+			if (BumpMapSpecular > 0.0) // Specular
+				TotalBumpColor +=  (MaterialAmbientColor + Color.xyz * LightColor * cosTheta * pow(cosAlpha,BumpMapSpecular)) * attenuation;
 			else
 				TotalBumpColor +=  (MaterialAmbientColor + Color.xyz * LightColor * cosTheta) * attenuation;
 
@@ -434,31 +426,30 @@ void main (void)
 	if ((DrawFlags & DF_FogMap) == DF_FogMap)
 	{
 	    vec4 FogColor;
-        #ifdef BINDLESSTEXTURES
-        if (TexNum[5] > uint(0))
-            FogColor = texture(Textures[TexNum[5]], vFogMapCoords);
-        else FogColor = texture(Texture5, vFogMapCoords);
-        #else
-		FogColor = texture(Texture5, vFogMapCoords);
-		#endif
+#ifdef BINDLESSTEXTURES
+	    if (TexNum[2] > 0)
+            FogColor = texture(Textures[TexNum[2]], vFogMapCoords);
+		else
+		    FogColor = texture(Texture2, vFogMapCoords);
+		
+#else
+		FogColor = texture(Texture2, vFogMapCoords);
+#endif
 
 		TotalColor.rgb = TotalColor.rgb * (1.0-FogColor.a) + FogColor.rgb;
 		TotalColor.a   = FogColor.a;
 	}
-
 
 	// EnvironmentMap
 #if ENGINE_VERSION==227
 	if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
 	{
 	    vec4 EnvironmentColor;
-        #ifdef BINDLESSTEXTURES
-        if (TexNum[6] > uint(0))
-            EnvironmentColor = texture(Textures[TexNum[6]], vEnvironmentTexCoords);
-        else EnvironmentColor = texture(Texture6, vEnvironmentTexCoords);
-        #else
+# ifdef BINDLESSTEXTURES
+        EnvironmentColor = texture(Textures[TexNum[6]], vEnvironmentTexCoords);
+# else
 		EnvironmentColor = texture(Texture6, vEnvironmentTexCoords);
-		#endif
+# endif
         if ( (PolyFlags&PF_Masked) == PF_Masked )
         {
             if(EnvironmentColor.a < 0.5)
@@ -475,6 +466,8 @@ void main (void)
 	TotalColor=clamp(TotalColor,0.0,1.0); //saturate.
 
 	// Add DistanceFog
+#if ENGINE_VERSION==227
+	// stijn: Very slow! Went from 135 to 155FPS on CTF-BT-CallousV3 by just disabling this branch even tho 469 doesn't do distance fog
 	if (DistanceFogValues.w >= 0.0)
 	{
 	    FogParameters DistanceFogParams;
@@ -492,11 +485,12 @@ void main (void)
 		DistanceFogParams.FogCoord = abs(vEyeSpacePos.z/vEyeSpacePos.w);
 		TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));
 	}
-
+#endif
 
 	if((PolyFlags & PF_Modulated)!=PF_Modulated)
 	{
 		// Gamma
+		float Gamma = TexCoords[IDX_Z_AXIS].w;
 #ifdef GL_ES
 		// 1.055*pow(x,(1.0 / 2.4) ) - 0.055
 		// FixMe: ugly rough srgb to linear conversion.
@@ -557,6 +551,17 @@ void main (void)
 	//FragColor1	= mix(TotalColor,LightColor,1.0);// way to fix skybox etc??
 	FragColor	= TotalColor;
 }
+#else
+void main(void)
+{
+# if BINDLESSTEXTURES
+    vec4 Color = texture(Textures[TexNum[0]], vTexCoords);
+# else
+    vec4 Color = texture(Texture0, vTexCoords);
+# endif
+	FragColor = Color;
+}
+#endif
 
 /*
 //

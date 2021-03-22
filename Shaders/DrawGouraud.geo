@@ -72,8 +72,6 @@ void main(void)
 
 	for(int i=0; i<3; ++i)
 	{
-		mat4 vmodelviewprojMat = projMat * viewMat * modelMat;
-
 		vec3 T = normalize(vec3(modelMat[i] * vec4(Tangent,0.0)));
 		vec3 B = normalize(vec3(modelMat[i] * vec4(Bitangent,0.0)));
 		vec3 N = normalize(vec3(modelMat[i] * vNormals[i]));
@@ -98,7 +96,7 @@ void main(void)
 		gDrawFlags = vDrawFlags[i];
 		gTextureFormat = vTextureFormat[i];
 
-		gl_Position = vmodelviewprojMat * gl_in[i].gl_Position;
+		gl_Position = modelviewprojMat * gl_in[i].gl_Position;
         gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,vCoords[i]);//
 		EmitVertex();
 	}

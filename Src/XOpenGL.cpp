@@ -1558,13 +1558,13 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
 	bIsOrtho = true;
 
-	//modelviewprojMat=projMat*viewMat*modelMat; //yes, this is right.
-	//modelviewMat=viewMat*modelMat;
+	modelviewprojMat=projMat*viewMat*modelMat; //yes, this is right.
+	modelviewMat=viewMat*modelMat;
 
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(modelMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(projMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 0                    , sizeof(glm::mat4), glm::value_ptr(modelMat));
+	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
 	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
@@ -1602,12 +1602,12 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
 
-	//modelviewprojMat=projMat*viewMat*modelMat;
-	//modelviewMat=viewMat*modelMat;
-	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(modelMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(projMat));
+	modelviewprojMat=projMat*viewMat*modelMat;
+	modelviewMat=viewMat*modelMat;
+	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);	
+	glBufferSubData(GL_UNIFORM_BUFFER, 0                    , sizeof(glm::mat4), glm::value_ptr(modelMat));
+	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
 	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 

@@ -41,7 +41,6 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 
     if (FogSurf.IsValid())
     {
-
         if((ActiveProgram == GouraudPolyVertList_Prog) || (ActiveProgram == GouraudPolyVert_Prog)) //bZoneBasedFog Fog.
         {
             if (DrawGouraudListBufferData.VertSize > 0)
@@ -73,8 +72,8 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 {
 	guard(UOpenGLRenderDevice::PostDrawGouraud);
-#if ENGINE_VERSION==227
 
+#if ENGINE_VERSION==227
     ResetFog();
 #endif // ENGINE_VERSION
 

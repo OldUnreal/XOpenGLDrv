@@ -24,8 +24,6 @@ out float gl_ClipDistance[MAX_CLIPPINGPLANES];
 
 void main()
 {
-	mat4 modelviewprojMat = projMat * viewMat * modelMat;
-
 	uint ClipIndex = uint(ClipParams.x);
 
 	gTexNum = vTexNum[0];

@@ -35,9 +35,7 @@ out vec4 vEyeSpacePos;
 
 void main(void)
 {
-    mat4 modelviewMat = modelMat * viewMat;
 #ifdef GL_ES
-	mat4 modelviewprojMat = projMat * viewMat * modelMat;
 	vec4 gEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
 
     gTexNum     = uint(TexNum);

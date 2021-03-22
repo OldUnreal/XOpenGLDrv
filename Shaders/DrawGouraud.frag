@@ -288,6 +288,7 @@ void main(void)
 
 
 	// Add DistanceFog
+#if ENGINE_VERSION==227
 	if (DistanceFogValues.w >= 0.0)
 	{
 	    FogParameters DistanceFogParams;
@@ -305,6 +306,7 @@ void main(void)
 		DistanceFogParams.FogCoord = abs(gEyeSpacePos.z/gEyeSpacePos.w);
 		TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));
 	}
+#endif
 
 	if((PolyFlags & PF_Modulated)!=PF_Modulated)
 	{

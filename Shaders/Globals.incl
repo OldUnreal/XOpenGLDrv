@@ -257,19 +257,33 @@ const uint	TEXF_MAX			    =   0xffu;
 
 // DrawFlags
 const uint	DF_DiffuseTexture	= 0x00000001u;
-const uint	DF_DetailTexture	= 0x00000002u;
-const uint	DF_MacroTexture	 	= 0x00000004u;
-const uint	DF_BumpMap			= 0x00000008u;
-const uint	DF_LightMap         = 0x00000010u;
-const uint	DF_FogMap          	= 0x00000020u;
+const uint	DF_LightMap         = 0x00000002u;
+const uint	DF_FogMap          	= 0x00000004u;
+const uint	DF_DetailTexture	= 0x00000008u;
+const uint	DF_MacroTexture	 	= 0x00000010u;
+const uint	DF_BumpMap			= 0x00000020u;
 const uint	DF_EnvironmentMap  	= 0x00000040u;
 
+// DrawComplex TexCoords Indices
+const uint  IDX_DIFFUSE_COORDS   = 0;
+const uint  IDX_DIFFUSE_INFO     = 1;
+const uint  IDX_X_AXIS           = 2;
+const uint  IDX_Y_AXIS           = 3;
+const uint  IDX_Z_AXIS           = 4;
+const uint  IDX_LIGHTMAP_COORDS  = 5;
+const uint  IDX_FOGMAP_COORDS    = 6;
+const uint  IDX_DETAIL_COORDS    = 7;
+const uint  IDX_MACRO_COORDS     = 8;
+const uint  IDX_MACRO_INFO       = 9;
+const uint  IDX_BUMPMAP_COORDS   = 10;
+const uint  IDX_BUMPMAP_INFO     = 11;
+const uint  IDX_ENVIROMAP_COORDS = 12;
 
 layout(std140) uniform GlobalMatrices
 {
 	mat4 modelMat;
-	mat4 viewMat;
-	mat4 projMat;
+	mat4 modelviewMat;
+	mat4 modelviewprojMat;
 	mat4 lightSpaceMat;
 };
 
