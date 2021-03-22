@@ -87,7 +87,7 @@ vec3 hsv2rgb(vec3 c)
 #if ENGINE_VERSION==227
 vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeight) //http://sunandblackcat.com/tipFullView.php?topicid=28
 {
-   float parallaxScale = TexCoords[IDX_MACRO_TEXINFO].w;
+   float parallaxScale = TexCoords[IDX_MACRO_INFO].w;
    // determine required number of layers
    const float minLayers = 10.0;
    const float maxLayers = 45.0;
@@ -411,6 +411,7 @@ void main (void)
 			vec3 LightColor = vec3(LightData1[i].x,LightData1[i].y,LightData1[i].z);
 			vec3 MaterialAmbientColor = vec3(0.1,0.1,0.1) * Color.xyz;
 
+			float BumpMapSpecular = TexCoords[IDX_BUMPMAP_INFO].x;
 			if (BumpMapSpecular > 0.0) // Specular
 				TotalBumpColor +=  (MaterialAmbientColor + Color.xyz * LightColor * cosTheta * pow(cosAlpha,BumpMapSpecular)) * attenuation;
 			else

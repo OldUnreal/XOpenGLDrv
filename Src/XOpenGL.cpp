@@ -1560,12 +1560,13 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 
 	modelviewprojMat=projMat*viewMat*modelMat; //yes, this is right.
 	modelviewMat=viewMat*modelMat;
-
+	
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0                    , sizeof(glm::mat4), glm::value_ptr(modelMat));
-	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
+	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 4 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	UpdateCoords(Frame);
@@ -1604,11 +1605,13 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	modelviewprojMat=projMat*viewMat*modelMat;
 	modelviewMat=viewMat*modelMat;
-	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);	
+	
+	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0                    , sizeof(glm::mat4), glm::value_ptr(modelMat));
-	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
-	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
+	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
+	glBufferSubData(GL_UNIFORM_BUFFER, 4 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 
 	UpdateCoords(Frame);

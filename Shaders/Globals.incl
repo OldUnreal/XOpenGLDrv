@@ -282,6 +282,7 @@ const uint  IDX_ENVIROMAP_COORDS = 12;
 layout(std140) uniform GlobalMatrices
 {
 	mat4 modelMat;
+	mat4 viewMat;
 	mat4 modelviewMat;
 	mat4 modelviewprojMat;
 	mat4 lightSpaceMat;
