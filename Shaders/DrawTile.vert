@@ -16,7 +16,6 @@ layout (location = 2) in vec2 TexCoords;
 out vec2 gTexCoords;
 out vec4 gDrawColor;
 flat out uint gTexNum;
-out float gl_ClipDistance[MAX_CLIPPINGPLANES];
 
 #else
 layout (location = 2) in vec4 TexCoords0;
@@ -42,10 +41,7 @@ void main(void)
 	gTexCoords  = TexCoords;
 	gDrawColor  = DrawColor;
 
-	uint ClipIndex = uint(ClipParams.x);
-
 	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
-    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,Coords.xyz);
 #else
     vEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
     vCoords = Coords;

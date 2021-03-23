@@ -47,13 +47,20 @@ flat out float BaseAlpha;
 flat out float parallaxScale;
 flat out float Gamma;
 flat out float BumpMapSpecular;
+#else
+uniform vec4 TexCoords[16];
+uniform uint TexNum[8];
+uniform uint DrawParams[3];
 #endif
 
+#ifndef GL_ES
 out float gl_ClipDistance[MAX_CLIPPINGPLANES];
+#endif
 
 #if 1
 void main(void)
 {
+#if BINDLESSTEXTURES
 	vec4 XAxis       = DrawComplexParams[gl_DrawID].XAxis;
 	vec4 YAxis       = DrawComplexParams[gl_DrawID].YAxis;
 	vec4 ZAxis       = DrawComplexParams[gl_DrawID].ZAxis;
@@ -80,6 +87,20 @@ void main(void)
 	BumpMapSpecular  = DrawComplexParams[gl_DrawID].BumpMapInfo.y;
 	parallaxScale    = DrawComplexParams[gl_DrawID].MacroInfo.w;
 	Gamma            = ZAxis.w;
+#else
+	vec4 XAxis       = TexCoords[IDX_X_AXIS];
+	vec4 YAxis       = TexCoords[IDX_Y_AXIS];
+	vec4 ZAxis       = TexCoords[IDX_Z_AXIS];
+	vec4 DiffuseUV   = TexCoords[IDX_DIFFUSE_COORDS];
+	vec4 LightMapUV  = TexCoords[IDX_LIGHTMAP_COORDS];
+	vec4 FogMapUV    = TexCoords[IDX_FOGMAP_COORDS];
+	vec4 DetailUV    = TexCoords[IDX_DETAIL_COORDS];
+	vec4 MacroUV     = TexCoords[IDX_MACRO_COORDS];
+	vec4 BumpMapUV   = TexCoords[IDX_BUMPMAP_COORDS];
+	vec4 EnviroMapUV = TexCoords[IDX_ENVIROMAP_COORDS];
+
+	uint DrawFlags   = DrawParams[0];
+#endif
 
 	// Point Coords
 	vCoords = Coords.xyz;
@@ -179,9 +200,12 @@ void main(void)
 	Surface_Normal = MapCoordsZAxis;
 #endif
 
-	uint ClipIndex = uint(ClipParams.x);
 	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
+
+#ifndef GL_ES
+	uint ClipIndex = uint(ClipParams.x);
     gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,Coords);
+#endif
 }
 #else
 void main (void)

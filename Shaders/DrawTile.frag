@@ -23,7 +23,7 @@ void main(void)
 	vec4 TotalColor;
 	vec4 Color;
 
-    #ifdef BINDLESSTEXTURES
+    #if BINDLESSTEXTURES
     if (gTexNum > 0u)
         Color = texture(Textures[gTexNum], gTexCoords);
     else Color = texture(Texture0, gTexCoords);
@@ -59,7 +59,7 @@ void main(void)
 #endif
 	}
 
-#ifdef EDITOR
+#if EDITOR
 	// Editor support.
 	if ( (PolyFlags&PF_Selected) == PF_Selected )
 	{

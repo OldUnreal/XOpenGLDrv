@@ -119,7 +119,7 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
    // depth from heightmap
    float heightFromTexture = 0.f;
 
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
    heightFromTexture = -texture(Textures[BumpMapTexNum], currentTextureCoords).r;
 # else
 	heightFromTexture = -texture(Texture5, currentTextureCoords).r;
@@ -133,7 +133,7 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
       // shift texture coordinates along V
       currentTextureCoords -= dtex;
       // new depth from heightmap
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
       heightFromTexture = -texture(Textures[BumMapTexNum], currentTextureCoords).r;
 # else
 	  heightFromTexture = -texture(Texture5, currentTextureCoords).r;
@@ -160,7 +160,7 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
       deltaHeight /= 2.0;
 
       // new depth from heightmap
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
       heightFromTexture = -texture(Textures[BumpMapTexNum], currentTextureCoords).r;
 # else
 	  heightFromTexture = -texture(Texture5, currentTextureCoords).r;
@@ -225,7 +225,7 @@ void main (void)
 #endif
 
     vec4 Color;
-#ifdef BINDLESSTEXTURES
+#if BINDLESSTEXTURES
     Color = texture(Textures[BaseTexNum], texCoords);
 #else
     Color = texture(Texture0, texCoords);
@@ -259,7 +259,7 @@ void main (void)
 	TotalColor=Color;
 
 
-#ifdef HARDWARELIGHTS
+#if HARDWARELIGHTS
 		float LightAdd = 0.0f;
 		vec4 TotalAdd = vec4(0.0,0.0,0.0,0.0);
 
@@ -292,7 +292,7 @@ void main (void)
 		if ((DrawFlags & DF_LightMap) == DF_LightMap)
 		{
 			vec4 LightColor;
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
 			if (LightMapTexNum > 0)
                 LightColor = texture(Textures[LightMapTexNum], vLightMapCoords);
 			else
@@ -316,7 +316,7 @@ void main (void)
 	if (((DrawFlags & DF_DetailTexture) == DF_DetailTexture) && bNear > 0.0)
 	{
 	    vec4 DetailTexColor;
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
         DetailTexColor = texture(Textures[DetailTexNum], vDetailTexCoords);
 # else
 		DetailTexColor = texture(Texture3, vDetailTexCoords);
@@ -340,7 +340,7 @@ void main (void)
 # endif
 	{
 		vec4 MacrotexColor;
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
  		MacrotexColor = texture(Textures[MacroTexNum], vMacroTexCoords);
 # else
 		MacrotexColor = texture(Texture4, vMacroTexCoords);
@@ -371,7 +371,7 @@ void main (void)
 		//normal from normal map
 		vec3 TextureNormal;
 		vec3 TextureNormal_tangentspace;
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
         TextureNormal = texture(Textures[BumpMapTexNum], vBumpTexCoords).rgb * 2.0 - 1.0;
 # else
         TextureNormal = texture(Texture5, vBumpTexCoords).rgb * 2.0 - 1.0;
@@ -443,7 +443,7 @@ void main (void)
 	if ((DrawFlags & DF_FogMap) == DF_FogMap)
 	{
 	    vec4 FogColor;
-#ifdef BINDLESSTEXTURES
+#if BINDLESSTEXTURES
 	    if (FogMapTexNum > 0)
             FogColor = texture(Textures[FogMapTexNum], vFogMapCoords);
 		else
@@ -462,7 +462,7 @@ void main (void)
 	if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
 	{
 	    vec4 EnvironmentColor;
-# ifdef BINDLESSTEXTURES
+# if BINDLESSTEXTURES
         EnvironmentColor = texture(Textures[EnviroMapTexNum], vEnvironmentTexCoords);
 # else
 		EnvironmentColor = texture(Texture6, vEnvironmentTexCoords);
@@ -520,7 +520,7 @@ void main (void)
 #endif
 	}
 
-#ifdef EDITOR
+#if EDITOR
 	// Editor support.
 	if (RendMap == REN_Zones || RendMap == REN_PolyCuts || RendMap == REN_Polys)
 	{

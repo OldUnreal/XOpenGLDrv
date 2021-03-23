@@ -72,7 +72,7 @@ const uint PF_RenderFog			= 0x40000000u;	// Render with fog mapping.
 const uint PF_Occlude			= 0x80000000u;	// Occludes even if PF_NoOcclude.
 const uint PF_RenderHint		= 0x01000000u;   // Rendering optimization hint.
 
-#ifdef EDITOR
+#if EDITOR
 // enum ERenderType
 const uint	REN_None			= 0u;	// Hide completely.
 const uint	REN_Wire			= 1u;	// Wireframe of EdPolys.
@@ -265,19 +265,19 @@ const uint	DF_BumpMap			= 0x00000020u;
 const uint	DF_EnvironmentMap  	= 0x00000040u;
 
 // DrawComplex TexCoords Indices
-const uint  IDX_X_AXIS           = 0;
-const uint  IDX_Y_AXIS           = 1;
-const uint  IDX_Z_AXIS           = 2;
-const uint  IDX_DIFFUSE_COORDS   = 3;
-const uint  IDX_LIGHTMAP_COORDS  = 4;
-const uint  IDX_FOGMAP_COORDS    = 5;
-const uint  IDX_DETAIL_COORDS    = 6;
-const uint  IDX_MACRO_COORDS     = 7;
-const uint  IDX_BUMPMAP_COORDS   = 8;
-const uint  IDX_ENVIROMAP_COORDS = 9;
-const uint  IDX_DIFFUSE_INFO     = 10;
-const uint  IDX_MACRO_INFO       = 11;
-const uint  IDX_BUMPMAP_INFO     = 12;
+const uint  IDX_DIFFUSE_COORDS   = 0u;
+const uint  IDX_LIGHTMAP_COORDS  = 1u;
+const uint  IDX_FOGMAP_COORDS    = 2u;
+const uint  IDX_DETAIL_COORDS    = 3u;
+const uint  IDX_MACRO_COORDS     = 4u;
+const uint  IDX_BUMPMAP_COORDS   = 5u;
+const uint  IDX_ENVIROMAP_COORDS = 6u;
+const uint  IDX_DIFFUSE_INFO     = 7u;
+const uint  IDX_MACRO_INFO       = 8u;
+const uint  IDX_BUMPMAP_INFO     = 9u;
+const uint  IDX_X_AXIS           = 10u;
+const uint  IDX_Y_AXIS           = 11u;
+const uint  IDX_Z_AXIS           = 12u;
 
 layout(std140) uniform GlobalMatrices
 {
@@ -317,7 +317,7 @@ layout(std140) uniform GlobalCoords
 	mat4 FrameUncoords;
 };
 
-#ifdef BINDLESSTEXTURES
+#if BINDLESSTEXTURES
 layout(std140) uniform TextureHandles
 {
 	sampler2D Textures[NUMTEXTURES];
@@ -362,6 +362,7 @@ float PlaneDot( vec4 Plane, vec3 Point )
     return dot(Plane.xyz,Point)-Plane.w;
 }
 
+#if BINDLESSTEXTURES
 struct DrawComplexShaderParams
 {
 	vec4 DiffuseUV;
@@ -385,6 +386,7 @@ layout(std430, binding = 6) buffer AllDrawComplexShaderParams
 {
 	DrawComplexShaderParams DrawComplexParams[];
 };
+#endif
 
 // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
 #line 1

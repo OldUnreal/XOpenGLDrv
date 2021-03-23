@@ -59,28 +59,15 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 		appErrorf(TEXT("XOpenGL: Failed loading global Extensions file xopengl/Extensions.incl"));
 
     // ADD DEFINITIONS
-    if (GIsEditor)
-		Definitions += TEXT("#define EDITOR 1\n");
-
-    if(UsingBindlessTextures)
-    {
-        Definitions += TEXT("#define BINDLESSTEXTURES 1\n");
-        Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), NUMTEXTURES);
-    }
-	if (UseHWLighting)
-		Definitions += TEXT("#define HARDWARELIGHTS 1\n");
-	if (BumpMaps)
-		Definitions += TEXT("#define BUMPMAPS 1\n");
-	if (DetailTextures)
-		Definitions += TEXT("#define DETAILTEXTURES 1\n");
-	if (MacroTextures)
-		Definitions += TEXT("#define MACROTEXTURES 1\n");
-
+	Definitions += *FString::Printf(TEXT("#define EDITOR %d\n"), GIsEditor ? 1 : 0);
+    Definitions += *FString::Printf(TEXT("#define BINDLESSTEXTURES %d\n"), UsingBindlessTextures ? 1 : 0);
+    Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), NUMTEXTURES);
+	Definitions += *FString::Printf(TEXT("#define HARDWARELIGHTS %d\n"), UseHWLighting ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define BUMPMAPS %d\n"), BumpMaps ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define DETAILTEXTURES %d\n"), DetailTextures ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define MACROTEXTURES %d\n"), MacroTextures ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define ENGINE_VERSION %d\n"), ENGINE_VERSION);
-
     Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
-
-    // Clipping Planes
 	Definitions += *FString::Printf(TEXT("#define MAX_CLIPPINGPLANES %i \n"), MaxClippingPlanes);
 
     // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
@@ -145,11 +132,6 @@ void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint &Shade
         GLchar* linker_log = new GLchar[blen + 1];
         glGetProgramInfoLog(ShaderProg, blen, &slen, linker_log);
         debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
-
-    	FILE* Err = fopen("C:\\GameDev\\utpg\\XOpenGLerr.txt", "wb");
-		fwrite(linker_log, 1, blen, Err);
-		fclose(Err);
-    	
         delete[] linker_log;
     }
     else debugf(TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);

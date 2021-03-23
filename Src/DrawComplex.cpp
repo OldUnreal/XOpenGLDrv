@@ -45,6 +45,9 @@ struct BufferedPoint
 
 void UXOpenGLRenderDevice::BufferComplexShaderParams()
 {
+	if (!UsingBindlessTextures)
+		return;
+	
 	auto& ShaderParams = reinterpret_cast<DrawComplexShaderParams*>(DrawComplexSSBORange.Buffer)[DrawComplexBufferData.Index * MAX_DRAWCOMPLEX_BATCH + DrawComplexMultiDrawCount];
 	for (INT i = 0; i < Z_AXIS + 1; ++i)
 		ShaderParams.TexCoords[i] = TexMaps.TexCoords[i];
@@ -184,11 +187,11 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	DrawComplexMultiDrawFacetArray[DrawComplexMultiDrawCount] = DrawComplexMultiDrawVertices;
 
 	INT FacetVertexCount = 0;
-    for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
-    {
-        INT NumPts = Poly->NumPts;
-        if (NumPts < 3) //Skip invalid polygons,if any?
-            continue;
+	for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
+	{
+		INT NumPts = Poly->NumPts;
+		if (NumPts < 3) //Skip invalid polygons,if any?
+			continue;
 
 		if (DrawComplexBufferData.IndexOffset >= DRAWCOMPLEX_SIZE - DrawComplexStrideSize * (NumPts - 2) * 3)
 		{
@@ -213,7 +216,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
     			
 		FTransform** In = &Poly->Pts[0];
 		auto Out = reinterpret_cast<BufferedPoint*>(
-			&DrawComplexSinglePassRange.Buffer[DrawComplexBufferData.IndexOffset]);
+			&DrawComplexSinglePassRange.Buffer[DrawComplexBufferData.BeginOffset + DrawComplexBufferData.IndexOffset]);
 		
 		for (INT i = 0; i < NumPts-2; i++)
 		{
@@ -225,7 +228,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		FacetVertexCount += (NumPts - 2) * 3;
 		DrawComplexMultiDrawVertices      += (NumPts-2) * 3;		
 		DrawComplexBufferData.IndexOffset += (NumPts-2) * 3 * (sizeof(BufferedPoint) / sizeof(FLOAT));
-    }
+	}
 	
 	DrawComplexMultiDrawVertexCountArray[DrawComplexMultiDrawCount] = FacetVertexCount;
 	DrawComplexMultiDrawCount++;
@@ -271,10 +274,10 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 		}
 #if defined(__LINUX_ARM__)
 		// stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
-		glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer, GL_DYNAMIC_DRAW);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderParams), DrawComplexSSBORange.Buffer, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer, GL_STREAM_DRAW);
+//		glBufferData(GL_SHADER_STORAGE_BUFFER, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderParams), DrawComplexSSBORange.Buffer, GL_DYNAMIC_DRAW);
 #else		
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderParams), DrawComplexSSBORange.Buffer);
+//		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderParams), DrawComplexSSBORange.Buffer);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer);
 #endif		
     }
@@ -303,8 +306,21 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer &BufferD
 		CHECK_GL_ERROR();
 	}
 
-	// Draw
-	glMultiDrawArrays(GL_TRIANGLES, DrawComplexMultiDrawFacetArray, DrawComplexMultiDrawVertexCountArray, DrawComplexMultiDrawCount);
+	if (!UsingBindlessTextures)
+	{
+		GLuint DrawFlags[] = { TexMaps.DrawFlags, TexMaps.TextureFormat, BufferData.PrevPolyFlags };
+		glUniform1uiv(DrawComplexSinglePassDrawParams, 3, DrawFlags);
+
+		glUniform4fv(DrawComplexSinglePassTexCoords, 16, (const GLfloat*)TexMaps.TexCoords);
+		CHECK_GL_ERROR();
+
+		glDrawArrays(GL_TRIANGLES, 0, DrawComplexMultiDrawVertexCountArray[0]);
+	}
+	else
+	{
+		// Draw
+		glMultiDrawArrays(GL_TRIANGLES, DrawComplexMultiDrawFacetArray, DrawComplexMultiDrawVertexCountArray, DrawComplexMultiDrawCount);
+	}
     CHECK_GL_ERROR();	
 
 	// reset

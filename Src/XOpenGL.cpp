@@ -130,7 +130,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #endif
 	new(GetClass(), TEXT("UseBufferInvalidation"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBufferInvalidation), TEXT("Options"), CPF_Config);
 
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	new(GetClass(), TEXT("UseLightmapAtlas"), RF_Public)UBoolProperty(CPP_PROPERTY(PrefersLightmapAtlas), TEXT("Options"), CPF_Config);
 	FindField<UBoolProperty>(GetClass(), TEXT("UseLightmapAtlas"))->PropertyFlags |= CPF_EditConst; // Do not allow modification in runtime
 #endif
@@ -192,7 +192,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	ShinySurfaces = 1;
 	VolumetricLighting = 1;
 
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	PrefersLightmapAtlas = 1;
 #endif
 
@@ -1988,7 +1988,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseVSync"), *FString::Printf(TEXT("%ls"), UseVSync == VS_Off ? TEXT("Off") : UseVSync == VS_On ? TEXT("On") : TEXT("Adaptive")));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("OpenGLVersion"), *FString::Printf(TEXT("%ls"), OpenGLVersion == GL_Core ? TEXT("Core") : TEXT("ES")));
 
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseLightmapAtlas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(PrefersLightmapAtlas)));
 #endif
 	unguard;

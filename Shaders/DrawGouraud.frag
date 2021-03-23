@@ -66,7 +66,7 @@ void main(void)
 	mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
 	mat3 InFrameUncoords =  mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
-#ifdef BINDLESSTEXTURES
+#if BINDLESSTEXTURES
     if (gTexNum > 0u)
         Color = texture(Textures[uint(gTexNum)], (texCoords*gTexUV.xy));
     else Color = texture(Texture0, (texCoords*gTexUV.xy));
@@ -95,7 +95,7 @@ void main(void)
 
 	vec4 LightColor;
 
-	#ifdef HARDWARELIGHTS
+	#if HARDWARELIGHTS
 		float LightAdd = 0.0f;
 		vec4 TotalAdd = vec4(0.0,0.0,0.0,0.0);
 
@@ -169,7 +169,7 @@ void main(void)
 	if( ((gDrawFlags & DF_DetailTexture) == DF_DetailTexture) && bNear > 0.0)
 	{
 	    vec4 DetailTexColor;
-	    #ifdef BINDLESSTEXTURES
+	    #if BINDLESSTEXTURES
 	    if (gDetailTexNum > 0u)
             DetailTexColor = texture(Textures[gDetailTexNum], (gTexCoords*gDetailTexUV));
         else
@@ -191,7 +191,7 @@ void main(void)
 	if ((gDrawFlags & DF_MacroTexture) == DF_MacroTexture)
 	{
 		vec4 MacroTexColor;
-		#ifdef BINDLESSTEXTURES
+		#if BINDLESSTEXTURES
 		if (gDetailTexNum > 0u)
 			MacroTexColor = texture(Textures[uint(gTextureInfo.w)], (gTexCoords*gTexUV.zw));
 		else
@@ -215,7 +215,7 @@ void main(void)
         vec3 TextureNormal;
 		vec3 TextureNormal_tangentspace;
 
-        #ifdef BINDLESSTEXTURES
+        #if BINDLESSTEXTURES
              if (gBumpTexNum > uint(0))
                 TextureNormal = texture(Textures[gBumpTexNum], gTexCoords*gTexUV.xy).rgb * 2.0 - 1.0;
             else
@@ -324,7 +324,7 @@ void main(void)
 #endif
 	}
 
-#ifdef EDITOR
+#if EDITOR
 	// Editor support.
 	if (RendMap == REN_Zones || RendMap == REN_PolyCuts || RendMap == REN_Polys || RendMap==REN_PlainTex)
 	{

@@ -36,7 +36,6 @@ out vec2 gDetailTexUV;
 out vec4 gTextureInfo;
 out mat3 TBNMat;
 out mat4 gviewMat;
-out float gl_ClipDistance[MAX_CLIPPINGPLANES];
 
 #else
 flat out uint vTexNum;
@@ -98,10 +97,7 @@ void main(void)
 
 	TBNMat = transpose(mat3(T, B, N));
 
-	uint ClipIndex = uint(ClipParams.x);
-
 	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
-    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,gEyeSpacePos.xyz);
 
 #else
 	vec4 pos=modelviewprojMat * vec4(Coords, 1.0);
