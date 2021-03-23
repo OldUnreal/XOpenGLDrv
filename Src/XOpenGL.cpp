@@ -399,6 +399,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UsingPersistentBuffersTile = false;
 	UsingPersistentBuffersComplex = false;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
+	BindlessFail = false;
+
+	DrawComplexMultiDrawVertices = DrawComplexMultiDrawCount = 0;
 
 	// Init shaders
 	InitShaders();

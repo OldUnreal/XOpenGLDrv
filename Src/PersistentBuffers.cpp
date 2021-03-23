@@ -21,7 +21,6 @@ void UXOpenGLRenderDevice::LockBuffer(BufferRange& Buffer, GLuint Index)
 
 	if (Buffer.Sync[Index])
 		glDeleteSync(Buffer.Sync[Index]);
-
 	Buffer.Sync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 	CHECK_GL_ERROR();
 
@@ -42,8 +41,10 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
             WaitReturn = glClientWaitSync(Buffer.Sync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, WaitDuration);
             CHECK_GL_ERROR();
 
-            if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
-                return;
+			if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
+			{
+				return;
+			}
             if (WaitReturn == GL_WAIT_FAILED)
             {
                 GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"),Index);
@@ -117,6 +118,14 @@ void UXOpenGLRenderDevice::MapBuffers()
 		DrawComplexSinglePassRange.Buffer = (float*)glMapNamedBufferRange(DrawComplexVertBuffer, 0, DrawComplexBufferSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 		CHECK_GL_ERROR();
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		GLsizeiptr DrawComplexSSBOSize = NUMBUFFERS * MAX_DRAWCOMPLEX_BATCH * sizeof(DrawComplexShaderParams);
+
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
+		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOSize, NULL, PersistentBufferFlags);
+		DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, sizeof(DrawComplexShaderParams) * MAX_DRAWCOMPLEX_BATCH, PersistentBufferFlags);
+		CHECK_GL_ERROR();
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 	else
 	{
@@ -124,6 +133,11 @@ void UXOpenGLRenderDevice::MapBuffers()
 		DrawComplexSinglePassRange.Buffer = new FLOAT[DRAWCOMPLEX_SIZE];
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * DRAWCOMPLEX_SIZE, DrawComplexSinglePassRange.Buffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
+		DrawComplexSSBORange.Buffer = (FLOAT*)(new DrawComplexShaderParams[MAX_DRAWCOMPLEX_BATCH]);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawComplexShaderParams) * MAX_DRAWCOMPLEX_BATCH, DrawComplexSSBORange.Buffer, GL_STREAM_DRAW);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}
 	
     if (UsingPersistentBuffersTile)
@@ -206,10 +220,18 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(DrawComplexVertBuffer);
 			DrawComplexSinglePassRange.Buffer = nullptr;
 		}
+
+		glGetNamedBufferParameteriv(DrawComplexSSBO, GL_BUFFER_MAPPED, &IsMapped);
+		if (IsMapped == GL_TRUE)
+		{
+			glUnmapNamedBuffer(DrawComplexSSBO);
+			DrawComplexSSBORange.Buffer = nullptr;
+		}
 	}
 	else
 	{
 		delete[] DrawComplexSinglePassRange.Buffer;
+		delete[] DrawComplexSSBORange.Buffer;
 	}
 	
 	if (UsingPersistentBuffersTile)

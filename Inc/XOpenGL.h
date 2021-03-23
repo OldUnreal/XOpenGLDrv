@@ -100,6 +100,7 @@ Globals.
 #define DRAWGOURAUDPOLYLIST_SIZE 262144
 #define NUMBUFFERS 6
 #define NUMTEXTURES 4096
+#define MAX_DRAWCOMPLEX_BATCH 1024
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 			#define MAX_LIGHTS 256
@@ -567,6 +568,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool NVIDIAMemoryInfo;
 	bool SwapControlExt;
 	bool SwapControlTearExt;
+	bool BindlessFail;
 
 	INT MaxTextureSize;
 	BYTE OpenGLVersion;
@@ -666,7 +668,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
 	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
-	GLuint DrawComplexStrideSize    = FloatSize4_4;
+	GLuint DrawComplexStrideSize    = FloatSize4;
 	GLuint DrawGouraudStrideSize	= FloatSize3_2_4_4_4_3_4_4_4;
 
 
@@ -702,9 +704,13 @@ class UXOpenGLRenderDevice : public URenderDevice
     BufferRange DrawComplexSinglePassRange;
 	INT PrevDrawComplexBeginOffset;
 
-	GLint MultiDrawPolyStartArray[1500];
-	GLsizei MultiDrawPointCountArray[1500];
-	INT MultiDrawPolyCount;
+	BufferRange DrawComplexSSBORange;
+	INT PrevDrawComplexSSBOBeginOffset;
+
+	GLint DrawComplexMultiDrawFacetArray[1500];
+	GLsizei DrawComplexMultiDrawVertexCountArray[1500];
+	INT DrawComplexMultiDrawCount;
+	INT DrawComplexMultiDrawVertices;
 	
     BufferRange DrawTileRange;
 	INT PrevDrawTileBeginOffset;
@@ -898,6 +904,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{}
 	}DrawComplexBufferData;
 
+	struct DrawComplexShaderParams
+	{
+		glm::vec4 TexCoords[13];
+		glm::vec4 TexNum[2];
+		glm::uvec4 DrawFlags;
+	};	
+
 	//DrawSimple
 	FLOAT* DrawLinesVertsBuf;
 	FLOAT* Draw2DLineVertsBuf;
@@ -942,7 +955,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL StoredbNearZ;
 	bool bIsOrtho;
 
-
 	// Shader globals
 	GLuint GlobalUniformBlockIndex;
 	GLuint GlobalMatricesUBO;
@@ -973,6 +985,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint GlobalUniformClipPlaneIndex;
 	GLuint GlobalClipPlaneUBO;
 	static const GLuint GlobalClipPlaneBindingIndex = 5;
+
+	//SSBOs
+	GLuint DrawComplexSSBO;
+	GLuint DrawComplexSSBOs[10];
+	static const GLuint DrawComplexBindingIndex = 6;
 
 	glm::vec4 DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
 	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
@@ -1036,6 +1053,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawSimpleVertBuffer;
 	GLuint DrawTileVertBuffer;
 	GLuint DrawComplexVertBuffer;
+	GLuint DrawComplexVertBuffers[10];
 	GLuint DrawGouraudVertBuffer;
 	GLuint DrawGouraudVertListBuffer;
 	GLuint DrawGouraudVertBufferInterleaved;
@@ -1047,10 +1065,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawGouraudPolyVertListVao;
 	GLuint DrawGouraudPolyVertsSingleBufferVao;
 	GLuint DrawGouraudPolyVertListSingleBufferVao;
-	GLuint DrawComplexVertsSingleBufferVao;
-	GLuint DrawComplexVertListSingleBufferVao;
 	GLuint DrawComplexVertsSinglePassVao;
-	GLuint SimpleDepthVao;
+	GLuint SimpleDepthVao;	
 
     GLuint DrawComplexSinglePassFogColor;
     GLuint DrawComplexSinglePassFogStart;
@@ -1135,9 +1151,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void FindProc( void*& ProcAddress, char* Name, char* SupportName, UBOOL& Supports, UBOOL AllowExt );
 	void FindProcs( UBOOL AllowExt );
 
-    #ifdef _WIN32
+#ifdef _WIN32
 	void PrintFormat( HDC hDC, INT nPixelFormat );
-	#endif
+#endif
 
     UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
 	UBOOL InitGLEW(HINSTANCE hInstance);
@@ -1164,6 +1180,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void CheckExtensions();
 
 	void BufferComplexSurfaceVert(FLOAT* VertexBuf);
+	void BufferComplexShaderParams();
 	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
 	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);

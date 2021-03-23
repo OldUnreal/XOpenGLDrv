@@ -50,7 +50,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	if (OpenGLVersion == GL_Core)
 	{
 		if (UsingBindlessTextures || UsingPersistentBuffers)
-			GLVersionString = TEXT("#version 450 core\n");
+			GLVersionString = TEXT("#version 460 core\n");
 		else GLVersionString = TEXT("#version 330 core\n");
 	}
 
@@ -367,7 +367,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	// Global matrices.
 	glGenBuffers(1, &GlobalMatricesUBO);
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (4*sizeof(glm::mat4)), NULL, GL_STREAM_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, (4*sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalMatricesBindingIndex, GlobalMatricesUBO, 0, sizeof(glm::mat4) * 4);
 	CHECK_GL_ERROR();
@@ -375,7 +375,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	// Global Coords.
 	glGenBuffers(1, &GlobalCoordsUBO);
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalCoordsUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (2*sizeof(glm::mat4)), NULL, GL_STREAM_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, (2*sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalCoordsBindingIndex, GlobalCoordsUBO, 0, sizeof(glm::mat4) * 2);
 	CHECK_GL_ERROR();
@@ -402,7 +402,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	// Global DistanceFog.
 	glGenBuffers(1, &GlobalDistanceFogUBO);
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (2 * sizeof(glm::vec4)), NULL, GL_STREAM_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, (2 * sizeof(glm::vec4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalDistanceFogBindingIndex, GlobalDistanceFogUBO, 0, sizeof(glm::vec4) * 2);
 	CHECK_GL_ERROR();
@@ -410,7 +410,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	// Global ClipPlane.
 	glGenBuffers(1, &GlobalClipPlaneUBO);
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalClipPlaneUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (2 * sizeof(glm::vec4)), NULL, GL_STREAM_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, (2 * sizeof(glm::vec4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalClipPlaneBindingIndex, GlobalClipPlaneUBO, 0, sizeof(glm::vec4) * 2);
 	CHECK_GL_ERROR();
@@ -427,10 +427,13 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	//DrawComplex
 	glGenBuffers(1, &DrawComplexVertBuffer);
-	glGenVertexArrays(1, &DrawComplexVertsSingleBufferVao);
-	glGenVertexArrays(1, &DrawComplexVertListSingleBufferVao);
 	glGenVertexArrays(1, &DrawComplexVertsSinglePassVao);
 	CHECK_GL_ERROR();
+
+	glGenBuffers(1, &DrawComplexSSBO);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);	
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, DrawComplexBindingIndex, DrawComplexSSBO);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);	
 
 	//DrawGouraud
 	glGenBuffers(1, &DrawGouraudVertBuffer);
@@ -475,6 +478,8 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 		glDeleteBuffers(1, &DrawGouraudVertListBuffer);
 	if (DrawComplexVertBuffer)
 		glDeleteBuffers(1, &DrawComplexVertBuffer);
+	if (DrawComplexSSBO)
+		glDeleteBuffers(1, &DrawComplexSSBO);
 	/*
         if (SimpleDepthBuffer)
             glDeleteBuffers(1, &SimpleDepthBuffer);
@@ -492,10 +497,6 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 		glDeleteVertexArrays(1, &DrawGouraudPolyVertsSingleBufferVao);
 	if (DrawGouraudPolyVertListSingleBufferVao)
 		glDeleteVertexArrays(1, &DrawGouraudPolyVertListSingleBufferVao);
-	if (DrawComplexVertsSingleBufferVao)
-		glDeleteVertexArrays(1, &DrawComplexVertsSingleBufferVao);
-	if (DrawComplexVertListSingleBufferVao)
-		glDeleteVertexArrays(1, &DrawComplexVertListSingleBufferVao);
 
 	if (DrawComplexVertsSinglePassVao)
 		glDeleteVertexArrays(1, &DrawComplexVertsSinglePassVao);

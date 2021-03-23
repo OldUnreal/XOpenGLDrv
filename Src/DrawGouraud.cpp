@@ -244,7 +244,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	FCachedTexture* CachedTexture = NULL;
 	bool TextureChanged = 
 		(!UsingBindlessTextures && TexInfo[0].CurrentCacheID != Info.CacheID) ||
-		(UsingBindlessTextures && (CachedTexture = GetBindlessCachedTexture(Info)) != NULL && CachedTexture->TexNum[((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0] != TexInfo[0].TexNum);
+		(UsingBindlessTextures && ((CachedTexture = GetBindlessCachedTexture(Info)) != NULL && CachedTexture->TexNum[((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0] != TexInfo[0].TexNum) || CachedTexture == NULL);
 
 	if ( DrawGouraudListBufferData.VertSize > 0 && 
 		(TextureChanged || DrawGouraudListBufferData.PrevPolyFlags != PolyFlags))
@@ -646,6 +646,7 @@ void UXOpenGLRenderDevice::DrawGouraudStart()
 		glEnableVertexAttribArray(TEXTURE_ATTRIB);
 	}
 
+	
 	PrevDrawGouraudBeginOffset = -1;
 
 	CHECK_GL_ERROR();

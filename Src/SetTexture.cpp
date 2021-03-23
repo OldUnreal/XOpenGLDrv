@@ -19,10 +19,9 @@
 
 UXOpenGLRenderDevice::FCachedTexture* UXOpenGLRenderDevice::GetBindlessCachedTexture(FTextureInfo& Info)
 {
+#if XOPENGL_TEXTUREHANDLE_SUPPORT
 	if (!Info.Texture)
 		return NULL;
-	
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
 	FCachedTexture* CachedTex = (FCachedTexture*)Info.Texture->TextureHandle;
 #else
 	FCachedTexture* CachedTex = TextureCacheMap.FindRef(Info.CacheID);
@@ -35,10 +34,11 @@ BOOL UXOpenGLRenderDevice::GetBindlessRealtimeChanged(FTextureInfo& Info, FCache
 	if (Info.bRealtimeChanged)
 	{
 #if UNREAL_TOURNAMENT_OLDUNREAL
-		// hasn't really changed
-		if (Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
-			return FALSE;
 		Info.bRealtimeChanged = FALSE;
+		
+		if (!Info.Texture || Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
+			return FALSE;
+		
 #endif
 		return TRUE;
 	}
@@ -147,22 +147,23 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 	FCachedTexture *Bind = NULL;
 	
-	if (UsingBindlessTextures && 
-		(Bind = GetBindlessCachedTexture(Info)) != NULL &&
-		Bind->TexNum[CacheSlot])
-    {
-        if (!GetBindlessRealtimeChanged(Info, Bind))
-        {
-			Tex.TexNum = Bind->TexNum[CacheSlot];
-			STAT(unclockFast(Stats.BindCycles));
-			return;
-        }
+	if (UsingBindlessTextures)
+	{
+		if ((Bind = GetBindlessCachedTexture(Info)) != NULL &&
+			Bind->TexNum[CacheSlot])
+		{
+			if (!GetBindlessRealtimeChanged(Info, Bind))
+			{
+				Tex.TexNum = Bind->TexNum[CacheSlot];
+				STAT(unclockFast(Stats.BindCycles));
+				return;
+			}
 
-		//debugf(TEXT("bRealtimeChanged: %ls"),Info.Texture->GetFullName());
-		bBindlessRealtimeChanged = true;
-    }
-
-	if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
+			//debugf(TEXT("bRealtimeChanged: %ls"), Info.Texture->GetFullName());
+			bBindlessRealtimeChanged = true;
+		}
+	}
+	else if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
     {
         STAT(unclockFast(Stats.BindCycles));
         return;
@@ -295,7 +296,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 	// Upload if needed.
 	STAT(clockFast(Stats.ImageCycles));
-	if( !ExistingBind || Info.bRealtimeChanged )
+	if( !ExistingBind || Info.bRealtimeChanged || bBindlessRealtimeChanged )
 	{
 		// Some debug output.
 		//if( Info.Palette && Info.Palette[128].A!=255 && !(PolyFlags&PF_Translucent) )
@@ -858,6 +859,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					FCachedTextureInfo->Next = BindList;
 					BindList = FCachedTextureInfo;
 #endif
+					TextureCacheMap.Set(Info.CacheID, FCachedTextureInfo);
+
+					checkSlow(TextureCacheMap.FindRef(Info.CacheID) == FCachedTextureInfo);
 				}
 
                 FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
@@ -875,11 +879,13 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     }
     else
     {
+		//debugf(TEXT("Bindless fail %ls"), *FObjectPathName(Info.Texture));
+		BindlessFail = true;
         Bind->TexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
-    if (UsingBindlessTextures)
-        Tex.TexNum = Bind->TexNum[CacheSlot];
+	if (UsingBindlessTextures)
+		Tex.TexNum = Bind->TexNum[CacheSlot];
     else Tex.TexNum  = 0;
 
     CHECK_GL_ERROR();
@@ -919,7 +925,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 	DWORD Xor = CurrentAdditionalPolyFlags^PolyFlags;
 	if (Xor & (PF_TwoSided | PF_RenderHint))
 	{
-		#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227
 		if (PolyFlags & PF_TwoSided)
 			glDisable(GL_CULL_FACE);
 		else
@@ -929,16 +935,10 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			glFrontFace(GL_CCW); //rather expensive switch better try to avoid!
 		else
 			glFrontFace(GL_CW);
-		#endif
-
-		if (ActiveProgram==GouraudPolyVert_Prog)
-		{
-			if (DrawGouraudBufferData.VertSize > 0)
-				DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-		}
+#endif
 
 		CurrentAdditionalPolyFlags=PolyFlags;
-	}
+	}	
 
 	Xor = CurrentPolyFlags^PolyFlags;
 	// Detect changes in the blending modes.
