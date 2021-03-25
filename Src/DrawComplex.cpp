@@ -72,7 +72,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		// Check if the blending mode will change
 		WillItBlend(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the surface texture will change	
-		(!UsingBindlessTextures && WillTextureChange(0, *Surface.Texture, NextPolyFlags, Bind)))
+		WillTextureChange(0, *Surface.Texture, NextPolyFlags, Bind))
 	{
 		//debugf(TEXT("Polyswitch %08x => %08x"), DrawComplexBufferData.PolyFlags, NextPolyFlags);
 		if (DrawComplexBufferData.IndexOffset > 0)

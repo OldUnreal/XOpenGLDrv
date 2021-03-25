@@ -309,7 +309,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		}
 	}
 
-	if (!bBindlessRealtimeChanged)
+	if (!bBindlessRealtimeChanged || Bind->TexNum[CacheSlot] == 0)
     {
         CHECK_GL_ERROR();
         glActiveTexture(GL_TEXTURE0 + Multi);
@@ -880,6 +880,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				if (!FCachedTextureInfo)
 				{
 					FCachedTextureInfo = new (TEXT("XOpenGL")) FCachedTexture;
+					memset(FCachedTextureInfo, 0, sizeof(FCachedTexture));
 
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
 					Info.Texture->TextureHandle = FCachedTextureInfo;

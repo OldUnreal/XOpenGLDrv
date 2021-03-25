@@ -124,7 +124,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 
 	// Check if the texture will change
 	FCachedTexture* Bind;
-	if (!UsingBindlessTextures && WillTextureChange(0, Info, NextPolyFlags, Bind))
+	if (WillTextureChange(0, Info, NextPolyFlags, Bind))
 	{
 		if (DrawGouraudBufferData.VertSize > 0)
 		{

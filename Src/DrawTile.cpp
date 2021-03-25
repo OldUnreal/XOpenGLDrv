@@ -61,9 +61,9 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	// Check if uniforms will change
 	if (DrawTileBufferData.PolyFlags != NextPolyFlags ||
         // Check if blending mode will change
-        WillItBlend(DrawTileBufferData.PolyFlags, PolyFlags) || // orig polyflags here!
+        WillItBlend(DrawTileBufferData.BlendPolyFlags, PolyFlags) || // orig polyflags here!
         // Check if texture will change
-        (!UsingBindlessTextures && WillTextureChange(0, Info, NextPolyFlags, Bind)))
+        WillTextureChange(0, Info, PolyFlags, Bind))
 	{
         if (DrawTileBufferData.VertSize > 0)
         {
@@ -71,9 +71,14 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
             WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
         }
 
+        DrawTileBufferData.BlendPolyFlags = PolyFlags;
         SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
 	}
-	
+    else
+    {
+        debugf(TEXT("Texture buffered %ls"), *FObjectPathName(Info.Texture));
+    }
+
     DrawTileBufferData.PolyFlags = NextPolyFlags;
 
     SetTexture(0, Info, PolyFlags, 0, Tile_Prog, NORMALTEX);
@@ -412,7 +417,8 @@ void UXOpenGLRenderDevice::DrawTileStart()
         glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
     }
 
-    DrawTileBufferData.PolyFlags = 0;// SetFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
+    DrawTileBufferData.BlendPolyFlags = CurrentPolyFlags | CurrentAdditionalPolyFlags;
+    DrawTileBufferData.PolyFlags = 0;
     PrevDrawTileBeginOffset = -1;
 
     CHECK_GL_ERROR();

@@ -353,7 +353,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
 	glBufferData(GL_UNIFORM_BUFFER, (4*sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
-	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalMatricesBindingIndex, GlobalMatricesUBO, 0, sizeof(glm::mat4) * 4);
+	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalMatricesBindingIndex, GlobalMatricesUBO, 0, sizeof(glm::mat4) * 5);
 	CHECK_GL_ERROR();
 
 	// Global Coords.
