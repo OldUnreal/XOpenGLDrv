@@ -154,8 +154,10 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
+	UseShaderDrawParameters = 1;
 #else
 	UseBindlessTextures = 0;
+	UseShaderDrawParameters = 0;
 #endif
 	UseHWLighting = 0;
 	AlwaysMipmap = 0;
@@ -244,7 +246,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SwapControlTearExt = false;
 
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
-	BindList = NULL;
+	BindlessList = NULL;
 #endif
 
 	// Verbose Logging
@@ -252,6 +254,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
+	debugf(NAME_DevLoad, TEXT("UseShaderDrawParameters %i"), UseShaderDrawParameters);
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
 #endif
@@ -370,9 +373,11 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
         // Doing after extensions have been checked.
 		UsingBindlessTextures = UseBindlessTextures ? true : false;
 		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
+		UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
 #else
 		UsingBindlessTextures = false;
 		UsingPersistentBuffers = false;
+		UsingShaderDrawParameters = false;
 #endif
 	}
 
@@ -501,6 +506,11 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		MajorVersion = 3;
 		MinorVersion = 1;
 	}
+	else if (UseShaderDrawParameters)
+	{
+		MajorVersion = 4;
+		MinorVersion = 6;
+	}
 	else if (UseBindlessTextures || UsePersistentBuffers)
 	{
 		MajorVersion = 4;
@@ -558,6 +568,7 @@ InitContext:
 
                     UsingBindlessTextures = false;
                     UsingPersistentBuffers = false;
+					UsingShaderDrawParameters = false;
 
                     debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
 
@@ -838,6 +849,7 @@ InitContext:
 
 					UsingBindlessTextures = false;
 					UsingPersistentBuffers = false;
+					UsingShaderDrawParameters = false;
 
 					debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
 
@@ -1232,16 +1244,16 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	// Marco using linked list here because UTexture may be garbage collected before the Flush call, thus causes memleak.
 	FCachedTexture* Next;
-	for (FCachedTexture* T = BindList; T; T = Next)
+	for (FCachedTexture* T = BindlessList; T; T = Next)
 	{
 		Next = T->Next;
 		delete T;
 	}
-	BindList = NULL;	
+	BindlessList = NULL;	
 #else
-	for (TMap<QWORD, FCachedTexture*>::TIterator It(TextureCacheMap); It; ++It)
+	for (TMap<QWORD, FCachedTexture*>::TIterator It(BindlessMap); It; ++It)
 		delete It.Value();
-	TextureCacheMap.Empty();
+	BindlessMap.Empty();
 #endif
 	unguard;
 
@@ -1253,13 +1265,17 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		{
 			glDeleteSamplers(1, &It.Value().Sampler[i]);
 
+			if (UsingBindlessTextures)
+			{
 #ifdef __LINUX_ARM__
-			if (UsingBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
-				glMakeTextureHandleNonResidentNV(It.Value().TexHandle[i]);
+				if (It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
+					glMakeTextureHandleNonResidentNV(It.Value().TexHandle[i]);
 #else
-            if (UsingBindlessTextures && It.Value().TexHandle[i] && glIsTextureHandleResidentARB(It.Value().TexHandle[i]))
-                glMakeTextureHandleNonResidentARB(It.Value().TexHandle[i]);
+				if (It.Value().TexHandle[i] && glIsTextureHandleResidentARB(It.Value().TexHandle[i]))
+					glMakeTextureHandleNonResidentARB(It.Value().TexHandle[i]);
 #endif
+			}
+			
 			It.Value().TexHandle[i] = 0;
 			It.Value().TexNum[i] = 1;
 			if (It.Value().Ids[i])
@@ -1811,12 +1827,11 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 	appSprintf // stijn: mem safety NOT OK
 		(
 		Result,
-		TEXT("XOpenGL stats: Bind=%04.1f Image=%04.1f Complex=%04.1f Gouraud=%04.1f GouraudList=%04.1f Tile Buffer/Draw=%04.1f/%04.1f"),
+		TEXT("XOpenGL stats: Bind=%04.1f Image=%04.1f Complex=%04.1f Gouraud=%04.1f Tile Buffer/Draw=%04.1f/%04.1f"),
 		GSecondsPerCycle * 1000.f * Stats.BindCycles,
 		GSecondsPerCycle * 1000.f * Stats.ImageCycles,
 		GSecondsPerCycle * 1000.f * Stats.ComplexCycles,
 		GSecondsPerCycle * 1000.f * Stats.GouraudPolyCycles,
-		GSecondsPerCycle * 1000.f * Stats.GouraudPolyListCycles,
 		GSecondsPerCycle * 1000.f * Stats.TileBufferCycles,
 		GSecondsPerCycle * 1000.f * Stats.TileDrawCycles
 		);
@@ -1957,7 +1972,8 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseOpenGLDebug"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseOpenGLDebug)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBufferInvalidation"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBufferInvalidation)));
@@ -2096,9 +2112,6 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("GouraudPoly_____= %05.2f"), GSecondsPerCycle * 1000 * Stats.GouraudPolyCycles);
-	Canvas->CurX = 400;
-	Canvas->CurY = (CurY += 12);
-	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("GouraudPolyList_= %05.2f"), GSecondsPerCycle * 1000 * Stats.GouraudPolyListCycles);
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 24);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Other:"));

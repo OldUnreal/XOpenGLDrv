@@ -38,7 +38,6 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
 	            break;
 	        }
 	        case GouraudPolyVert_Prog:
-	        case GouraudPolyVertList_Prog:
 	        {
                 DrawGouraudEnd(NextProgram);
 	            break;
@@ -72,7 +71,6 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
                 break;
             }
             case GouraudPolyVert_Prog:
-            case GouraudPolyVertList_Prog:
             {
                 DrawGouraudStart();
                 break;

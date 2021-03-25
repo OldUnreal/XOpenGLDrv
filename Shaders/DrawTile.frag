@@ -5,7 +5,6 @@
 		* Created by Smirftsch
 =============================================================================*/
 
-
 uniform uint PolyFlags;
 uniform bool bHitTesting;
 uniform float Gamma;

@@ -32,6 +32,7 @@ out vec4 vEyeSpacePos;
 
 #endif
 
+
 void main(void)
 {
 #ifdef GL_ES

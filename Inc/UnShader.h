@@ -49,9 +49,12 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 
 	if (OpenGLVersion == GL_Core)
 	{
-		if (UsingBindlessTextures || UsingPersistentBuffers)
+		if (UsingShaderDrawParameters)
 			GLVersionString = TEXT("#version 460 core\n");
-		else GLVersionString = TEXT("#version 330 core\n");
+		else if (UsingBindlessTextures || UsingPersistentBuffers)
+			GLVersionString = TEXT("#version 450 core\n");
+		else 
+			GLVersionString = TEXT("#version 330 core\n");
 	}
 
 	// LOAD EXTENSIONS
@@ -69,6 +72,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	Definitions += *FString::Printf(TEXT("#define ENGINE_VERSION %d\n"), ENGINE_VERSION);
     Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
 	Definitions += *FString::Printf(TEXT("#define MAX_CLIPPINGPLANES %i \n"), MaxClippingPlanes);
+	Definitions += *FString::Printf(TEXT("#define SHADERDRAWPARAMETERS %i \n"), UsingShaderDrawParameters);
 
     // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
     Definitions += *FString::Printf(TEXT("#line 1 \n"));
@@ -312,7 +316,6 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	//DrawComplexSinglePass vars.
 	FString DrawComplexSinglePass = TEXT("DrawComplexSinglePass");
-	GetUniformLocation(DrawComplexSinglePassRendMap, DrawComplexProg, "RendMap", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassbHitTesting, DrawComplexProg, "bHitTesting", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassDrawColor, DrawComplexProg, "DrawColor", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassFogColor, DrawComplexProg, "FogParams.FogColor", DrawComplexSinglePass);
@@ -333,7 +336,6 @@ void UXOpenGLRenderDevice::InitShaders()
 	//DrawGouraud vars.
 	FString DrawGouraud = TEXT("DrawGouraud");
 	GetUniformLocation(DrawGouraudPolyFlags, DrawGouraudProg, "PolyFlags", DrawGouraud);
-	GetUniformLocation(DrawGouraudRendMap, DrawGouraudProg, "RendMap", DrawGouraud);
 	GetUniformLocation(DrawGouraudbHitTesting, DrawGouraudProg, "bHitTesting", DrawGouraud);
 	GetUniformLocation(DrawGouraudDrawColor, DrawGouraudProg, "DrawColor", DrawGouraud);
 	GetUniformLocation(DrawGouraudGamma, DrawGouraudProg, "Gamma", DrawGouraud);
@@ -419,12 +421,7 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	//DrawGouraud
 	glGenBuffers(1, &DrawGouraudVertBuffer);
-	glGenBuffers(1, &DrawGouraudVertBufferInterleaved);
-	glGenBuffers(1, &DrawGouraudVertListBuffer);
 	glGenVertexArrays(1, &DrawGouraudPolyVertsVao);
-	glGenVertexArrays(1, &DrawGouraudPolyVertListVao);
-	glGenVertexArrays(1, &DrawGouraudPolyVertsSingleBufferVao);
-	glGenVertexArrays(1, &DrawGouraudPolyVertListSingleBufferVao);
 
 	/*
 	// ShadowMap
@@ -454,10 +451,6 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 		glDeleteBuffers(1, &DrawTileVertBuffer);
 	if (DrawGouraudVertBuffer)
 		glDeleteBuffers(1, &DrawGouraudVertBuffer);
-	if (DrawGouraudVertBufferInterleaved)
-		glDeleteBuffers(1, &DrawGouraudVertBufferInterleaved);
-	if (DrawGouraudVertListBuffer)
-		glDeleteBuffers(1, &DrawGouraudVertListBuffer);
 	if (DrawComplexVertBuffer)
 		glDeleteBuffers(1, &DrawComplexVertBuffer);
 	if (DrawComplexSSBO)
@@ -473,12 +466,6 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 		glDeleteVertexArrays(1, &DrawTileVertsVao);
 	if (DrawGouraudPolyVertsVao)
 		glDeleteVertexArrays(1, &DrawGouraudPolyVertsVao);
-	if (DrawGouraudPolyVertListVao)
-		glDeleteVertexArrays(1, &DrawGouraudPolyVertListVao);
-	if (DrawGouraudPolyVertsSingleBufferVao)
-		glDeleteVertexArrays(1, &DrawGouraudPolyVertsSingleBufferVao);
-	if (DrawGouraudPolyVertListSingleBufferVao)
-		glDeleteVertexArrays(1, &DrawGouraudPolyVertListSingleBufferVao);
 
 	if (DrawComplexVertsSinglePassVao)
 		glDeleteVertexArrays(1, &DrawComplexVertsSinglePassVao);

@@ -41,16 +41,8 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 
     if (FogSurf.IsValid())
     {
-        if((ActiveProgram == GouraudPolyVertList_Prog) || (ActiveProgram == GouraudPolyVert_Prog)) //bZoneBasedFog Fog.
-        {
-            if (DrawGouraudListBufferData.VertSize > 0)
-                DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudListBufferData);
-        }
-        else if(ActiveProgram == ComplexSurfaceSinglePass_Prog)
-        {
-            if (DrawGouraudBufferData.VertSize > 0 )
-                DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-        }
+        if (ActiveProgram == GouraudPolyVert_Prog && DrawGouraudBufferData.IndexOffset > 0) //bZoneBasedFog Fog.
+			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 
         DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
         DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)(FogSurf.FogMode));

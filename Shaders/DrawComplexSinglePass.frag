@@ -13,25 +13,13 @@ uniform sampler2D Texture4;	//Macro Texture
 uniform sampler2D Texture5;	//BumpMap
 uniform sampler2D Texture6;	//EnvironmentMap
 
-uniform vec4 TexCoords[16];
-uniform uint TexNum[8];
-uniform uint DrawParams[3];
-
-//uniform bool FogChanged;
-#if EDITOR
-uniform bool bHitTesting;
-uniform uint RendMap;
-uniform vec4 DrawColor;
-#endif
-//uniform float AlphaThreshold;
-
 in vec3 vCoords;
 #if EDITOR
-in vec3 Surface_Normal;
+flat in vec3 Surface_Normal;
 #endif
 #if ENGINE_VERSION==227 || BUMPMAPS
 in vec4 vEyeSpacePos;
-in mat3 TBNMat;
+flat in mat3 TBNMat;
 #endif
 
 in vec2 vTexCoords;
@@ -57,7 +45,7 @@ layout ( location = 0, index = 0) out vec4 FragColor;
 //layout ( location = 0, index = 1) out vec4 FragColor1;
 #endif
 
-#if BINDLESSTEXTURES
+#if SHADERDRAWPARAMETERS
 flat in uint BaseTexNum;
 flat in uint LightMapTexNum;
 flat in uint FogMapTexNum;
@@ -73,6 +61,15 @@ flat in float BaseAlpha;
 flat in float parallaxScale;
 flat in float Gamma;
 flat in float BumpMapSpecular;
+# if EDITOR
+flat in bool bHitTesting;
+flat in uint RendMap;
+flat in vec4 DrawColor;
+# endif
+#else
+uniform vec4 TexCoords[16];
+uniform uint TexNum[8];
+uniform uint DrawParams[5];
 #endif
 
 vec3 rgb2hsv(vec3 c)
@@ -97,7 +94,7 @@ vec3 hsv2rgb(vec3 c)
 #if ENGINE_VERSION==227
 vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeight) //http://sunandblackcat.com/tipFullView.php?topicid=28
 {
-#if !BINDLESSTEXTURES
+#if !SHADERDRAWPARAMETERS
    float parallaxScale = TexCoords[IDX_MACRO_TEXINFO].w;
 #endif
 
@@ -190,13 +187,16 @@ void main (void)
 {
 	vec4 TotalColor = vec4(0.0,0.0,0.0,0.0);
 
-#if !BINDLESSTEXTURES
+#if !SHADERDRAWPARAMETERS
 	uint DrawFlags     = DrawParams[0];
 	uint TextureFormat = DrawParams[1];
 	uint PolyFlags     = DrawParams[2];
+	uint RendMap       = DrawParams[3];
+	bool bHitTesting   = bool(DrawParams[4]);
 	float BaseDiffuse  = TexCoords[IDX_DIFFUSE_INFO].x;
 	float BaseAlpha    = TexCoords[IDX_DIFFUSE_INFO].z;
 	float Gamma        = TexCoords[IDX_Z_AXIS].w;
+	vec4 DrawColor     = TexCoords[IDX_DRAWCOLOR];
 #endif
 
 #if HARDWARELIGHTS || BUMPMAPS

@@ -32,7 +32,7 @@ LINE_DepthCued
 * Seems not to be implemented in SoftDrv?
 -----------------------------------------------------------------------------*/
 
-inline void UXOpenGLRenderDevice::BufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData)
+inline void UXOpenGLRenderDevice::DrawSimpleBufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData)
 {
 	DrawLinesTemp[0] = LineData[0];
 	DrawLinesTemp[1] = LineData[1];
@@ -78,7 +78,7 @@ void UXOpenGLRenderDevice::Draw2DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 	}
 	else
 	{
-		BufferLines(&DrawLinesVertsBuf[DrawLinesBufferData.VertSize], Draw2DLineVertsBuf);
+		DrawSimpleBufferLines(&DrawLinesVertsBuf[DrawLinesBufferData.VertSize], Draw2DLineVertsBuf);
 		DrawLinesBufferData.DrawColor = Color;
 		DrawLinesBufferData.VertSize += 6;
 		DrawLinesBufferData.LineFlags = LineFlags;
@@ -143,7 +143,7 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 		}
 		else
 		{
-			BufferLines(&DrawLinesVertsBuf[DrawLinesBufferData.VertSize], Draw3DLineVertsBuf);
+			DrawSimpleBufferLines(&DrawLinesVertsBuf[DrawLinesBufferData.VertSize], Draw3DLineVertsBuf);
 			DrawLinesBufferData.DrawColor = Color;
 			DrawLinesBufferData.VertSize += 6;
 			DrawLinesBufferData.LineFlags = LineFlags;

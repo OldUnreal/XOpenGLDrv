@@ -112,6 +112,19 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
         }
 
+		if (UseShaderDrawParameters)
+		{
+            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")))
+            {
+                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters found. UseShaderDrawParameters enabled."));
+            }
+            else
+            {
+                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
+                UseShaderDrawParameters = false;
+            }
+		}
+
         if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
         {
             debugf(TEXT("XOpenGL: GL_NVX_gpu_memory_info found."));
@@ -125,6 +138,9 @@ void UXOpenGLRenderDevice::CheckExtensions()
             AMDMemoryInfo = true;
         }
         else AMDMemoryInfo = false;
+
+		if (UseShaderDrawParameters)
+        { }
 
 #ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
         if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))

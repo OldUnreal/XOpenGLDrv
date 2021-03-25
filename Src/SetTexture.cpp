@@ -24,17 +24,23 @@ UXOpenGLRenderDevice::FCachedTexture* UXOpenGLRenderDevice::GetBindlessCachedTex
 		return NULL;
 	FCachedTexture* CachedTex = (FCachedTexture*)Info.Texture->TextureHandle;
 #else
-	FCachedTexture* CachedTex = TextureCacheMap.FindRef(Info.CacheID);
+	FCachedTexture* CachedTex = BindlessMap.FindRef(Info.CacheID);
 #endif
 	return CachedTex;
 }
 
-BOOL UXOpenGLRenderDevice::GetBindlessRealtimeChanged(FTextureInfo& Info, FCachedTexture* Texture)
+BOOL UXOpenGLRenderDevice::WillBindlessTextureChange(FTextureInfo& Info, FCachedTexture* Texture, DWORD PolyFlags)
 {
+	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
+
+	// see if we have the necessary texture cached
+	if (Texture->TexNum[CacheSlot] == 0)
+		return TRUE;
+
+	// already cached but the texture data may have changed
 	if (Info.bRealtimeChanged)
 	{
 #if UNREAL_TOURNAMENT_OLDUNREAL
-		Info.bRealtimeChanged = FALSE;
 		
 		if (!Info.Texture || Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
 			return FALSE;
@@ -42,6 +48,39 @@ BOOL UXOpenGLRenderDevice::GetBindlessRealtimeChanged(FTextureInfo& Info, FCache
 #endif
 		return TRUE;
 	}
+	return FALSE;
+}
+
+BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture)
+{	
+	if (UsingBindlessTextures)
+	{	
+		CachedTexture = GetBindlessCachedTexture(Info);
+		if (CachedTexture)
+			return WillBindlessTextureChange(Info, CachedTexture, PolyFlags);
+	}
+
+	// not bindless or not cached
+	if (TexInfo[Multi].CurrentCacheID != Info.CacheID)
+		return TRUE;
+
+	// see if we have the right version of the texture bound
+	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
+	if (TexInfo[Multi].CurrentCacheSlot != CacheSlot)
+		return TRUE;
+
+	// we have a texture bound but we are now trying to unbind?
+	if (!Info.Texture)
+		return TRUE;
+
+	if (Info.bRealtimeChanged)
+	{
+		CachedTexture = BindMap->Find(Info.CacheID);
+
+		if (CachedTexture && CachedTexture->RealtimeChangeCount != Info.Texture->RealtimeChangeCount)
+			return TRUE;
+	}
+
 	return FALSE;
 }
 
@@ -146,28 +185,21 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(clockFast(Stats.BindCycles));
 
 	FCachedTexture *Bind = NULL;
-	
-	if (UsingBindlessTextures)
+	if (!WillTextureChange(Multi, Info, PolyFlags, Bind))
 	{
-		if ((Bind = GetBindlessCachedTexture(Info)) != NULL &&
-			Bind->TexNum[CacheSlot])
-		{
-			if (!GetBindlessRealtimeChanged(Info, Bind))
-			{
-				Tex.TexNum = Bind->TexNum[CacheSlot];
-				STAT(unclockFast(Stats.BindCycles));
-				return;
-			}
-
-			//debugf(TEXT("bRealtimeChanged: %ls"), Info.Texture->GetFullName());
-			bBindlessRealtimeChanged = true;
-		}
+		if (UsingBindlessTextures && Bind)
+			Tex.TexNum = Bind->TexNum[CacheSlot];
+		STAT(unclockFast(Stats.BindCycles));
+		return;
 	}
-	else if( !Info.bRealtimeChanged && Info.CacheID==Tex.CurrentCacheID && CacheSlot==Tex.CurrentCacheSlot )
-    {
-        STAT(unclockFast(Stats.BindCycles));
-        return;
-    }
+
+	if (Bind)
+	{
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
+#endif
+		bBindlessRealtimeChanged = true;
+	}
 
     // Make current.
 	Tex.CurrentCacheSlot = CacheSlot;
@@ -251,11 +283,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	}
 
 	switch (ShaderProg)
-	{
-		case Simple_Prog:
-		{
-			break;
-		}
+	{	
 		case Tile_Prog:
 		{
 			glUniform1i(DrawTileTexture, Multi);
@@ -263,7 +291,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			break;
 		}
 		case GouraudPolyVert_Prog:
-		case GouraudPolyVertList_Prog:
 		{
 			glUniform1i(DrawGouraudTexture[Multi], Multi);
 			CHECK_GL_ERROR();
@@ -275,6 +302,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			CHECK_GL_ERROR();
 			break;
 		}
+		case Simple_Prog:
 		default:
 		{
 			break;
@@ -846,7 +874,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
                 FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
 #else
-				FCachedTexture* FCachedTextureInfo = TextureCacheMap.FindRef(Info.CacheID);
+				FCachedTexture* FCachedTextureInfo = BindlessMap.FindRef(Info.CacheID);
 #endif
 
 				if (!FCachedTextureInfo)
@@ -856,12 +884,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
 					Info.Texture->TextureHandle = FCachedTextureInfo;
 					// Marco: Hookup for linked list for mem cleanup later.
-					FCachedTextureInfo->Next = BindList;
-					BindList = FCachedTextureInfo;
+					FCachedTextureInfo->Next = BindlessList;
+					BindlessList = FCachedTextureInfo;
+#else					
+					BindlessMap.Set(Info.CacheID, FCachedTextureInfo);
+					checkSlow(BindlessMap.FindRef(Info.CacheID) == FCachedTextureInfo);
 #endif
-					TextureCacheMap.Set(Info.CacheID, FCachedTextureInfo);
-
-					checkSlow(TextureCacheMap.FindRef(Info.CacheID) == FCachedTextureInfo);
 				}
 
                 FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
@@ -892,6 +920,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	STAT(unclockFast(Stats.ImageCycles));
 	unguard;
 }
+
 DWORD UXOpenGLRenderDevice::SetFlags(DWORD PolyFlags)
 {
     guard(UOpenGLRenderDevice::SetFlags);
@@ -1009,6 +1038,12 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 
 	CHECK_GL_ERROR();
 	unguard;
+}
+
+BOOL UXOpenGLRenderDevice::WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags)
+{
+	// stijn: returns true if the polyflag switch will cause a change in the blending mode
+	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog)) ? TRUE : FALSE;
 }
 
 BYTE UXOpenGLRenderDevice::SetZTestMode(BYTE Mode)

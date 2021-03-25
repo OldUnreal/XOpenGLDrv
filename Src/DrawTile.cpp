@@ -55,24 +55,26 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
     if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags&PF_Translucent))
 		PolyFlags |= PF_Highlighted;
 
-	// stijn: UT draws fonts with PF_Translucent AND PF_Masked set. All of the other rendevs will remove PF_Masked from PF_Translucent tiles, but XOpenGL did not
-	//if (PolyFlags & (PF_Translucent|PF_AlphaBlend))
-	//	PolyFlags &= ~PF_Masked;
+    FCachedTexture* Bind;
+    DWORD NextPolyFlags = SetFlags(PolyFlags);
 
+	// Check if uniforms will change
+	if (DrawTileBufferData.PolyFlags != NextPolyFlags ||
+        // Check if blending mode will change
+        WillItBlend(DrawTileBufferData.PolyFlags, PolyFlags) || // orig polyflags here!
+        // Check if texture will change
+        (!UsingBindlessTextures && WillTextureChange(0, Info, NextPolyFlags, Bind)))
+	{
+        if (DrawTileBufferData.VertSize > 0)
+        {
+            DrawTileVerts(DrawTileBufferData);
+            WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
+        }
 
-    if (DrawTileBufferData.VertSize > 0 &&
-        (DrawTileBufferData.PrevPolyFlags != PolyFlags ||
-            (!UsingBindlessTextures && (Info.Texture != DrawTileBufferData.PrevTexture || Info.bRealtimeChanged)))) // stijn: with this check we can enable tile buffering even for GPUs that don't support bindless textures
-    {
-        // Non 227: to make this work, add missing ComputeRenderSize() in URender::DrawWorld and UGameEngine::Draw for canvas operations.
-        DrawTileVerts(DrawTileBufferData);
-    }
-
-	DrawTileBufferData.PrevPolyFlags = PolyFlags;
-    DrawTileBufferData.PrevTexture = Info.Texture;
-
-    DrawTileBufferData.PolyFlags = SetFlags(PolyFlags);
-	SetBlend(PolyFlags, false);
+        SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
+	}
+	
+    DrawTileBufferData.PolyFlags = NextPolyFlags;
 
     SetTexture(0, Info, PolyFlags, 0, Tile_Prog, NORMALTEX);
     //debugf(TEXT("%ls %ls"), GetTextureFormatString(Info.Format), Info.Texture->GetName());
@@ -101,9 +103,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		Color.W = 1.0f;
 #else
 	else Color.W = 1.0f;
-#endif
-	if (UsingPersistentBuffersTile && DrawTileRange.Sync[DrawTileBufferData.Index])
-		WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
+#endif	
 
 	if (OpenGLVersion == GL_ES)
 	{
@@ -242,11 +242,15 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	if ( DrawTileBufferData.IndexOffset >= DRAWTILE_SIZE - 60)
     {
         DrawTileVerts(DrawTileBufferData);
+        WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
         debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
     }
     unclockFast(Stats.TileBufferCycles);
-	if (NoBuffering) // No buffering at this time for Editor.
+    if (NoBuffering) // No buffering at this time for Editor.
+    {
         DrawTileVerts(DrawTileBufferData);
+        WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
+    }
 
 	unguard;
 }
@@ -286,14 +290,12 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
         {
             if (UseBufferInvalidation)
                 glInvalidateBufferData(DrawTileVertBuffer);
-            #ifdef __LINUX_ARM__
-                    // stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
-                    glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_DYNAMIC_DRAW);
-            #else
-                    glBufferSubData(GL_ARRAY_BUFFER, 0, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
-            #endif
-
-
+#ifdef __LINUX_ARM__
+	        // stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
+	        glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_DYNAMIC_DRAW);
+#else
+			glBufferSubData(GL_ARRAY_BUFFER, 0, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
+#endif
             CHECK_GL_ERROR();
         }
 
@@ -358,7 +360,10 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
 void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
 {
     if (DrawTileBufferData.VertSize > 0)
+    {
         DrawTileVerts(DrawTileBufferData);
+        WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
+    }
 
     CHECK_GL_ERROR();
 
@@ -379,6 +384,8 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
 
 void UXOpenGLRenderDevice::DrawTileStart()
 {
+    WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
+	
 #if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
     if (UseAA && NoAATiles && PrevProgram != Simple_Prog)
         glDisable(GL_MULTISAMPLE);
@@ -405,6 +412,7 @@ void UXOpenGLRenderDevice::DrawTileStart()
         glEnableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
     }
 
+    DrawTileBufferData.PolyFlags = 0;// SetFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
     PrevDrawTileBeginOffset = -1;
 
     CHECK_GL_ERROR();

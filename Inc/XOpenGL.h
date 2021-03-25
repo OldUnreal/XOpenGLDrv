@@ -171,7 +171,6 @@ enum ShaderProgType
 	Simple_Prog,
 	Tile_Prog,
 	GouraudPolyVert_Prog,
-	GouraudPolyVertList_Prog,
 	GouraudMeshBufferPolyVert_Prog,
 	ComplexSurfaceSinglePass_Prog,
 	ShadowMap_Prog,
@@ -449,9 +448,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	};
 
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
-	FCachedTexture* BindList;
+	FCachedTexture* BindlessList;
 #else
-	TMap<QWORD, FCachedTexture*> TextureCacheMap;
+	TMap<QWORD, FCachedTexture*> BindlessMap;
 #endif
 	/*
 	// Information about a Mesh
@@ -508,7 +507,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		DWORD Draw3DLine;
 		DWORD Draw2DPoint;
 		DWORD GouraudPolyCycles;
-		DWORD GouraudPolyListCycles;
 		DWORD TileBufferCycles;
 		DWORD TileDrawCycles;
 		DWORD TriangleCycles;
@@ -552,6 +550,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD UseBindlessTextures;
 	BITFIELD UsePersistentBuffers;
 	BITFIELD UseBufferInvalidation;
+	BITFIELD UseShaderDrawParameters;
 
 	// Not really in use...(yet)
 	BITFIELD UseMeshBuffering; //Buffer (Static)Meshes for drawing.
@@ -564,6 +563,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool UsingPersistentBuffersGouraud;
 	bool UsingPersistentBuffersComplex;
 	bool UsingPersistentBuffersTile;
+	bool UsingShaderDrawParameters;
 	bool AMDMemoryInfo;
 	bool NVIDIAMemoryInfo;
 	bool SwapControlExt;
@@ -612,6 +612,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FLOAT UPan;
 		FLOAT VPan;
 		INT TexNum;
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		INT RealTimeChangeCount{};
+#endif
 	FTexInfo()
 		:CurrentCacheID(0),
 		CurrentCacheSlot(0),
@@ -619,7 +622,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		VMult(0),
 		UPan(0),
 		VPan(0),
-		TexNum(0)
+		TexNum(0)		
 		{}
 	} TexInfo[8];
 	FLOAT RFX2, RFY2;
@@ -698,7 +701,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	};
 
 	BufferRange DrawGouraudBufferRange;
-	BufferRange DrawGouraudListBufferRange;
 	INT PrevDrawGouraudBeginOffset;
 
     BufferRange DrawComplexSinglePassRange;
@@ -774,8 +776,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint IndexOffset;
 		GLuint BeginOffset;
 		DWORD PolyFlags;
-		DWORD PrevPolyFlags;
-		UTexture* PrevTexture;
 		DrawTileBuffer()
 			: TexCoords(),
 			VertSize(0),
@@ -785,9 +785,7 @@ class UXOpenGLRenderDevice : public URenderDevice
             Index(0),
 			IndexOffset(0),
 			BeginOffset(0),
-			PolyFlags(0),
-            PrevPolyFlags(0),
-			PrevTexture(nullptr)
+			PolyFlags(0)
 		{}
 	}DrawTileBufferData;
 
@@ -798,7 +796,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint IndexOffset;
 		GLuint BeginOffset;
 		DWORD PolyFlags;
-		DWORD PrevPolyFlags;
 		DWORD RendMap;
 		FLOAT TexUMult;
 		FLOAT TexVMult;
@@ -822,7 +819,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			IndexOffset(0),
 			BeginOffset(0),
 			PolyFlags(0),
-			PrevPolyFlags(0),
 			RendMap(0),
 			TexUMult(0.f),
 			TexVMult(0.f),
@@ -841,8 +837,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 			MacroTextureDrawScale(0.f),
 			FogSurf()
 		{}
-	}DrawGouraudBufferData;
-	DrawGouraudBuffer DrawGouraudListBufferData;
+	} DrawGouraudBufferData;
+
+	struct DrawGouraudBufferedVert
+	{
+		FPlane Vert;
+		FPlane Normal;
+	};
 
 	struct LightInfo
 	{
@@ -864,21 +865,46 @@ class UXOpenGLRenderDevice : public URenderDevice
 	LightInfo LightData;
 	INT NumStaticLights = 0;
 
-	struct DrawComplexTexMaps
+	struct DrawComplexShaderDrawParams
 	{
-		FPlane SurfNormal;
-		glm::vec4 TexCoords[16];
-		FCoords MapCoords;
-		GLuint DrawFlags;
-		GLuint TextureFormat;
-		DrawComplexTexMaps()
-			: SurfNormal(0.f, 0.f, 0.f, 0.f),
-			TexCoords(),
-			MapCoords(),
-			DrawFlags(0),
-			TextureFormat(0)
-		{}
-	}TexMaps;
+		glm::vec4 TexCoords[14];
+		glm::uvec4 TexNum[2];
+		glm::uvec4 DrawParams;
+
+		DWORD& DrawFlags()
+		{
+			return reinterpret_cast<DWORD&>(DrawParams.x);
+		}
+
+		DWORD& TextureFormat()
+		{
+			return reinterpret_cast<DWORD&>(DrawParams.y);
+		}
+		
+		DWORD& PolyFlags()
+		{
+			return reinterpret_cast<DWORD&>(DrawParams.z);
+		}
+
+		DWORD& RendMap()
+		{
+			return reinterpret_cast<DWORD&>(DrawParams.w);
+		}
+
+		DWORD& HitTesting()
+		{
+			return reinterpret_cast<DWORD&>(TexNum[1].w);
+		}
+	} DrawComplexDrawParams;
+
+	struct DrawComplexBufferedVert
+	{
+#if WIN32
+		FPlane Coords;
+#else
+		glm::vec4 Coords;
+#endif
+	};
 
 	struct DrawComplexBuffer
 	{
@@ -886,30 +912,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint IndexOffset;
 		GLuint BeginOffset;
 		GLuint Iteration;
-		DWORD PolyFlags;
-		DWORD PrevPolyFlags;
-		DWORD RendMap;
-		FPlane DrawColor;
-		GLuint TexNum[8];
+		
 		DrawComplexBuffer()
 			: Index(0),
 			IndexOffset(0),
 			BeginOffset(0),
-			Iteration(0),
-			PolyFlags(0),
-			PrevPolyFlags(0),
-			RendMap(0),
-			DrawColor(0.f, 0.f, 0.f, 0.f),
-			TexNum()
+			Iteration(0)
 		{}
 	}DrawComplexBufferData;
-
-	struct DrawComplexShaderParams
-	{
-		glm::vec4 TexCoords[13];
-		glm::vec4 TexNum[2];
-		glm::uvec4 DrawFlags;
-	};	
 
 	//DrawSimple
 	FLOAT* DrawLinesVertsBuf;
@@ -1002,9 +1012,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawSimplebHitTesting;
 	GLuint DrawTilebHitTesting;
 	GLuint DrawGouraudbHitTesting;
-	GLuint DrawGouraudRendMap;
 	GLuint DrawComplexSinglePassbHitTesting;
-	GLuint DrawComplexSinglePassRendMap;
 
 	//DrawComplexSinglePass
 	GLuint DrawComplexSinglePassFogMap;
@@ -1055,16 +1063,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawComplexVertBuffer;
 	GLuint DrawComplexVertBuffers[10];
 	GLuint DrawGouraudVertBuffer;
-	GLuint DrawGouraudVertListBuffer;
-	GLuint DrawGouraudVertBufferInterleaved;
 
 	//VAO's
 	GLuint DrawSimpleGeometryVertsVao;
 	GLuint DrawTileVertsVao;
 	GLuint DrawGouraudPolyVertsVao;
-	GLuint DrawGouraudPolyVertListVao;
-	GLuint DrawGouraudPolyVertsSingleBufferVao;
-	GLuint DrawGouraudPolyVertListSingleBufferVao;
 	GLuint DrawComplexVertsSinglePassVao;
 	GLuint SimpleDepthVao;	
 
@@ -1101,6 +1104,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Texture UV
 	GLuint DrawGouraudTexUV;
 	GLuint DrawGouraudDetailTexUV;
+
+	// Cached Texture Infos
+	FTextureInfo DrawGouraudDetailTextureInfo;
+	FTextureInfo DrawGouraudMacroTextureInfo;
+	FTextureInfo DrawGouraudBumpMapInfo;
+
+	FTextureInfo DrawComplexBumpMapInfo;
 
 	//Gamma
 	struct FGammaRamp
@@ -1179,19 +1189,23 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL GLExtensionSupported(FString Extension_Name);
 	void CheckExtensions();
 
-	void BufferComplexSurfaceVert(FLOAT* VertexBuf);
-	void BufferComplexShaderParams();
+	DrawComplexShaderDrawParams* DrawComplexGetDrawParamsRef();
 	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
+
+	void DrawGouraudBufferVert(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
 	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);
-	void BufferGouraudPolygonPoint(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer );
-	void BufferGouraudPolygonVert(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
+	void DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
+	void DrawGouraudReleaseState(FTextureInfo& Info);	
+
+	void DrawTileBufferTile(FLOAT* DrawTilesTemp, FLOAT* TileData);
 	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
-	void BufferTiles(FLOAT* DrawTilesTemp, FLOAT* TileData);
+
+	void DrawSimpleBufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
 	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
 	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
 	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
-	void BufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
+	
 	void DrawPass(FSceneNode* Frame, INT Pass);
 	void ClearZ(FSceneNode* Frame);
 	void GetStats(TCHAR* Result);
@@ -1222,11 +1236,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void MakeCurrent();
 
 	FCachedTexture* GetBindlessCachedTexture(FTextureInfo& Info);
-	static BOOL GetBindlessRealtimeChanged(FTextureInfo& Info, FCachedTexture* Texture);
+	static BOOL WillBindlessTextureChange(FTextureInfo& Info, FCachedTexture* Texture, DWORD PolyFlags);
+	BOOL WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture);
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
 	DWORD SetFlags(DWORD PolyFlags);
 	void SetBlend(DWORD PolyFlags, bool InverseOrder);
+	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
 	DWORD SetDepth(DWORD PolyFlags);
 	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode);
 
@@ -1255,9 +1271,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void GetUniformLocation(GLuint &Uniform, GLuint &Program, const char* Name, FString ProgramName);
 	void DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLuint size, INT Mode, DWORD LineFLags, FPlane DrawColor, bool BufferedDraw);
 	void DrawTileVerts(DrawTileBuffer &BufferData);
-	void DrawComplexVertsSinglePass(DrawComplexBuffer &BufferData, DrawComplexTexMaps TexMaps);
-	void BufferGouraudPolyVerts( FLOAT* verts, GLuint VertSize, GLuint TexSize, GLuint colorsize, FPlane DrawColor);
-	void DrawGouraudPolyBuffer();
+	void DrawComplexVertsSinglePass(DrawComplexBuffer &BufferData);
 	void DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer &BufferData);
 
 	void Exit();

@@ -278,6 +278,7 @@ const uint  IDX_BUMPMAP_INFO     = 9u;
 const uint  IDX_X_AXIS           = 10u;
 const uint  IDX_Y_AXIS           = 11u;
 const uint  IDX_Z_AXIS           = 12u;
+const uint  IDX_DRAWCOLOR        = 13u;
 
 layout(std140) uniform GlobalMatrices
 {
@@ -362,31 +363,6 @@ float PlaneDot( vec4 Plane, vec3 Point )
     return dot(Plane.xyz,Point)-Plane.w;
 }
 
-#if BINDLESSTEXTURES
-struct DrawComplexShaderParams
-{
-	vec4 DiffuseUV;
-	vec4 LightMapUV;
-	vec4 FogMapUV;
-	vec4 DetailUV;
-	vec4 MacroUV;
-	vec4 BumpMapUV;
-	vec4 EnviroMapUV;
-	vec4 DiffuseInfo;
-	vec4 MacroInfo;
-	vec4 BumpMapInfo;
-	vec4 XAxis;
-	vec4 YAxis;
-	vec4 ZAxis;
-	vec4 TexNum[2];
-	uvec4 DrawFlags;
-};
-
-layout(std430, binding = 6) buffer AllDrawComplexShaderParams
-{
-	DrawComplexShaderParams DrawComplexParams[];
-};
-#endif
 
 // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
 #line 1

@@ -19,6 +19,9 @@ void UXOpenGLRenderDevice::LockBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::LockBuffer);
 
+	if (!UsingPersistentBuffers || &Buffer == &GlobalUniformTextureHandles)
+		return;
+
 	if (Buffer.Sync[Index])
 		glDeleteSync(Buffer.Sync[Index]);
 	Buffer.Sync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -30,6 +33,9 @@ void UXOpenGLRenderDevice::LockBuffer(BufferRange& Buffer, GLuint Index)
 void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::WaitBuffer);
+
+	if (!UsingPersistentBuffers || &Buffer == &GlobalUniformTextureHandles)
+		return;
 
     CHECK_GL_ERROR();
 	GLuint64 WaitDuration = 0;
@@ -84,25 +90,14 @@ void UXOpenGLRenderDevice::MapBuffers()
         glBufferStorage(GL_ARRAY_BUFFER, DrawGouraudBufferSize, 0, PersistentBufferFlags);
 		DrawGouraudBufferRange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudVertBuffer, 0, DrawGouraudBufferSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 		CHECK_GL_ERROR();
-
-		GLsizeiptr DrawGouraudBufferListSize = (NUMBUFFERS * DRAWGOURAUDPOLYLIST_SIZE * sizeof(float));
-
-        glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
-		glBufferStorage(GL_ARRAY_BUFFER, DrawGouraudBufferListSize, 0, PersistentBufferFlags);
-		DrawGouraudListBufferRange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudVertListBuffer, 0, DrawGouraudBufferListSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
-		CHECK_GL_ERROR();
     }
 	else
 	{
 
 		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
-		DrawGouraudListBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLYLIST_SIZE];
 
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
 		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
-		glBindBuffer(GL_ARRAY_BUFFER, 0);
-		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertListBuffer);
-		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLYLIST_SIZE * sizeof(float), DrawGouraudListBufferRange.VertBuffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 	
@@ -119,11 +114,11 @@ void UXOpenGLRenderDevice::MapBuffers()
 		CHECK_GL_ERROR();
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		GLsizeiptr DrawComplexSSBOSize = NUMBUFFERS * MAX_DRAWCOMPLEX_BATCH * sizeof(DrawComplexShaderParams);
+		GLsizeiptr DrawComplexSSBOSize = NUMBUFFERS * MAX_DRAWCOMPLEX_BATCH * sizeof(DrawComplexShaderDrawParams);
 
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
 		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOSize, NULL, PersistentBufferFlags);
-		DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, sizeof(DrawComplexShaderParams) * MAX_DRAWCOMPLEX_BATCH, PersistentBufferFlags);
+		DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, sizeof(DrawComplexShaderDrawParams) * MAX_DRAWCOMPLEX_BATCH, PersistentBufferFlags);
 		CHECK_GL_ERROR();
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
@@ -135,8 +130,8 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
-		DrawComplexSSBORange.Buffer = (FLOAT*)(new DrawComplexShaderParams[MAX_DRAWCOMPLEX_BATCH]);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawComplexShaderParams) * MAX_DRAWCOMPLEX_BATCH, DrawComplexSSBORange.Buffer, GL_STREAM_DRAW);
+		DrawComplexSSBORange.Buffer = (FLOAT*)(new DrawComplexShaderDrawParams[MAX_DRAWCOMPLEX_BATCH]);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawComplexShaderDrawParams) * MAX_DRAWCOMPLEX_BATCH, DrawComplexSSBORange.Buffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}
 	
@@ -198,18 +193,10 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(DrawGouraudVertBuffer);
 			DrawGouraudBufferRange.Buffer = nullptr;
 		}
-
-		glGetNamedBufferParameteriv(DrawGouraudVertListBuffer, GL_BUFFER_MAPPED, &IsMapped);
-		if (IsMapped == GL_TRUE)
-		{
-			glUnmapNamedBuffer(DrawGouraudVertListBuffer);
-			DrawGouraudListBufferRange.Buffer = nullptr;
-		}
 	}
 	else 
 	{
 		delete[] DrawGouraudBufferRange.Buffer;
-		delete[] DrawGouraudListBufferRange.Buffer;
 	}
 	
 	if (UsingPersistentBuffersComplex)
