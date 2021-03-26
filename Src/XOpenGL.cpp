@@ -109,6 +109,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
 
 	// Debug Options
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
@@ -137,7 +138,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	//new(GetClass(),TEXT("EnableShadows"),			RF_Public)UBoolProperty ( CPP_PROPERTY(EnableShadows			), TEXT("Options"), CPF_Config);
 
 	// Defaults.
-	RefreshRate = 60;
+	RefreshRate = 0;
 	NumAASamples = 4;
 	GammaOffsetScreenshots = 0.7f;
 	LODBias = 0.f;
@@ -1976,8 +1977,8 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseOpenGLDebug"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseOpenGLDebug)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBufferInvalidation"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBufferInvalidation)));

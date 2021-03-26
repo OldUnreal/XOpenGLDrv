@@ -77,8 +77,11 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 	if (Info.bRealtimeChanged)
 	{
 		CachedTexture = BindMap->Find(Info.CacheID);
-
-		if (CachedTexture && CachedTexture->RealtimeChangeCount != Info.Texture->RealtimeChangeCount)
+		if (CachedTexture
+#if UNREAL_TOURNAMENT_OLDUNREAL
+			&& CachedTexture->RealtimeChangeCount != Info.Texture->RealtimeChangeCount
+#endif
+			)
 			return TRUE;
 	}
 

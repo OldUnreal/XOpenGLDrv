@@ -68,6 +68,7 @@ flat in vec4 vDrawColor;
 # endif
 #else
 uint vBumpMapTexNum;
+float vBumpMapSpecular;
 uniform vec4 TexCoords[16];
 uniform uint TexNum[8];
 uniform uint DrawParams[5];
@@ -96,7 +97,7 @@ vec3 hsv2rgb(vec3 c)
 vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeight) //http://sunandblackcat.com/tipFullView.php?topicid=28
 {
 #if !SHADERDRAWPARAMETERS
-   float vParallaxScale = TexCoords[IDX_MACRO_TEXINFO].w;
+   float vParallaxScale = TexCoords[IDX_MACRO_INFO].w;
 #endif
 
    // determine required number of layers
@@ -132,7 +133,7 @@ vec2 ParallaxMapping(in vec2 PTexCoords, in vec3 ViewDir, out float parallaxHeig
       currentTextureCoords -= dtex;
       // new depth from heightmap
 # if BINDLESSTEXTURES
-      heightFromTexture = -texture(Textures[vBumMapTexNum], currentTextureCoords).r;
+      heightFromTexture = -texture(Textures[vBumpMapTexNum], currentTextureCoords).r;
 # else
 	  heightFromTexture = -texture(Texture5, currentTextureCoords).r;
 # endif
@@ -198,6 +199,7 @@ void main (void)
 	float vBaseAlpha       = TexCoords[IDX_DIFFUSE_INFO].z;
 	float vGamma           = TexCoords[IDX_Z_AXIS].w;
 	vec4 vDrawColor        = TexCoords[IDX_DRAWCOLOR];
+	vBumpMapSpecular       = TexCoords[IDX_BUMPMAP_INFO].y;
 # if BINDLESSTEXTURES
    	uint vTexNum		   = TexNum[0];
 	uint vLightMapTexNum   = TexNum[1];

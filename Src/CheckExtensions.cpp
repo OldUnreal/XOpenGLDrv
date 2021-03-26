@@ -139,9 +139,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
         else AMDMemoryInfo = false;
 
-		if (UseShaderDrawParameters)
-        { }
-
 #ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
         if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))
         {
