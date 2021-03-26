@@ -86,7 +86,7 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
             	// stijn: is this really necessary?
             	//glBindBuffer(GL_ARRAY_BUFFER, 0);
                 //glBindVertexArray(0);
-                //glUseProgram(0);
+                //glUseProgram(0);                
 
                 //CHECK_GL_ERROR();
                 break;

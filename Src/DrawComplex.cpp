@@ -67,8 +67,10 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	const DWORD NextPolyFlags = SetFlags(Surface.PolyFlags);
 	FCachedTexture* Bind;
 
-	// Check if the blending mode will change
-	if (WillItBlend(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
+	if (!UsingShaderDrawParameters ||
+		!UsingBindlessTextures ||
+		// Check if the blending mode will change
+		WillItBlend(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the surface texture will change	
 		WillTextureChange(0, *Surface.Texture, NextPolyFlags, Bind))
 	{
@@ -243,12 +245,6 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	
 	DrawComplexMultiDrawVertexCountArray[DrawComplexMultiDrawCount] = FacetVertexCount;
 	DrawComplexMultiDrawCount++;
-
-	if (BindlessFail)
-	{
-		DrawComplexVertsSinglePass(DrawComplexBufferData);
-		WaitBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
-	}
 	
 	CHECK_GL_ERROR();
 #if ENGINE_VERSION!=227

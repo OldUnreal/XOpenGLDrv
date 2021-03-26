@@ -208,13 +208,13 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
     // Make current.
 	Tex.CurrentCacheSlot = CacheSlot;
-	Tex.CurrentCacheID   = Info.CacheID;
-
-	//debugf(NAME_DevGraphics, TEXT("Info.Texture %ls Tex.CurrentCacheID 0x%08x%08x, Multi %i, Bind %i" ),Info.Texture->GetPathName(), Tex.CurrentCacheID, Multi, Bind );
+	Tex.CurrentCacheID   = Info.CacheID;	
 
 	// Find in cache.
 	if (!Bind)
         Bind=BindMap->Find(Info.CacheID);
+
+	//debugf(NAME_DevGraphics, TEXT("Info.Texture %ls Tex.CurrentCacheID 0x%016llx, Multi %i, Bind %08x Format %d"), Info.Texture->GetPathName(), Tex.CurrentCacheID, Multi, Bind, Info.Format);
 
 	// Whether we can handle this texture format/size.
 	bool Unsupported = false;
@@ -633,6 +633,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							INT ULimit = Min(USize,Info.UClamp); // Implicit assumes NumMips==1.
 							INT VLimit = Min(VSize,Info.VClamp);
 
+							//debugf(NAME_DevGraphics, TEXT("Unpacking lightmap %dx%d"), ULimit, VLimit);
+
 							// Do resampling. The area outside of the clamp gets filled up with the last valid values
 							// to emulate GL_CLAMP_TO_EDGE behaviour. This is done to avoid using NPOT textures.
 							for ( INT v=0; v<VLimit; v++ )
@@ -856,7 +858,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
                 Bind->TexHandle[CacheSlot] = 0;
                 Bind->TexNum[CacheSlot] = 0;
             }
-            else
+            else if (TexNum < NUMTEXTURES)
             {
                 //debugf(TEXT("Making %ls with TexNum %i resident 0x%08x%08x"),Info.Texture->GetFullName(),FCachedTextureInfo->TexNum[CacheSlot], FCachedTextureInfo->TexHandle[CacheSlot]);
 #ifdef __LINUX_ARM__
@@ -868,7 +870,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
                 if (GlobalUniformTextureHandles.Sync[0])
                     WaitBuffer(GlobalUniformTextureHandles, 0);
-
+            	
                 GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
 
                 LockBuffer(GlobalUniformTextureHandles, 0);				
@@ -906,15 +908,18 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
                 TexNum++;
             }
-
-            if (TexNum > NUMTEXTURES)
-				debugf(TEXT("Bindless texture overflow! %i"),TexNum);
+			else
+			{
+				BindlessFail = true;
+				Bind->TexHandle[CacheSlot] = 0;
+				Bind->TexNum[CacheSlot] = 0;
+			}
         }
     }
     else
     {
 		//debugf(TEXT("Bindless fail %ls"), *FObjectPathName(Info.Texture));
-		BindlessFail = true;
+		BindlessFail = UsingBindlessTextures;
         Bind->TexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
