@@ -217,7 +217,7 @@ void main(void)
 
 #if ENGINE_VERSION==227 || BUMPMAPS
 	vEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
-	if ((vDrawFlags & (DF_MacroTexture|DF_BumpMap)) != 0)
+	if ((vDrawFlags & (DF_MacroTexture|DF_BumpMap)) != 0u)
 	{
 		vec3 T = normalize(vec3(-MapCoordsXAxis.x,MapCoordsXAxis.y,MapCoordsXAxis.z));
 		vec3 B = normalize(vec3(MapCoordsYAxis.x,-MapCoordsYAxis.y,-MapCoordsYAxis.z));
