@@ -40,11 +40,12 @@ BOOL UXOpenGLRenderDevice::WillBindlessTextureChange(FTextureInfo& Info, FCached
 	// already cached but the texture data may have changed
 	if (Info.bRealtimeChanged)
 	{
+		if (!Info.Texture)
+			return TRUE;
+		
 #if UNREAL_TOURNAMENT_OLDUNREAL
-		
-		if (!Info.Texture || Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
-			return FALSE;
-		
+		if (Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
+			return FALSE;		
 #endif
 		return TRUE;
 	}
@@ -71,7 +72,7 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 
 	// we have a texture bound but we are now trying to unbind?
 	if (!Info.Texture)
-		return TRUE;
+		return Info.bRealtimeChanged;
 
 	if (Info.bRealtimeChanged)
 	{
@@ -196,7 +197,8 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	if (Bind)
 	{
 #if UNREAL_TOURNAMENT_OLDUNREAL
-		Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
+		if (Info.Texture)
+			Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
 #endif
 		bBindlessRealtimeChanged = true;
 	}

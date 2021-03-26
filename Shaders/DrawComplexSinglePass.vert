@@ -25,10 +25,10 @@ out vec2 vBumpTexCoords;
 out vec2 vEnvironmentTexCoords;
 #endif
 #if EDITOR
-flat out vec3 Surface_Normal; // f.e. Render normal view.
+flat out vec3 vSurfaceNormal; // f.e. Render normal view.
 #endif
 #if ENGINE_VERSION==227 || BUMPMAPS
-flat out mat3 TBNMat;
+flat out mat3 vTBNMat;
 #endif
 
 #if SHADERDRAWPARAMETERS
@@ -57,25 +57,25 @@ layout(std430, binding = 6) buffer AllDrawComplexShaderDrawParams
 	DrawComplexShaderDrawParams DrawComplexParams[];
 };
 
-flat out uint BaseTexNum;
-flat out uint LightMapTexNum;
-flat out uint FogMapTexNum;
-flat out uint DetailTexNum;
-flat out uint MacroTexNum;
-flat out uint BumpMapTexNum;
-flat out uint EnviroMapTexNum;
-flat out uint DrawFlags;
-flat out uint TextureFormat;
-flat out uint PolyFlags;
-flat out float BaseDiffuse;
-flat out float BaseAlpha;
-flat out float parallaxScale;
-flat out float Gamma;
-flat out float BumpMapSpecular;
+flat out uint vTexNum;
+flat out uint vLightMapTexNum;
+flat out uint vFogMapTexNum;
+flat out uint vDetailTexNum;
+flat out uint vMacroTexNum;
+flat out uint vBumpMapTexNum;
+flat out uint vEnviroMapTexNum;
+flat out uint vDrawFlags;
+flat out uint vTextureFormat;
+flat out uint vPolyFlags;
+flat out float vBaseDiffuse;
+flat out float vBaseAlpha;
+flat out float vParallaxScale;
+flat out float vGamma;
+flat out float vBumpMapSpecular;
 # if EDITOR
-flat out bool bHitTesting;
-flat out uint RendMap;
-flat out vec4 DrawColor;
+flat out uint vHitTesting;
+flat out uint vRendMap;
+flat out vec4 vDrawColor;
 # endif
 #else
 uniform vec4 TexCoords[16];
@@ -102,26 +102,26 @@ void main(void)
 	vec4 BumpMapUV   = DrawComplexParams[gl_DrawID].BumpMapUV;
 	vec4 EnviroMapUV = DrawComplexParams[gl_DrawID].EnviroMapUV;
 
-	DrawFlags        = DrawComplexParams[gl_DrawID].DrawFlags[0];
-	TextureFormat    = DrawComplexParams[gl_DrawID].DrawFlags[1];
-	PolyFlags        = DrawComplexParams[gl_DrawID].DrawFlags[2];
+	vDrawFlags        = DrawComplexParams[gl_DrawID].DrawFlags[0];
+	vTextureFormat    = DrawComplexParams[gl_DrawID].DrawFlags[1];
+	vPolyFlags        = DrawComplexParams[gl_DrawID].DrawFlags[2];
 # if EDITOR
-	RendMap          = DrawComplexParams[gl_DrawID].DrawFlags[3];
-	bHitTesting      = bool(DrawComplexParams[gl_DrawID].TexNum[1].w);
-	DrawColor        = DrawComplexParams[gl_DrawID].DrawColor;
+	vRendMap          = DrawComplexParams[gl_DrawID].DrawFlags[3];
+	vHitTesting       = DrawComplexParams[gl_DrawID].TexNum[1].w;
+	vDrawColor        = DrawComplexParams[gl_DrawID].DrawColor;
 # endif	
-	BaseTexNum       = DrawComplexParams[gl_DrawID].TexNum[0].x;
-	LightMapTexNum   = DrawComplexParams[gl_DrawID].TexNum[0].y;
-	FogMapTexNum     = DrawComplexParams[gl_DrawID].TexNum[0].z;
-	DetailTexNum     = DrawComplexParams[gl_DrawID].TexNum[0].w;
-	MacroTexNum      = DrawComplexParams[gl_DrawID].TexNum[1].x;
-	BumpMapTexNum    = DrawComplexParams[gl_DrawID].TexNum[1].y;
-	EnviroMapTexNum  = DrawComplexParams[gl_DrawID].TexNum[1].z;
-	BaseDiffuse      = DrawComplexParams[gl_DrawID].DiffuseInfo.x;
-	BaseAlpha        = DrawComplexParams[gl_DrawID].DiffuseInfo.z;
-	BumpMapSpecular  = DrawComplexParams[gl_DrawID].BumpMapInfo.y;
-	parallaxScale    = DrawComplexParams[gl_DrawID].MacroInfo.w;
-	Gamma            = ZAxis.w;
+	vTexNum			  = DrawComplexParams[gl_DrawID].TexNum[0].x;
+	vLightMapTexNum   = DrawComplexParams[gl_DrawID].TexNum[0].y;
+	vFogMapTexNum     = DrawComplexParams[gl_DrawID].TexNum[0].z;
+	vDetailTexNum     = DrawComplexParams[gl_DrawID].TexNum[0].w;
+	vMacroTexNum      = DrawComplexParams[gl_DrawID].TexNum[1].x;
+	vBumpMapTexNum    = DrawComplexParams[gl_DrawID].TexNum[1].y;
+	vEnviroMapTexNum  = DrawComplexParams[gl_DrawID].TexNum[1].z;
+	vBaseDiffuse      = DrawComplexParams[gl_DrawID].DiffuseInfo.x;
+	vBaseAlpha        = DrawComplexParams[gl_DrawID].DiffuseInfo.z;
+	vBumpMapSpecular  = DrawComplexParams[gl_DrawID].BumpMapInfo.y;
+	vParallaxScale    = DrawComplexParams[gl_DrawID].MacroInfo.w;
+	vGamma            = ZAxis.w;
 #else
 	vec4 XAxis       = TexCoords[IDX_X_AXIS];
 	vec4 YAxis       = TexCoords[IDX_Y_AXIS];
@@ -134,7 +134,7 @@ void main(void)
 	vec4 BumpMapUV   = TexCoords[IDX_BUMPMAP_COORDS];
 	vec4 EnviroMapUV = TexCoords[IDX_ENVIROMAP_COORDS];
 
-	uint DrawFlags   = DrawParams[0];
+	uint vDrawFlags  = DrawParams[0];
 #endif
 
 	// Point Coords
@@ -160,7 +160,7 @@ void main(void)
 	vTexCoords      = (MapDot - TexMapPan) * TexMapMult;
 
 	//Texture UV Lightmap to fragment
-	if ((DrawFlags & DF_LightMap) == DF_LightMap)
+	if ((vDrawFlags & DF_LightMap) == DF_LightMap)
 	{
 		vec2 LightMapMult = LightMapUV.xy;
 		vec2 LightMapPan  = LightMapUV.zw;
@@ -168,7 +168,7 @@ void main(void)
 	}
 
 	// Texture UV FogMap
-	if ((DrawFlags & DF_FogMap) == DF_FogMap)
+	if ((vDrawFlags & DF_FogMap) == DF_FogMap)
 	{
 		vec2 FogMapMult = FogMapUV.xy;
 		vec2 FogMapPan  = FogMapUV.zw;
@@ -177,7 +177,7 @@ void main(void)
 
 	// Texture UV DetailTexture
 #if DETAILTEXTURES
-	if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
+	if ((vDrawFlags & DF_DetailTexture) == DF_DetailTexture)
 	{
 		vec2 DetailMult  = DetailUV.xy;
 		vec2 DetailPan   = DetailUV.zw;
@@ -187,7 +187,7 @@ void main(void)
 
 	// Texture UV Macrotexture
 #if MACROTEXTURES
-	if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
+	if ((vDrawFlags & DF_MacroTexture) == DF_MacroTexture)
 	{
 		vec2 MacroMult  = MacroUV.xy;
 		vec2 MacroPan   = MacroUV.zw;
@@ -197,7 +197,7 @@ void main(void)
 
 	// Texture UV BumpMap
 #if BUMPMAPS
-	if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+	if ((vDrawFlags & DF_BumpMap) == DF_BumpMap)
 	{
 		vec2 BumpMapMult = BumpMapUV.xy;
 		vec2 BumpMapPan  = BumpMapUV.zw;
@@ -207,7 +207,7 @@ void main(void)
 
 	// Texture UV EnvironmentMap
 #if ENGINE_VERSION==227
-	if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
+	if ((vDrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
 	{
 		vec2 EnvironmentMapMult = EnviroMapUV.xy;
 		vec2 EnvironmentMapPan  = EnviroMapUV.zw;
@@ -217,7 +217,7 @@ void main(void)
 
 #if ENGINE_VERSION==227 || BUMPMAPS
 	vEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
-	if ((DrawFlags & (DF_MacroTexture|DF_BumpMap)) != 0)
+	if ((vDrawFlags & (DF_MacroTexture|DF_BumpMap)) != 0)
 	{
 		vec3 T = normalize(vec3(-MapCoordsXAxis.x,MapCoordsXAxis.y,MapCoordsXAxis.z));
 		vec3 B = normalize(vec3(MapCoordsYAxis.x,-MapCoordsYAxis.y,-MapCoordsYAxis.z));
@@ -227,12 +227,12 @@ void main(void)
 		if (dot(cross(N, T), B) < 0.0)
 		   T = T * -1.0;
 
-		TBNMat = transpose(mat3(T, B, N));
+		vTBNMat = transpose(mat3(T, B, N));
 	}
 #endif
 
 #if EDITOR
-	Surface_Normal = MapCoordsZAxis;
+	vSurfaceNormal = MapCoordsZAxis;
 #endif
 
 	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
@@ -245,38 +245,6 @@ void main(void)
 #else
 void main (void)
 {
-
-	vec4 XAxis       = DrawComplexParams[gl_DrawID].XAxis;
-	vec4 YAxis       = DrawComplexParams[gl_DrawID].YAxis;
-	vec4 ZAxis       = DrawComplexParams[gl_DrawID].ZAxis;
-	vec4 DiffuseUV   = DrawComplexParams[gl_DrawID].DiffuseUV;
-	vec4 LightMapUV  = DrawComplexParams[gl_DrawID].LightMapUV;
-	vec4 FogMapUV    = DrawComplexParams[gl_DrawID].FogMapUV;
-	vec4 DetailUV    = DrawComplexParams[gl_DrawID].DetailUV;
-	vec4 MacroUV     = DrawComplexParams[gl_DrawID].MacroUV;
-	vec4 BumpMapUV   = DrawComplexParams[gl_DrawID].BumpMapUV;
-	vec4 EnviroMapUV = DrawComplexParams[gl_DrawID].EnviroMapUV;
-
-	DrawFlags        = DrawComplexParams[gl_DrawID].DrawFlags[0];
-	TextureFormat    = DrawComplexParams[gl_DrawID].DrawFlags[1];
-	PolyFlags        = DrawComplexParams[gl_DrawID].DrawFlags[2];
-# if EDITOR
-	RendMap          = DrawComplexParams[gl_DrawID].DrawFlags[3];
-	bHitTesting      = bool(DrawComplexParams[gl_DrawID].TexNum[1].w);
-	DrawColor        = DrawComplexParams[gl_DrawID].DrawColor;
-# endif	
-	BaseTexNum       = uint(DrawComplexParams[gl_DrawID].TexNum[0].x);
-	LightMapTexNum   = uint(DrawComplexParams[gl_DrawID].TexNum[0].y);
-	FogMapTexNum     = uint(DrawComplexParams[gl_DrawID].TexNum[0].z);
-	DetailTexNum     = uint(DrawComplexParams[gl_DrawID].TexNum[0].w);
-	MacroTexNum      = uint(DrawComplexParams[gl_DrawID].TexNum[1].x);
-	BumpMapTexNum    = uint(DrawComplexParams[gl_DrawID].TexNum[1].y);
-	EnviroMapTexNum  = uint(DrawComplexParams[gl_DrawID].TexNum[1].z);
-	BaseDiffuse      = DrawComplexParams[gl_DrawID].DiffuseInfo.x;
-	BaseAlpha        = DrawComplexParams[gl_DrawID].DiffuseInfo.z;
-	BumpMapSpecular  = DrawComplexParams[gl_DrawID].BumpMapInfo.y;
-	parallaxScale    = DrawComplexParams[gl_DrawID].MacroInfo.w;
-	Gamma            = ZAxis.w;
 
 	vEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
 

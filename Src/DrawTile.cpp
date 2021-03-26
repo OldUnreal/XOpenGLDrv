@@ -74,10 +74,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         DrawTileBufferData.BlendPolyFlags = PolyFlags;
         SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
 	}
-    else
-    {
-        debugf(TEXT("Texture buffered %ls"), *FObjectPathName(Info.Texture));
-    }
 
     DrawTileBufferData.PolyFlags = NextPolyFlags;
 
@@ -212,7 +208,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	}
 	else
 	{
-        DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset] = X;
+        DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset  ] = X;
         DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+1] = Y;
         DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+2] = Z;
 

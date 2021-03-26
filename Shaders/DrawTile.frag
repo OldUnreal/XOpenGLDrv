@@ -11,7 +11,7 @@ uniform float Gamma;
 uniform vec4 HitDrawColor;
 
 in vec2 gTexCoords;
-in vec4 gDrawColor;
+flat in vec4 gDrawColor;
 flat in uint gTexNum;
 out vec4 FragColor;
 

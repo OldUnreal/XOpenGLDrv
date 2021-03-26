@@ -32,6 +32,24 @@
 #include "XOpenGL.h"
 //#include "UnStaticLight.h"
 
+enum DrawGouraudTexCoordsIndices
+{
+	DIFFUSE_COORDS,
+	LIGHTMAP_COORDS,
+	FOGMAP_COORDS,
+	DETAIL_COORDS,
+	MACRO_COORDS,
+	BUMPMAP_COORDS,
+	ENVIROMAP_COORDS,
+	DIFFUSE_INFO,
+	MACRO_INFO,
+	BUMPMAP_INFO,
+	X_AXIS,
+	Y_AXIS,
+	Z_AXIS,
+	DRAWCOLOR
+};
+
 inline void UXOpenGLRenderDevice::DrawGouraudBufferVert( FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& BufferData )
 {
 	// Verts

@@ -1575,6 +1575,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
+	CHECK_GL_ERROR();
 	bIsOrtho = true;
 
 	modelviewprojMat=projMat*viewMat*modelMat; //yes, this is right.
@@ -1587,6 +1588,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
 	glBufferSubData(GL_UNIFORM_BUFFER, 4 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
 
@@ -1621,6 +1623,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
+	CHECK_GL_ERROR();
 
 	modelviewprojMat=projMat*viewMat*modelMat;
 	modelviewMat=viewMat*modelMat;
@@ -1632,6 +1635,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	glBufferSubData(GL_UNIFORM_BUFFER, 3 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(modelviewprojMat));
 	glBufferSubData(GL_UNIFORM_BUFFER, 4 * sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(lightSpaceMat));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
 

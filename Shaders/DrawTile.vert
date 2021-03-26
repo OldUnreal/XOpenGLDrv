@@ -26,12 +26,37 @@ out vec3 vCoords;
 out vec4 vTexCoords0;
 out vec4 vTexCoords1;
 out vec4 vTexCoords2;
-out vec4 vDrawColor;
+flat out vec4 vDrawColor;
 flat out uint vTexNum;
 out vec4 vEyeSpacePos;
 
 #endif
 
+/*
+#if SHADERDRAWPARAMETERS
+struct DrawTileShaderDrawParams
+{
+	vec4 FrameCoords;  // (RFX2, RFY2, FX2, FY2)
+	vec4 TextureInfo;  // (UMult, VMult, TexNum, Gamma)
+	vec4 DrawColor;    // Color for the tile
+	vec4 HitDrawColor; // Selection color for UEd
+	uvec4 DrawParams;  // (PolyFlags, bHitTesting, unused, unused)
+};
+
+layout(std430, binding = 6) buffer AllDrawTileShaderDrawParams
+{
+	DrawTileShaderDrawParams DrawTileParams[];
+};
+
+flat out uint vTexNum;
+flat out uint vPolyFlags;
+flat out float vGamma;
+# if EDITOR
+flat out bool vHitTesting;
+flat out vec4 vHitDrawColor;
+# endif
+#endif
+*/
 
 void main(void)
 {
