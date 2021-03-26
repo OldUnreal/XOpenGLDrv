@@ -835,12 +835,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             Info.Unload();
 	}
 
-    if (UsingBindlessTextures && (Info.Texture 
-#if UNREAL_TOURNAMENT_OLDUNREAL
-		|| (TextureType == LIGHTMAP && GAtlasManager.Enabled)
-		|| TextureType == FOGMAP
-#endif
-		) && !Unsupported)
+    if (UsingBindlessTextures && !Unsupported)
     {
 		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UsingBindlessTextures.
         {
@@ -910,6 +905,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             }
 			else
 			{
+				debugf(NAME_DevGraphics, TEXT("Bindless overflow"));
 				BindlessFail = true;
 				Bind->TexHandle[CacheSlot] = 0;
 				Bind->TexNum[CacheSlot] = 0;

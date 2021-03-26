@@ -107,16 +107,22 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	SetProgram(GouraudPolyVert_Prog);
 
 	DWORD NextPolyFlags = SetFlags(PolyFlags);
-
+	
+	FCachedTexture* Bind;
 	// Check if the uniforms will change
-	if (DrawGouraudBufferData.PolyFlags != NextPolyFlags)
+	if (DrawGouraudBufferData.PolyFlags != NextPolyFlags ||
+		// Check if the blending mode will change
+		WillItBlend(DrawGouraudBufferData.PolyFlags, NextPolyFlags) ||
+		// Check if the texture will change
+		WillTextureChange(0, Info, NextPolyFlags, Bind))
 	{
 		if (DrawGouraudBufferData.VertSize > 0)
 		{
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
 		}
-	}
+		SetBlend(NextPolyFlags, false);
+	}	
 
 	// Check if the projection will change
 	if ((GUglyHackFlags & HACKFLAGS_NoNearZ) && (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || !StoredbNearZ))
@@ -127,28 +133,6 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
 		}
 		SetProjection(Frame, 1);
-	}
-
-	// Check if the blending mode will change
-	if (WillItBlend(DrawGouraudBufferData.PolyFlags, NextPolyFlags))
-	{
-		if (DrawGouraudBufferData.VertSize > 0)
-		{
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-		}
-		SetBlend(NextPolyFlags, false);
-	}
-
-	// Check if the texture will change
-	FCachedTexture* Bind;
-	if (WillTextureChange(0, Info, NextPolyFlags, Bind))
-	{
-		if (DrawGouraudBufferData.VertSize > 0)
-		{
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-		}
 	}
 
 	DrawGouraudBufferData.PolyFlags = NextPolyFlags;
