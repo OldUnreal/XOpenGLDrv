@@ -24,13 +24,8 @@ void UXOpenGLRenderDevice::ResetFog()
     DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
     DistanceFogValues = glm::vec4(0.f,0.f,0.f,-1.f);
 
-    glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
-    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(DistanceFogColor));
-    glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(DistanceFogValues));
-    glBindBuffer(GL_UNIFORM_BUFFER, 0);
-    CHECK_GL_ERROR();
-
     bFogEnabled = false;
+	bFogUniformsStale = true;
 
 	unguard;
 }
@@ -41,19 +36,11 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 
     if (FogSurf.IsValid())
     {
-        if (ActiveProgram == GouraudPolyVert_Prog && DrawGouraudBufferData.IndexOffset > 0) //bZoneBasedFog Fog.
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-
         DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
-        DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)(FogSurf.FogMode));
-
-        glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
-        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(DistanceFogColor));
-        glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(DistanceFogValues));
-        glBindBuffer(GL_UNIFORM_BUFFER, 0);
-        CHECK_GL_ERROR();
+        DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)(FogSurf.FogMode));        
 
         bFogEnabled = true;
+        bFogUniformsStale = true;
     }
     else if (bFogEnabled)
         ResetFog();
@@ -71,3 +58,14 @@ void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf)
 
 	unguard;
 }
+
+void UXOpenGLRenderDevice::SetDistanceFogUniformData()
+{
+    glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(DistanceFogColor));
+    glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(DistanceFogValues));
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+    CHECK_GL_ERROR();
+	bFogUniformsStale = false;	
+}
+

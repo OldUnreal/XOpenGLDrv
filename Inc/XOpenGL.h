@@ -93,14 +93,17 @@ Globals.
 -----------------------------------------------------------------------------*/
 #define MAX_FRAME_RECURSION 4
 
+// maximum number of surfaces in one drawcomplex multi-draw
+#define MAX_DRAWCOMPLEX_BATCH 1024
+// maximum number of polys in one drawgouraud multi-draw
+#define MAX_DRAWGOURAUD_BATCH 16384
+
 #define DRAWSIMPLE_SIZE 262144
 #define DRAWTILE_SIZE 524288
-#define DRAWCOMPLEX_SIZE 262144
+#define DRAWCOMPLEX_SIZE 8 * 32 * MAX_DRAWCOMPLEX_BATCH
 #define DRAWGOURAUDPOLY_SIZE 1048576
-#define DRAWGOURAUDPOLYLIST_SIZE 262144
 #define NUMBUFFERS 6
 #define NUMTEXTURES 4096
-#define MAX_DRAWCOMPLEX_BATCH 1024
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 			#define MAX_LIGHTS 256
@@ -501,7 +504,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		DWORD BindCycles;
 		DWORD ImageCycles;
 		DWORD BlendCycles;
-		DWORD ProgramCycles;
 		DWORD ComplexCycles;
 		DWORD Draw2DLine;
 		DWORD Draw3DLine;
@@ -670,9 +672,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint FloatSize4_4				= 2 * FloatSize4;
 
 	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
-	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
-	GLuint DrawComplexStrideSize    = FloatSize4;
-	GLuint DrawGouraudStrideSize	= FloatSize3_2_4_4_4_3_4_4_4;
+	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;	
 
 
 	//DrawSimple
@@ -703,14 +703,22 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BufferRange DrawGouraudBufferRange;
 	INT PrevDrawGouraudBeginOffset;
 
+	BufferRange DrawGouraudSSBORange;
+	INT PrevDrawGouraudSSBOBeginOffset;
+
+	GLint DrawGouraudMultiDrawPolyListArray[MAX_DRAWGOURAUD_BATCH];
+	GLsizei DrawGouraudMultiDrawVertexCountArray[MAX_DRAWGOURAUD_BATCH];
+	INT DrawGouraudMultiDrawCount;
+	INT DrawGouraudMultiDrawVertices;
+
     BufferRange DrawComplexSinglePassRange;
 	INT PrevDrawComplexBeginOffset;
 
 	BufferRange DrawComplexSSBORange;
 	INT PrevDrawComplexSSBOBeginOffset;
 
-	GLint DrawComplexMultiDrawFacetArray[1500];
-	GLsizei DrawComplexMultiDrawVertexCountArray[1500];
+	GLint DrawComplexMultiDrawFacetArray[MAX_DRAWCOMPLEX_BATCH];
+	GLsizei DrawComplexMultiDrawVertexCountArray[MAX_DRAWCOMPLEX_BATCH];
 	INT DrawComplexMultiDrawCount;
 	INT DrawComplexMultiDrawVertices;
 	
@@ -791,61 +799,57 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{}
 	}DrawTileBufferData;
 
-	struct DrawGouraudBuffer
+	struct DrawGouraudShaderDrawParams
 	{
-		GLuint VertSize;
-		GLuint Index;
-		GLuint IndexOffset;
-		GLuint BeginOffset;
-		DWORD PolyFlags;
-		DWORD RendMap;
-		FLOAT TexUMult;
-		FLOAT TexVMult;
-		FLOAT DetailTexUMult;
-		FLOAT DetailTexVMult;
-		FLOAT MacroTexUMult;
-		FLOAT MacroTexVMult;
-		FLOAT Alpha;
-		GLuint DrawFlags;
-		GLfloat TextureFormat;
-		GLfloat TextureAlpha;
-		GLuint TexNum[8];
-		FPlane DrawColor;
-		FLOAT TextureDiffuse;
-		FLOAT BumpTextureSpecular;
-		FLOAT MacroTextureDrawScale;
-		FFogSurf FogSurf;
-		DrawGouraudBuffer()
-			: VertSize(0),
-			Index(0),
-			IndexOffset(0),
-			BeginOffset(0),
-			PolyFlags(0),
-			RendMap(0),
-			TexUMult(0.f),
-			TexVMult(0.f),
-			DetailTexUMult(0.f),
-			DetailTexVMult(0.f),
-			MacroTexUMult(0.f),
-			MacroTexVMult(0.f),
-			Alpha(0.f),
-			DrawFlags(0),
-			TextureFormat(0.f),
-			TextureAlpha(0.f),
-			TexNum(),
-			DrawColor(0.f, 0.f, 0.f, 0.f),
-			TextureDiffuse(0.f),
-			BumpTextureSpecular(0.f),
-			MacroTextureDrawScale(0.f),
-			FogSurf()
-		{}
-	} DrawGouraudBufferData;
+		glm::vec4 DrawData[6];
+		glm::uvec4 TexNum;				
+		glm::uvec4 _DrawFlags;
+
+		DWORD& DrawFlags()
+		{
+			return reinterpret_cast<DWORD&>(_DrawFlags.x);
+		}
+
+		DWORD& HitTesting()
+		{
+			return reinterpret_cast<DWORD&>(_DrawFlags.y);
+		}
+
+		DWORD& PolyFlags()
+		{
+			return reinterpret_cast<DWORD&>(_DrawFlags.z);
+		}
+
+		DWORD& RendMap()
+		{
+			return reinterpret_cast<DWORD&>(_DrawFlags.w);
+		}
+		
+	} DrawGouraudDrawParams;
 
 	struct DrawGouraudBufferedVert
 	{
-		FPlane Vert;
-		FPlane Normal;
-	};
+		glm::vec3 Point;
+		glm::vec3 Normal;
+		glm::vec2 UV;
+		glm::vec4 Light;
+		glm::vec4 Fog;
+	};	
+	GLuint DrawGouraudStrideSize = sizeof(DrawGouraudBufferedVert);
+	static_assert(sizeof(DrawGouraudBufferedVert) == 64, "Invalid gouraud buffered vertex size");
+
+	struct DrawGouraudBuffer
+	{
+		GLuint Index;
+		GLuint IndexOffset;
+		GLuint BeginOffset;
+		
+		DrawGouraudBuffer()
+			: Index(0),
+			IndexOffset(0),
+			BeginOffset(0)
+		{}
+	} DrawGouraudBufferData;
 
 	struct LightInfo
 	{
@@ -869,28 +873,28 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	struct DrawComplexShaderDrawParams
 	{
-		glm::vec4 TexCoords[14];
+		glm::vec4 DrawData[16];
 		glm::uvec4 TexNum[2];
-		glm::uvec4 DrawParams;
+		glm::uvec4 _DrawFlags;
 
 		DWORD& DrawFlags()
 		{
-			return reinterpret_cast<DWORD&>(DrawParams.x);
+			return reinterpret_cast<DWORD&>(_DrawFlags.x);
 		}
 
 		DWORD& TextureFormat()
 		{
-			return reinterpret_cast<DWORD&>(DrawParams.y);
+			return reinterpret_cast<DWORD&>(_DrawFlags.y);
 		}
 		
 		DWORD& PolyFlags()
 		{
-			return reinterpret_cast<DWORD&>(DrawParams.z);
+			return reinterpret_cast<DWORD&>(_DrawFlags.z);
 		}
 
 		DWORD& RendMap()
 		{
-			return reinterpret_cast<DWORD&>(DrawParams.w);
+			return reinterpret_cast<DWORD&>(_DrawFlags.w);
 		}
 
 		DWORD& HitTesting()
@@ -901,12 +905,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	struct DrawComplexBufferedVert
 	{
-#if WIN32
-		FPlane Coords;
-#else
 		glm::vec4 Coords;
-#endif
+		glm::vec4 Normal;
 	};
+	GLuint DrawComplexStrideSize = sizeof(DrawComplexBufferedVert);
+	static_assert(sizeof(DrawComplexBufferedVert) == 32, "Invalid complex buffered vertex size");
 
 	struct DrawComplexBuffer
 	{
@@ -1000,12 +1003,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	//SSBOs
 	GLuint DrawComplexSSBO;
-	GLuint DrawComplexSSBOs[10];
-	static const GLuint DrawComplexBindingIndex = 6;
+	static const GLuint DrawComplexSSBOBindingIndex = 6;
+	GLuint DrawGouraudSSBO;
+	static const GLuint DrawGouraudSSBOBindingIndex = 7;
 
 	glm::vec4 DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
 	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	bool bFogEnabled = false;
+	bool bFogUniformsStale = false;
 
 	FCachedTexture* MapTextureData[8];
     GLuint TexNum;
@@ -1013,27 +1018,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Editor
 	GLuint DrawSimplebHitTesting;
 	GLuint DrawTilebHitTesting;
-	GLuint DrawGouraudbHitTesting;
-	GLuint DrawComplexSinglePassbHitTesting;
 
-	//DrawComplexSinglePass
-	GLuint DrawComplexSinglePassFogMap;
-	GLuint DrawComplexSinglePassLightPos;
+	// Bulk texture data
 	GLuint DrawComplexSinglePassTexCoords;
-
-	//DrawGouraud Matrix
-	GLuint DrawGouraudMeshBufferModelMat;
-	GLuint DrawGouraudMeshBufferViewMat;
-	GLuint DrawGouraudMeshBufferProjMat;
-	GLuint DrawGouraudMeshBufferViewMatinv;
-	GLuint DrawGouraudLightPos;
+	GLuint DrawGouraudDrawData;
 
 	//Drawing colors
 	GLuint DrawSimpleDrawColor;
 	GLuint DrawTileHitDrawColor;
-	GLuint DrawComplexSinglePassDrawColor;
-	GLuint DrawGouraudDrawColor;
-	GLuint DrawGouraudMeshBufferDrawColor;
 
 	//Texture vars
 	GLuint DrawTileTexture;
@@ -1045,8 +1037,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// PolyFlags for shaders.
 	GLuint DrawTilePolyFlags;
-	GLuint DrawGouraudPolyFlags;
-	GLuint DrawComplexSinglePassDrawParams;
+	GLuint DrawGouraudDrawFlags;
+	GLuint DrawComplexSinglePassDrawFlags;
 
 	// TexNum for bindless textures in shaders.
 	GLuint DrawTileTexNum;
@@ -1057,7 +1049,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static FLOAT Gamma;
 	GLuint DrawSimpleGamma;
 	GLuint DrawTileGamma;
-	GLuint DrawGouraudGamma;
 
 	//Vertices
 	GLuint DrawSimpleVertBuffer;
@@ -1072,18 +1063,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawGouraudPolyVertsVao;
 	GLuint DrawComplexVertsSinglePassVao;
 	GLuint SimpleDepthVao;	
-
-    GLuint DrawComplexSinglePassFogColor;
-    GLuint DrawComplexSinglePassFogStart;
-    GLuint DrawComplexSinglePassFogEnd;
-    GLuint DrawComplexSinglePassFogDensity;
-    GLuint DrawComplexSinglePassFogMode;
-
-    GLuint DrawGouraudFogColor;
-    GLuint DrawGouraudFogStart;
-    GLuint DrawGouraudFogEnd;
-    GLuint DrawGouraudFogDensity;
-    GLuint DrawGouraudFogMode;
 
 	struct GouraudBufferData
 	{
@@ -1194,7 +1173,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	DrawComplexShaderDrawParams* DrawComplexGetDrawParamsRef();
 	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
 
-	void DrawGouraudBufferVert(FLOAT* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
+	DrawGouraudShaderDrawParams* DrawGouraudGetDrawParamsRef();
+	static void DrawGouraudBufferVert(DrawGouraudBufferedVert* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
 	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);
 	void DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
@@ -1257,6 +1237,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf);
 	void PostDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf);
 	void ResetFog();
+	void SetDistanceFogUniformData();
 
 #if ENGINE_VERSION==227
 	// Lighting

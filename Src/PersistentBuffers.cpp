@@ -90,15 +90,27 @@ void UXOpenGLRenderDevice::MapBuffers()
         glBufferStorage(GL_ARRAY_BUFFER, DrawGouraudBufferSize, 0, PersistentBufferFlags);
 		DrawGouraudBufferRange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudVertBuffer, 0, DrawGouraudBufferSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 		CHECK_GL_ERROR();
+
+		GLsizeiptr DrawGouraudSSBOSize = NUMBUFFERS * MAX_DRAWGOURAUD_BATCH * sizeof(DrawGouraudShaderDrawParams);
+
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
+		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBOSize, NULL, PersistentBufferFlags);
+		DrawGouraudSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudSSBOSize, 0, sizeof(DrawGouraudShaderDrawParams) * MAX_DRAWGOURAUD_BATCH, PersistentBufferFlags);
+		CHECK_GL_ERROR();
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
 	else
 	{
-
 		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
 
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
 		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
+		DrawGouraudSSBORange.Buffer = (FLOAT*)new DrawGouraudShaderDrawParams[MAX_DRAWGOURAUD_BATCH];
+		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawGouraudShaderDrawParams) * MAX_DRAWGOURAUD_BATCH, DrawGouraudSSBORange.Buffer, GL_STREAM_DRAW);
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);		
 	}
 	
     if (UsingPersistentBuffersComplex)
@@ -193,10 +205,18 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(DrawGouraudVertBuffer);
 			DrawGouraudBufferRange.Buffer = nullptr;
 		}
+
+		glGetNamedBufferParameteriv(DrawGouraudSSBO, GL_BUFFER_MAPPED, &IsMapped);
+		if (IsMapped == GL_TRUE)
+		{
+			glUnmapNamedBuffer(DrawGouraudSSBO);
+			DrawGouraudSSBORange.Buffer = nullptr;
+		}
 	}
 	else 
 	{
 		delete[] DrawGouraudBufferRange.Buffer;
+		delete[] DrawGouraudSSBORange.Buffer;
 	}
 	
 	if (UsingPersistentBuffersComplex)

@@ -5,7 +5,26 @@
 		* Created by Smirftsch
 =============================================================================*/
 
-layout (location = 0) in vec3 Coords;		// == gl_Vertex
+// DrawComplex TexCoords Indices
+const uint  IDX_DIFFUSE_COORDS     = 0u;
+const uint  IDX_LIGHTMAP_COORDS    = 1u;
+const uint  IDX_FOGMAP_COORDS      = 2u;
+const uint  IDX_DETAIL_COORDS      = 3u;
+const uint  IDX_MACRO_COORDS       = 4u;
+const uint  IDX_BUMPMAP_COORDS     = 5u;
+const uint  IDX_ENVIROMAP_COORDS   = 6u;
+const uint  IDX_DIFFUSE_INFO       = 7u;
+const uint  IDX_MACRO_INFO         = 8u;
+const uint  IDX_BUMPMAP_INFO       = 9u;
+const uint  IDX_X_AXIS             = 10u;
+const uint  IDX_Y_AXIS             = 11u;
+const uint  IDX_Z_AXIS             = 12u;
+const uint  IDX_DRAWCOLOR          = 13u;
+const uint  IDX_DISTANCE_FOG_COLOR = 14u;
+const uint  IDX_DISTANCE_FOG_INFO  = 15u;
+
+layout (location = 0) in vec4 Coords;		// == gl_Vertex
+layout (location = 1) in vec4 Normal;		// == gl_Vertex
 
 out vec3 vCoords;
 out vec4 vEyeSpacePos;
@@ -34,20 +53,22 @@ flat out mat3 vTBNMat;
 #if SHADERDRAWPARAMETERS
 struct DrawComplexShaderDrawParams
 {
-	vec4 DiffuseUV;		// 0
-	vec4 LightMapUV;	// 1
-	vec4 FogMapUV;		// 2
-	vec4 DetailUV;		// 3
-	vec4 MacroUV;		// 4
-	vec4 BumpMapUV;		// 5
-	vec4 EnviroMapUV;	// 6
-	vec4 DiffuseInfo;	// 7
-	vec4 MacroInfo;		// 8
-	vec4 BumpMapInfo;	// 9
-	vec4 XAxis;			// 10
-	vec4 YAxis;			// 11
-	vec4 ZAxis;			// 12
-	vec4 DrawColor;		// 13
+	vec4 DiffuseUV;		    // 0
+	vec4 LightMapUV;	    // 1
+	vec4 FogMapUV;		    // 2
+	vec4 DetailUV;		    // 3
+	vec4 MacroUV;		    // 4
+	vec4 BumpMapUV;		    // 5
+	vec4 EnviroMapUV;	    // 6
+	vec4 DiffuseInfo;	    // 7
+	vec4 MacroInfo;		    // 8
+	vec4 BumpMapInfo;	    // 9
+	vec4 XAxis;			    // 10
+	vec4 YAxis;			    // 11
+	vec4 ZAxis;			    // 12
+	vec4 DrawColor;		    // 13
+	vec4 DistanceFogColor;  // 14
+	vec4 DistanceFogInfo;   // 15
 	uvec4 TexNum[2];
 	uvec4 DrawFlags;
 };
@@ -77,10 +98,12 @@ flat out uint vHitTesting;
 flat out uint vRendMap;
 flat out vec4 vDrawColor;
 # endif
+flat out vec4 vDistanceFogColor;
+flat out vec4 vDistanceFogInfo;
 #else
 uniform vec4 TexCoords[16];
 uniform uint TexNum[8];
-uniform uint DrawParams[5];
+uniform uint DrawFlags[4];
 #endif
 
 #ifndef GL_ES
@@ -122,6 +145,8 @@ void main(void)
 	vBumpMapSpecular  = DrawComplexParams[gl_DrawID].BumpMapInfo.y;
 	vParallaxScale    = DrawComplexParams[gl_DrawID].MacroInfo.w;
 	vGamma            = ZAxis.w;
+	vDistanceFogColor = DrawComplexParams[gl_DrawID].DistanceFogColor;
+	vDistanceFogInfo  = DrawComplexParams[gl_DrawID].DistanceFogInfo;	
 #else
 	vec4 XAxis       = TexCoords[IDX_X_AXIS];
 	vec4 YAxis       = TexCoords[IDX_Y_AXIS];
@@ -134,7 +159,7 @@ void main(void)
 	vec4 BumpMapUV   = TexCoords[IDX_BUMPMAP_COORDS];
 	vec4 EnviroMapUV = TexCoords[IDX_ENVIROMAP_COORDS];
 
-	uint vDrawFlags  = DrawParams[0];
+	uint vDrawFlags  = DrawFlags[0];
 #endif
 
 	// Point Coords
@@ -216,7 +241,7 @@ void main(void)
 #endif
 
 #if ENGINE_VERSION==227 || BUMPMAPS
-	vEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
+	vEyeSpacePos = modelviewMat*vec4(Coords.xyz, 1.0);
 	if ((vDrawFlags & (DF_MacroTexture|DF_BumpMap)) != 0u)
 	{
 		vec3 T = normalize(vec3(-MapCoordsXAxis.x,MapCoordsXAxis.y,MapCoordsXAxis.z));
@@ -235,18 +260,18 @@ void main(void)
 	vSurfaceNormal = MapCoordsZAxis;
 #endif
 
-	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
+	gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);
 
 #ifndef GL_ES
 	uint ClipIndex = uint(ClipParams.x);
-    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,Coords);
+    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,Coords.xyz);
 #endif
 }
 #else
 void main (void)
 {
 
-	vEyeSpacePos = modelviewMat*vec4(Coords, 1.0);
+	vEyeSpacePos = modelviewMat*vec4(Coords.xyz, 1.0);
 
 	// Point Coords
 	vCoords = Coords.xyz;
@@ -257,7 +282,7 @@ void main (void)
 #endif
 
 	uint ClipIndex = uint(ClipParams.x);
-	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
-    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,Coords);
+	gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);
+    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,Coords.xyz);
 }
 #endif

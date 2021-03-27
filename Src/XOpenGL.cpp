@@ -1315,6 +1315,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
     glBindVertexArray(0);
     glUseProgram(0);
 
+	// stijn: crashes the intel drivers if we do it here
 	///glClear(GL_COLOR_BUFFER_BIT);
 	///glFlush();
 
@@ -1442,6 +1443,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	{
 		if (GIsEditor)
 			StaticLightList.Empty();
+		
 		for (INT i = 0; i < Level->Actors.Num(); ++i)
 		{
 			AActor* Actor = Level->Actors(i);
@@ -1450,9 +1452,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
                 StaticLightList.AddItem(Actor);
 #else
-                if (UseHWLighting)
-                    StaticLightList.AddItem(Actor);
-                else if (Actor->NormalLightRadius) //for normal mapping only add lights with normallightradius set. Needs performance tests if not.
+                if (UseHWLighting || Actor->NormalLightRadius) //for normal mapping only add lights with normallightradius set. Needs performance tests if not.
                     StaticLightList.AddItem(Actor);
 #endif
             }
@@ -1519,38 +1519,14 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		SetOrthoProjection(Frame);
 	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || GIsEditor || StoredbNearZ)
 		SetProjection(Frame, 0);
-	/*
-	else
-	{
-        UpdateCoords(Frame);
-	}
-	*/
-
-	/*
-	m_3x3_inv_transp = glm::inverseTranspose(glm::mat3(modelviewMat));
-
-	//viewMat inverted
-	viewMatinv = glm::inverse(viewMat);
-	glUseProgram(DrawComplexProg);//FIXME: use shared UBO
-	glUniformMatrix4fv(g_programprojMat, 1, GL_FALSE, glm::value_ptr(projMat));
-	glUniformMatrix4fv(g_programviewMat, 1, GL_FALSE, glm::value_ptr(viewMat));
-	glUniformMatrix4fv(g_programmodelMat, 1, GL_FALSE, glm::value_ptr(modelMat));
-	glUniformMatrix4fv(g_programmodelviewMat, 1, GL_FALSE, glm::value_ptr(modelviewMat));
-	glUniformMatrix4fv(g_programmodelviewprojMat, 1, GL_FALSE, glm::value_ptr(modelviewprojMat));
-	glUniformMatrix3fv(g_programNormMat, 1, GL_FALSE, glm::value_ptr(m_3x3_inv_transp));
-	glUniformMatrix4fv(g_programviewMatinv, 1, GL_FALSE, glm::value_ptr(viewMatinv));
-	glUniformMatrix4fv(g_programmodelviewprojMat, 1, GL_FALSE, glm::value_ptr(modelviewprojMat));
-	CHECK_GL_ERROR();
-	*/
 
 	// Set clip planes.
 	SetSceneNodeHit(Frame);
 
 	// Disable clipping
 	while (NumClipPlanes > 0)
-	{
 		PopClipPlane();
-	}
+	
 	unguard;
 }
 
@@ -2095,9 +2071,6 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Blend___________= %05.2f"), GSecondsPerCycle * 1000 * Stats.BlendCycles);
-	Canvas->CurX = 400;
-	Canvas->CurY = (CurY += 12);
-	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Program_________= %05.2f"), GSecondsPerCycle * 1000 * Stats.ProgramCycles);
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Draw2DLine______= %05.2f"), GSecondsPerCycle * 1000 * Stats.Draw2DLine);

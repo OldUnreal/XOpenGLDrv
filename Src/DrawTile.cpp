@@ -240,13 +240,13 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         DrawTileBufferData.VertSize    += 9;
         DrawTileBufferData.IndexOffset += 60;
 	}
+    unclockFast(Stats.TileBufferCycles);
 	if ( DrawTileBufferData.IndexOffset >= DRAWTILE_SIZE - 60)
     {
         DrawTileVerts(DrawTileBufferData);
         WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
         debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
-    }
-    unclockFast(Stats.TileBufferCycles);
+    }    
     if (NoBuffering) // No buffering at this time for Editor.
     {
         DrawTileVerts(DrawTileBufferData);

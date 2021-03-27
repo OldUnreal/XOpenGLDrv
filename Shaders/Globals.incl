@@ -264,22 +264,6 @@ const uint	DF_MacroTexture	 	= 0x00000010u;
 const uint	DF_BumpMap			= 0x00000020u;
 const uint	DF_EnvironmentMap  	= 0x00000040u;
 
-// DrawComplex TexCoords Indices
-const uint  IDX_DIFFUSE_COORDS   = 0u;
-const uint  IDX_LIGHTMAP_COORDS  = 1u;
-const uint  IDX_FOGMAP_COORDS    = 2u;
-const uint  IDX_DETAIL_COORDS    = 3u;
-const uint  IDX_MACRO_COORDS     = 4u;
-const uint  IDX_BUMPMAP_COORDS   = 5u;
-const uint  IDX_ENVIROMAP_COORDS = 6u;
-const uint  IDX_DIFFUSE_INFO     = 7u;
-const uint  IDX_MACRO_INFO       = 8u;
-const uint  IDX_BUMPMAP_INFO     = 9u;
-const uint  IDX_X_AXIS           = 10u;
-const uint  IDX_Y_AXIS           = 11u;
-const uint  IDX_Z_AXIS           = 12u;
-const uint  IDX_DRAWCOLOR        = 13u;
-
 layout(std140) uniform GlobalMatrices
 {
 	mat4 modelMat;

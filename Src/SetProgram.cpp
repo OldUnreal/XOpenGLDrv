@@ -20,7 +20,6 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
 {
 	guard(UXOpenGLRenderDevice::SetProgram);
 	CHECK_GL_ERROR();
-    STAT(clockFast(Stats.ProgramCycles));
 
     if (ActiveProgram != NextProgram)
     {
@@ -30,22 +29,22 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
 	        case Simple_Prog:
 	        {
                 DrawSimpleEnd(NextProgram);
-	            break;
+                break;
 	        }
 	        case Tile_Prog:
 	        {
                 DrawTileEnd(NextProgram);
-	            break;
+                break;
 	        }
 	        case GouraudPolyVert_Prog:
 	        {
                 DrawGouraudEnd(NextProgram);
-	            break;
+                break;
 	        }
 	        case ComplexSurfaceSinglePass_Prog:
 	        {
-                DrawComplexEnd(NextProgram);
-	            break;
+				DrawComplexEnd(NextProgram);
+                break;
 	        }
             case No_Prog:
 	        default:
@@ -94,6 +93,5 @@ void UXOpenGLRenderDevice::SetProgram( INT NextProgram )
         }
     }
 	
-	STAT(unclockFast(Stats.ProgramCycles));
 	unguard;
 }

@@ -316,18 +316,9 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	//DrawComplexSinglePass vars.
 	FString DrawComplexSinglePass = TEXT("DrawComplexSinglePass");
-	GetUniformLocation(DrawComplexSinglePassbHitTesting, DrawComplexProg, "bHitTesting", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassDrawColor, DrawComplexProg, "DrawColor", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassFogColor, DrawComplexProg, "FogParams.FogColor", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassFogStart, DrawComplexProg, "FogParams.FogStart", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassFogEnd, DrawComplexProg, "FogParams.FogEnd", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassFogDensity, DrawComplexProg, "FogParams.FogDensity", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassFogMode, DrawComplexProg, "FogParams.FogMode", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassLightPos, DrawComplexProg, "LightPos", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassTexCoords, DrawComplexProg, "TexCoords", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassFogMode, DrawComplexProg, "FogMode", DrawComplexSinglePass);
 	GetUniformLocation(DrawComplexSinglePassTexNum, DrawComplexProg, "TexNum", DrawComplexSinglePass);
-	GetUniformLocation(DrawComplexSinglePassDrawParams, DrawComplexProg, "DrawParams", DrawComplexSinglePass);
+	GetUniformLocation(DrawComplexSinglePassDrawFlags, DrawComplexProg, "DrawFlags", DrawComplexSinglePass);
 	// Multitextures in DrawComplexProg
 	for (INT i = 0; i < 8; i++)
         GetUniformLocation(DrawComplexSinglePassTexture[i], DrawComplexProg, (char*) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawComplexSinglePass);
@@ -335,12 +326,9 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	//DrawGouraud vars.
 	FString DrawGouraud = TEXT("DrawGouraud");
-	GetUniformLocation(DrawGouraudPolyFlags, DrawGouraudProg, "PolyFlags", DrawGouraud);
-	GetUniformLocation(DrawGouraudbHitTesting, DrawGouraudProg, "bHitTesting", DrawGouraud);
-	GetUniformLocation(DrawGouraudDrawColor, DrawGouraudProg, "DrawColor", DrawGouraud);
-	GetUniformLocation(DrawGouraudGamma, DrawGouraudProg, "Gamma", DrawGouraud);
-	GetUniformLocation(DrawGouraudPolyFlags, DrawGouraudProg, "PolyFlags", DrawGouraud);
-	GetUniformLocation(DrawGouraudLightPos, DrawGouraudProg, "LightPos", DrawGouraud);
+	GetUniformLocation(DrawGouraudDrawData, DrawGouraudProg, "DrawData", DrawGouraud);
+	GetUniformLocation(DrawGouraudDrawFlags, DrawGouraudProg, "DrawFlags", DrawGouraud);
+	GetUniformLocation(DrawGouraudTexNum, DrawGouraudProg, "TexNum", DrawGouraud);
 	// Multitextures DrawGouraudProg
 	for (INT i = 0; i < 8; i++)
         GetUniformLocation(DrawGouraudTexture[i], DrawGouraudProg, (char *) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawGouraud);
@@ -416,12 +404,17 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	glGenBuffers(1, &DrawComplexSSBO);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);	
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, DrawComplexBindingIndex, DrawComplexSSBO);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOBindingIndex, DrawComplexSSBO);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);	
 
 	//DrawGouraud
 	glGenBuffers(1, &DrawGouraudVertBuffer);
 	glGenVertexArrays(1, &DrawGouraudPolyVertsVao);
+
+	glGenBuffers(1, &DrawGouraudSSBO);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBOBindingIndex, DrawGouraudSSBO);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 	/*
 	// ShadowMap
@@ -455,6 +448,8 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 		glDeleteBuffers(1, &DrawComplexVertBuffer);
 	if (DrawComplexSSBO)
 		glDeleteBuffers(1, &DrawComplexSSBO);
+	if (DrawGouraudSSBO)
+		glDeleteBuffers(1, &DrawGouraudSSBO);
 	/*
         if (SimpleDepthBuffer)
             glDeleteBuffers(1, &SimpleDepthBuffer);
