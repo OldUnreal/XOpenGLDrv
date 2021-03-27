@@ -77,7 +77,9 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		WillTextureChange(0, *Surface.Texture, NextPolyFlags, Bind) ||
 		(Surface.LightMap && WillTextureChange(1, *Surface.LightMap, NextPolyFlags, Bind)) ||
 		(Surface.FogMap && WillTextureChange(2, *Surface.FogMap, NextPolyFlags, Bind)) ||
+#if ENGINE_VERSION==227
 		(Surface.EnvironmentMap && EnvironmentMaps && WillTextureChange(6, *Surface.EnvironmentMap, NextPolyFlags, Bind)) ||
+#endif
 		// Check if we have room left in the multi-draw array
 		DrawComplexMultiDrawCount+1 >= MAX_DRAWCOMPLEX_BATCH)
 	{

@@ -334,7 +334,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	if (Frame->NearClip.W != 0.0)
 	{
-		if (DrawGouraudBufferData.VertSize > 0)
+		if (DrawGouraudBufferData.IndexOffset > 0)
 		{
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
@@ -396,7 +396,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	if (Frame->NearClip.W != 0.0)
 	{
-		if (DrawGouraudBufferData.VertSize > 0)
+		if (DrawGouraudBufferData.IndexOffset > 0)
 		{
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
