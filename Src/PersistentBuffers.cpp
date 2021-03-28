@@ -84,7 +84,7 @@ void UXOpenGLRenderDevice::MapBuffers()
         // DrawGouraud
         debugf(TEXT("Mapping persistent DrawGouraudBuffer"));
 
-        GLsizeiptr DrawGouraudBufferSize=(NUMBUFFERS * DRAWGOURAUDPOLY_SIZE * sizeof(float));
+        GLsizeiptr DrawGouraudBufferSize = NUMBUFFERS * DRAWGOURAUDPOLY_SIZE * sizeof(FLOAT);
 
         glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
         glBufferStorage(GL_ARRAY_BUFFER, DrawGouraudBufferSize, 0, PersistentBufferFlags);
@@ -95,7 +95,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
 		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBOSize, NULL, PersistentBufferFlags);
-		DrawGouraudSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudSSBOSize, 0, sizeof(DrawGouraudShaderDrawParams) * MAX_DRAWGOURAUD_BATCH, PersistentBufferFlags);
+		DrawGouraudSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudSSBO, 0, DrawGouraudSSBOSize, PersistentBufferFlags);
 		CHECK_GL_ERROR();
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
@@ -130,7 +130,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
 		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOSize, NULL, PersistentBufferFlags);
-		DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, sizeof(DrawComplexShaderDrawParams) * MAX_DRAWCOMPLEX_BATCH, PersistentBufferFlags);
+		DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, DrawComplexSSBOSize, PersistentBufferFlags);
 		CHECK_GL_ERROR();
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     }
