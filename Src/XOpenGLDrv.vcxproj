@@ -177,7 +177,7 @@
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>winmm.lib;..\..\Core\Lib\Core.lib;..\..\Engine\Lib\Engine.lib;..\..\Render\Lib\Render.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>..\..\Render\Lib\Render.lib;winmm.lib;..\..\Core\Lib\Core.lib;..\..\Engine\Lib\Engine.lib;..\..\Render\Lib\Render.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <ImportLibrary>.\..\Lib\XOpenGLDrvDrv.lib</ImportLibrary>
@@ -221,7 +221,7 @@
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>winmm.lib;..\..\Core\Lib\Core.lib;..\..\Engine\Lib\Engine.lib;..\..\Render\Lib\Render.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>..\..\Render\Lib\Render.lib;winmm.lib;..\..\Core\Lib\Core.lib;..\..\Engine\Lib\Engine.lib;..\..\Render\Lib\Render.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>
       <ImportLibrary>.\..\Lib\XOpenGLDrvDrv.lib</ImportLibrary>
@@ -351,7 +351,7 @@
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>winmm.lib;..\..\Core\Lib\Core.lib;..\..\Engine\Lib\Engine.lib;..\..\Render\Lib\Render.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>..\..\Render\Lib\Render.lib;winmm.lib;..\..\Core\Lib\Core.lib;..\..\Engine\Lib\Engine.lib;..\..\Render\Lib\Render.lib;OpenGL32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <RandomizedBaseAddress>true</RandomizedBaseAddress>

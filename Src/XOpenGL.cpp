@@ -132,7 +132,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UseBufferInvalidation"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBufferInvalidation), TEXT("Options"), CPF_Config);
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
-	new(GetClass(), TEXT("UseLightmapAtlas"), RF_Public)UBoolProperty(CPP_PROPERTY(PrefersLightmapAtlas), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseLightmapAtlas"), RF_Public)UBoolProperty(CPP_PROPERTY(UseLightmapAtlas), TEXT("Options"), CPF_Config);
 	FindField<UBoolProperty>(GetClass(), TEXT("UseLightmapAtlas"))->PropertyFlags |= CPF_EditConst; // Do not allow modification in runtime
 #endif
 	//new(GetClass(),TEXT("EnableShadows"),			RF_Public)UBoolProperty ( CPP_PROPERTY(EnableShadows			), TEXT("Options"), CPF_Config);
@@ -196,7 +196,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	VolumetricLighting = 1;
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
-	PrefersLightmapAtlas = 1;
+	UseLightmapAtlas = 1;
 #endif
 
 	unguard;
@@ -1985,7 +1985,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("OpenGLVersion"), *FString::Printf(TEXT("%ls"), OpenGLVersion == GL_Core ? TEXT("Core") : TEXT("ES")));
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseLightmapAtlas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(PrefersLightmapAtlas)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseLightmapAtlas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseLightmapAtlas)));
 #endif
 	unguard;
 }
