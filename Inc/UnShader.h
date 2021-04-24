@@ -64,7 +64,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
     // ADD DEFINITIONS
 	Definitions += *FString::Printf(TEXT("#define EDITOR %d\n"), GIsEditor ? 1 : 0);
     Definitions += *FString::Printf(TEXT("#define BINDLESSTEXTURES %d\n"), UsingBindlessTextures ? 1 : 0);
-    Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), NUMTEXTURES);
+    Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), MaxBindlessTextures);
 	Definitions += *FString::Printf(TEXT("#define HARDWARELIGHTS %d\n"), UseHWLighting ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define BUMPMAPS %d\n"), BumpMaps ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define DETAILTEXTURES %d\n"), DetailTextures ? 1 : 0);
@@ -357,9 +357,9 @@ void UXOpenGLRenderDevice::InitShaders()
     {
         glGenBuffers(1, &GlobalTextureHandlesUBO);
         glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);
-        glBufferData(GL_UNIFORM_BUFFER,sizeof(GLuint64) * NUMTEXTURES * 2, NULL, GL_DYNAMIC_DRAW);
+        glBufferData(GL_UNIFORM_BUFFER,sizeof(GLuint64) * MaxBindlessTextures * 2, NULL, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
-        glBindBufferRange(GL_UNIFORM_BUFFER, GlobalTextureHandlesBindingIndex, GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * NUMTEXTURES * 2);
+        glBindBufferRange(GL_UNIFORM_BUFFER, GlobalTextureHandlesBindingIndex, GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * MaxBindlessTextures * 2);
         CHECK_GL_ERROR();
     }
 

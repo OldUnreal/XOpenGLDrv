@@ -110,6 +110,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("MaxBindlessTextures"), RF_Public)UIntProperty(CPP_PROPERTY(MaxBindlessTextures), TEXT("Options"), CPF_Config);
 
 	// Debug Options
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
@@ -132,7 +133,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UseBufferInvalidation"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBufferInvalidation), TEXT("Options"), CPF_Config);
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
-	new(GetClass(), TEXT("UseLightmapAtlas"), RF_Public)UBoolProperty(CPP_PROPERTY(UseLightmapAtlas), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseLightmapAtlas"), RF_Public)UBoolProperty(CPP_PROPERTY(PrefersLightmapAtlas), TEXT("Options"), CPF_Config);
 	FindField<UBoolProperty>(GetClass(), TEXT("UseLightmapAtlas"))->PropertyFlags |= CPF_EditConst; // Do not allow modification in runtime
 #endif
 	//new(GetClass(),TEXT("EnableShadows"),			RF_Public)UBoolProperty ( CPP_PROPERTY(EnableShadows			), TEXT("Options"), CPF_Config);
@@ -155,6 +156,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
+	MaxBindlessTextures = 4096;
 	UseShaderDrawParameters = 1;
 #else
 	UseBindlessTextures = 0;
@@ -196,7 +198,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	VolumetricLighting = 1;
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
-	UseLightmapAtlas = 1;
+	PrefersLightmapAtlas = 1;
 #endif
 
 	unguard;
@@ -255,6 +257,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
+	debugf(NAME_DevLoad, TEXT("MaxBindlessTextures %i"), MaxBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseShaderDrawParameters %i"), UseShaderDrawParameters);
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
@@ -1177,36 +1180,60 @@ void UXOpenGLRenderDevice::SwapControl()
 		wglSwapIntervalEXT = (PFNWGLSWAPINTERVALEXTPROC)wglGetProcAddress("wglSwapIntervalEXT");
 		if (!wglSwapIntervalEXT)
 			return;
-		switch (UseVSync)
+		if (GIsEditor) // Remove logspam in Editor Window
 		{
-		case VS_On:
-			if (wglSwapIntervalEXT(1) != 1)
-				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
-			else  debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
-			break;
-		case VS_Off:
-			if (wglSwapIntervalEXT(0) != 1)
-				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-			else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
-			break;
-
-		case VS_Adaptive:
-			if (!SwapControlTearExt)
+			switch (UseVSync)
 			{
-				debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
+			case VS_On:
+				wglSwapIntervalEXT(1);
+				break;
+			case VS_Off:
+				wglSwapIntervalEXT(0);
+				break;
+
+			case VS_Adaptive:
+				if (!SwapControlTearExt)
+					wglSwapIntervalEXT(0);
+				else
+					wglSwapIntervalEXT(-1);
+				break;
+			default:
+				wglSwapIntervalEXT(0);
+			}
+		}
+		else
+		{
+			switch (UseVSync)
+			{
+			case VS_On:
+				if (wglSwapIntervalEXT(1) != 1)
+					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
+				else  debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
+				break;
+			case VS_Off:
 				if (wglSwapIntervalEXT(0) != 1)
 					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
 				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
 				break;
+
+			case VS_Adaptive:
+				if (!SwapControlTearExt)
+				{
+					debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
+					if (wglSwapIntervalEXT(0) != 1)
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+					else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+					break;
+				}
+				if (wglSwapIntervalEXT(-1) != 1)
+					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed."));
+				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
+				break;
+			default:
+				if (wglSwapIntervalEXT(0) != 1)
+					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
 			}
-			if (wglSwapIntervalEXT(-1) != 1)
-				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed."));
-			else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
-			break;
-		default:
-			if (wglSwapIntervalEXT(0) != 1)
-				debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-			else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
 		}
 	}
 	else
@@ -1221,7 +1248,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	guard(UXOpenGLRenderDevice::Flush);
 	CHECK_GL_ERROR();
 
-	debugf(TEXT("XOpenGL: Flush"));
+	debugf(NAME_DevGraphics, TEXT("XOpenGL: Flush"));
 
 #if WIN32
 	if (GIsEditor)
@@ -1236,26 +1263,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		StaticLightList.Empty();
 
 	NumStaticLights = 0;
-
-	guard(CleanupBindless);
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-	for (TObjectIterator<UTexture> It; It; ++It)
-		It->TextureHandle = NULL;
-
-	// Marco using linked list here because UTexture may be garbage collected before the Flush call, thus causes memleak.
-	FCachedTexture* Next;
-	for (FCachedTexture* T = BindlessList; T; T = Next)
-	{
-		Next = T->Next;
-		delete T;
-	}
-	BindlessList = NULL;	
-#else
-	for (TMap<QWORD, FCachedTexture*>::TIterator It(BindlessMap); It; ++It)
-		delete It.Value();
-	BindlessMap.Empty();
-#endif
-	unguard;
 
 	TArray<GLuint> Binds;
 	for (TOpenGLMap<QWORD, FCachedTexture>::TIterator It(*BindMap); It; ++It)
@@ -1953,6 +1960,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("MaxBindlessTextures"), *FString::Printf(TEXT("%d"), MaxBindlessTextures));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
@@ -1985,7 +1993,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("OpenGLVersion"), *FString::Printf(TEXT("%ls"), OpenGLVersion == GL_Core ? TEXT("Core") : TEXT("ES")));
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseLightmapAtlas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseLightmapAtlas)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseLightmapAtlas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(PrefersLightmapAtlas)));
 #endif
 	unguard;
 }

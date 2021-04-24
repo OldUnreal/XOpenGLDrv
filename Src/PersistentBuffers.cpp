@@ -173,14 +173,17 @@ void UXOpenGLRenderDevice::MapBuffers()
         debugf(TEXT("Mapping persistent BindlessTexturesBuffer"));
 
         glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);
-        glBufferStorage(GL_UNIFORM_BUFFER, sizeof(GLuint64) * NUMTEXTURES * 2, 0, PersistentBufferFlags);
+        glBufferStorage(GL_UNIFORM_BUFFER, sizeof(GLuint64) * MaxBindlessTextures * 2, 0, PersistentBufferFlags);
 #ifndef __LINUX_ARM__
-		GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapNamedBufferRange(GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * NUMTEXTURES * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+		GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapNamedBufferRange(GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 #else
         GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(GLuint64) * NUMTEXTURES * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 #endif
-        if (!GlobalUniformTextureHandles.UniformBuffer)
-            GWarn->Logf(TEXT("Mapping of GlobalUniformTextureHandles failed!"));
+		if (!GlobalUniformTextureHandles.UniformBuffer)
+		{
+			GWarn->Logf(TEXT("Mapping of GlobalUniformTextureHandles failed! Disabling UsingBindlessTextures. Try reducing MaxBindlessTextures!"));
+			UsingBindlessTextures = false;
+		}
         CHECK_GL_ERROR();
     }
 

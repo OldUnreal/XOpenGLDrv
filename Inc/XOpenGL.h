@@ -75,17 +75,9 @@
 // another crash during cleanup. This would change your crash message and hide the original
 // cause of the crash.
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
-// stijn: Should the game store bindless info in the UTexture::TextureHandle field?
-// Note: This has limited use. It can help you avoid a TMap lookup, but that lookup is pretty fast anyway.
-// Moreover, if you store bindless info in a UTexture, you will most likely see glitches or perf issues in cases where multiple rendevs coexist (e.g., UED)
-#define XOPENGL_TEXTUREHANDLE_SUPPORT 0
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 // stijn: Just do what other devices do!
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
-// stijn: Should the game store bindless info in the UTexture::TextureHandle field?
-// Note: This has limited use. It can help you avoid a TMap lookup, but that lookup is pretty fast anyway.
-// Moreover, if you store bindless info in a UTexture, you will most likely see glitches or perf issues in cases where multiple rendevs coexist (e.g., UED)
-#define XOPENGL_TEXTUREHANDLE_SUPPORT 0
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -103,7 +95,6 @@ Globals.
 #define DRAWCOMPLEX_SIZE 8 * 32 * MAX_DRAWCOMPLEX_BATCH
 #define DRAWGOURAUDPOLY_SIZE 1048576
 #define NUMBUFFERS 6
-#define NUMTEXTURES 4096
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 			#define MAX_LIGHTS 256
@@ -436,9 +427,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Information about a cached texture.
 	struct FCachedTexture
 	{
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-		FCachedTexture* Next;
-#endif
 		GLuint Ids[2]; // 0:Unmasked, 1:Masked.
 		INT BaseMip;
 		INT MaxLevel;
@@ -450,11 +438,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 #endif
 	};
 
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-	FCachedTexture* BindlessList;
-#else
-	TMap<QWORD, FCachedTexture*> BindlessMap;
-#endif
 	/*
 	// Information about a Mesh
 	struct UMeshBufferData
@@ -570,7 +553,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool NVIDIAMemoryInfo;
 	bool SwapControlExt;
 	bool SwapControlTearExt;
-	bool BindlessFail;
+
+	INT MaxBindlessTextures;
 
 	INT MaxTextureSize;
 	BYTE OpenGLVersion;
@@ -1217,7 +1201,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void UnsetRes();
 	void MakeCurrent();
 
-	FCachedTexture* GetBindlessCachedTexture(FTextureInfo& Info);
 	static BOOL WillBindlessTextureChange(FTextureInfo& Info, FCachedTexture* Texture, DWORD PolyFlags);
 	BOOL WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture);
 	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader

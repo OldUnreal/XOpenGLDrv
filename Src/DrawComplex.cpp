@@ -43,7 +43,7 @@ enum DrawComplexTexCoordsIndices
 
 UXOpenGLRenderDevice::DrawComplexShaderDrawParams* UXOpenGLRenderDevice::DrawComplexGetDrawParamsRef()
 {
-	return UsingShaderDrawParameters ? 
+	return UsingShaderDrawParameters ?
 		&reinterpret_cast<DrawComplexShaderDrawParams*>(DrawComplexSSBORange.Buffer)[DrawComplexBufferData.Index * MAX_DRAWCOMPLEX_BATCH + DrawComplexMultiDrawCount] :
 		&DrawComplexDrawParams;
 }
@@ -67,13 +67,13 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	SetProgram(ComplexSurfaceSinglePass_Prog);
 
 	const DWORD NextPolyFlags = SetFlags(Surface.PolyFlags);
-	
+
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
-	if (!UsingShaderDrawParameters || HitTesting() ||
+	if (!UsingShaderDrawParameters || HitTesting() || 
 		// Check if the blending mode will change
 		WillItBlend(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
-		// Check if the surface textures will change	
+		// Check if the surface textures will change
 		WillTextureChange(0, *Surface.Texture, NextPolyFlags, Bind) ||
 		(Surface.LightMap && WillTextureChange(1, *Surface.LightMap, NextPolyFlags, Bind)) ||
 		(Surface.FogMap && WillTextureChange(2, *Surface.FogMap, NextPolyFlags, Bind)) ||
@@ -91,7 +91,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 			clockFast(Stats.ComplexCycles);
 			WaitBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
 		}
-		
+
 		SetBlend(NextPolyFlags, false);
 	}
 
@@ -100,7 +100,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	// Editor Support.
 	if (GIsEditor)
-	{		
+	{
 		if (HitTesting())
 		{
 			DrawComplexDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
@@ -188,7 +188,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
-#endif	
+#endif
 #if ENGINE_VERSION==227
 	if (Surface.EnvironmentMap && EnvironmentMaps)
 	{
@@ -235,12 +235,12 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 			}
 
 			FacetVertexCount = 0;
-		}				
-    			
+		}
+
 		FTransform** In = &Poly->Pts[0];
 		auto Out = reinterpret_cast<DrawComplexBufferedVert*>(
 			&DrawComplexSinglePassRange.Buffer[DrawComplexBufferData.BeginOffset + DrawComplexBufferData.IndexOffset]);
-		
+
 		for (INT i = 0; i < NumPts-2; i++)
 		{
 			// stijn: not using the normals currently, but we're keeping them in
@@ -251,19 +251,19 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		}
 
 		FacetVertexCount += (NumPts - 2) * 3;
-		DrawComplexMultiDrawVertices      += (NumPts-2) * 3;		
+		DrawComplexMultiDrawVertices      += (NumPts-2) * 3;
 		DrawComplexBufferData.IndexOffset += (NumPts-2) * 3 * (sizeof(DrawComplexBufferedVert) / sizeof(FLOAT));
 	}
-	
+
 	DrawComplexMultiDrawVertexCountArray[DrawComplexMultiDrawCount] = FacetVertexCount;
 	DrawComplexMultiDrawCount++;
-	
+
 	CHECK_GL_ERROR();
 #if ENGINE_VERSION!=227
 	if(DrawComplexDrawParams.DrawFlags() & DF_BumpMap)
 		Surface.Texture->Texture->BumpMap->Unlock(BumpMapInfo);
 #endif
-	
+
 	unclockFast(Stats.ComplexCycles);
 	unguard;
 }
@@ -291,11 +291,11 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 	{
 		if (UseBufferInvalidation)
 			glInvalidateBufferData(DrawComplexVertBuffer);
-			
+
 #if defined(__LINUX_ARM__)
 		// stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
 		glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer, GL_STREAM_DRAW);
-#else		
+#else
 		glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer);
 #endif
 
@@ -304,8 +304,8 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 			if (UseBufferInvalidation)
 				glInvalidateBufferData(DrawComplexSSBO);
 #if defined(__LINUX_ARM__)
-			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderParams), DrawComplexSSBORange.Buffer, GL_DYNAMIC_DRAW);
-#else		
+			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderDrawParams), DrawComplexSSBORange.Buffer, GL_DYNAMIC_DRAW);
+#else
 			glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderDrawParams), DrawComplexSSBORange.Buffer);
 #endif
 		}
@@ -315,27 +315,27 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 	if (BeginOffset != PrevDrawComplexBeginOffset)
 	{
 		glVertexAttribPointer  (VERTEX_COORD_ATTRIB, 4 , GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)(BeginOffset                  ));
-		glVertexAttribPointer  (NORMALS_ATTRIB     , 4 , GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)(BeginOffset + FloatSize4     ));		
+		glVertexAttribPointer  (NORMALS_ATTRIB     , 4 , GL_FLOAT, GL_FALSE, DrawComplexStrideSize, (GLvoid*)(BeginOffset + FloatSize4     ));
 		PrevDrawComplexBeginOffset = BeginOffset;
-	}		
+	}
 
 	if (!UsingShaderDrawParameters)
 	{
 		glUniform1uiv(DrawComplexSinglePassDrawFlags, 4, &DrawComplexDrawParams._DrawFlags[0]);
 		glUniform1uiv(DrawComplexSinglePassTexNum, 8, reinterpret_cast<const GLuint*>(&DrawComplexDrawParams.TexNum[0]));
-		glUniform4fv(DrawComplexSinglePassTexCoords, ARRAY_COUNT(DrawComplexDrawParams.DrawData), reinterpret_cast<const GLfloat*>(DrawComplexDrawParams.DrawData));		
+		glUniform4fv(DrawComplexSinglePassTexCoords, ARRAY_COUNT(DrawComplexDrawParams.DrawData), reinterpret_cast<const GLfloat*>(DrawComplexDrawParams.DrawData));
 		CHECK_GL_ERROR();
 	}
 
 	// Draw
 	glMultiDrawArrays(GL_TRIANGLES, DrawComplexMultiDrawFacetArray, DrawComplexMultiDrawVertexCountArray, DrawComplexMultiDrawCount);
-    CHECK_GL_ERROR();	
+    CHECK_GL_ERROR();
 
 	// reset
 	DrawComplexMultiDrawVertices = DrawComplexMultiDrawCount = 0;
 
 	if (UsingPersistentBuffersComplex)
-	{		
+	{
 		LockBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
 		DrawComplexBufferData.Index = (DrawComplexBufferData.Index + 1) % NUMBUFFERS;
 		CHECK_GL_ERROR();
@@ -343,7 +343,6 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 
 	DrawComplexBufferData.BeginOffset = DrawComplexBufferData.Index * DRAWCOMPLEX_SIZE;
 	DrawComplexBufferData.IndexOffset = 0;
-	BindlessFail = false;
 
 	CHECK_GL_ERROR();
 	unclockFast(Stats.ComplexCycles);
@@ -368,7 +367,7 @@ void UXOpenGLRenderDevice::DrawComplexStart()
 {
 	clockFast(Stats.ComplexCycles);
 	WaitBuffer(DrawComplexSinglePassRange, DrawComplexBufferData.Index);
-	
+
 #if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
 	if (UseAA && PrevProgram != GouraudPolyVert_Prog)
 		glEnable(GL_MULTISAMPLE);
@@ -382,7 +381,7 @@ void UXOpenGLRenderDevice::DrawComplexStart()
 
 	for (INT i = 0; i < 2; ++i)
 		glEnableVertexAttribArray(i);
-	
+
 	DrawComplexDrawParams.PolyFlags() = 0;// SetFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
 	PrevDrawComplexBeginOffset = -1;
 

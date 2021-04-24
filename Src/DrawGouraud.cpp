@@ -509,7 +509,6 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 
 	BufferData.BeginOffset = BufferData.Index * DRAWGOURAUDPOLY_SIZE;
     BufferData.IndexOffset = 0;
-	BindlessFail = false;
 
 	unclockFast(Stats.GouraudPolyCycles);
 }

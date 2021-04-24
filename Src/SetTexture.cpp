@@ -17,56 +17,38 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-UXOpenGLRenderDevice::FCachedTexture* UXOpenGLRenderDevice::GetBindlessCachedTexture(FTextureInfo& Info)
-{
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-	if (!Info.Texture)
-		return NULL;
-	FCachedTexture* CachedTex = (FCachedTexture*)Info.Texture->TextureHandle;
-#else
-	FCachedTexture* CachedTex = BindlessMap.FindRef(Info.CacheID);
-#endif
-	return CachedTex;
-}
-
-BOOL UXOpenGLRenderDevice::WillBindlessTextureChange(FTextureInfo& Info, FCachedTexture* Texture, DWORD PolyFlags)
+BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture)
 {
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
-
-	// see if we have the necessary texture cached
-	if (Texture->TexNum[CacheSlot] == 0)
-		return TRUE;
-
-	// already cached but the texture data may have changed
-	if (Info.bRealtimeChanged)
-	{
-		if (!Info.Texture)
-			return TRUE;
-		
-#if UNREAL_TOURNAMENT_OLDUNREAL
-		if (Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
-			return FALSE;		
-#endif
-		return TRUE;
-	}
-	return FALSE;
-}
-
-BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture)
-{	
+	CachedTexture = nullptr;
+	
 	if (UsingBindlessTextures)
-	{	
-		CachedTexture = GetBindlessCachedTexture(Info);
-		if (CachedTexture)
-			return WillBindlessTextureChange(Info, CachedTexture, PolyFlags);
-	}
+	{
+		CachedTexture = BindMap->Find(Info.CacheID);
+		if (CachedTexture && CachedTexture->TexNum[CacheSlot])
+		{
+			// already cached but the texture data may have changed
+			if (Info.bRealtimeChanged)
+			{
+				if (!Info.Texture)
+					return TRUE;
 
+#if UNREAL_TOURNAMENT_OLDUNREAL
+				if (Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
+					return FALSE;
+#endif
+				return TRUE;
+			}
+
+			return FALSE;
+		}
+	}
+	
 	// not bindless or not cached
 	if (TexInfo[Multi].CurrentCacheID != Info.CacheID)
 		return TRUE;
 
 	// see if we have the right version of the texture bound
-	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
 	if (TexInfo[Multi].CurrentCacheSlot != CacheSlot)
 		return TRUE;
 
@@ -76,7 +58,9 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 
 	if (Info.bRealtimeChanged)
 	{
-		CachedTexture = BindMap->Find(Info.CacheID);
+		if (!CachedTexture)
+			CachedTexture = BindMap->Find(Info.CacheID);
+		
 		if (CachedTexture
 #if UNREAL_TOURNAMENT_OLDUNREAL
 			&& CachedTexture->RealtimeChangeCount != Info.Texture->RealtimeChangeCount
@@ -192,27 +176,36 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	if (!WillTextureChange(Multi, Info, PolyFlags, Bind))
 	{
 		if (UsingBindlessTextures && Bind)
+		{
+			//debugf(TEXT("Bindless unchanged %ls %08x %i texnum %i"), Info.Texture->GetPathName(), Bind, CacheSlot, Bind->TexNum[CacheSlot]);
 			Tex.TexNum = Bind->TexNum[CacheSlot];
+		}
 		STAT(unclockFast(Stats.BindCycles));
 		return;
 	}
-
+	
 	if (Bind)
 	{
+		// We found the texture in the bindmap but WillTextureChange indicates that it is going to change...
 #if UNREAL_TOURNAMENT_OLDUNREAL
 		if (Info.Texture)
 			Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
 #endif
-		bBindlessRealtimeChanged = true;
+		if (Bind->TexNum[CacheSlot])
+		{
+			//debugf(TEXT("Bindless realtimechanged %ls %08x %i texnum %i"), Info.Texture->GetPathName(), Bind, CacheSlot, Bind->TexNum[CacheSlot]);
+			bBindlessRealtimeChanged = true;
+		}
+	}
+	else
+	{
+		// WillTextureChange could have returned TRUE without even doing a lookup (e.g., because Info.Texture==NULL and Info.bRealtimeChanged==TRUE). Do the lookup here.
+		Bind = BindMap->Find(Info.CacheID);
 	}
 
     // Make current.
 	Tex.CurrentCacheSlot = CacheSlot;
-	Tex.CurrentCacheID   = Info.CacheID;	
-
-	// Find in cache.
-	if (!Bind)
-        Bind=BindMap->Find(Info.CacheID);
+	Tex.CurrentCacheID   = Info.CacheID;	        
 
 	//debugf(NAME_DevGraphics, TEXT("Info.Texture %ls Tex.CurrentCacheID 0x%016llx, Multi %i, Bind %08x Format %d"), Info.Texture->GetPathName(), Tex.CurrentCacheID, Multi, Bind, Info.Format);
 
@@ -314,7 +307,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		}
 	}
 
-	if (!bBindlessRealtimeChanged || Bind->TexNum[CacheSlot] == 0)
+	if ( /*!bBindlessRealtimeChanged || */Bind->TexNum[CacheSlot] == 0)
     {
         CHECK_GL_ERROR();
         glActiveTexture(GL_TEXTURE0 + Multi);
@@ -835,93 +828,55 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             Info.Unload();
 	}
 
-    if (UsingBindlessTextures && !Unsupported)
+	// Try to make the texture resident as a bindless texture
+    if (UsingBindlessTextures && !Unsupported && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures
+#if ENGINE_VERSION==227
+		//&& (Info.Texture || (Multi != 1 && Multi != 2)) // stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in)
+#endif		
+		)
     {
-		if (!Bind->TexNum[CacheSlot] && GlobalUniformTextureHandles.UniformBuffer) //additional check required in case of runtime change UsingBindlessTextures.
-        {
-            Bind->TexNum[CacheSlot]=TexNum;
+        Bind->TexNum[CacheSlot] = TexNum;
+    	
 #ifdef __LINUX_ARM__
-            Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleNV(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
+        Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleNV(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
 #else
-			Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleARB(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
+		Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleARB(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
 #endif // __Linux_ARM
+        CHECK_GL_ERROR();
+
+        if (!Bind->TexHandle[CacheSlot])
+        {
+            debugf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture->GetFullName());
+            Bind->TexHandle[CacheSlot] = 0;
+            Bind->TexNum[CacheSlot] = 0;
+        }
+        else
+        {
+            //debugf(TEXT("Making %ls %08x with TexNum %i resident 0x%016llx multi %i"),Info.Texture->GetFullName(),Bind,Bind->TexNum[CacheSlot], Bind->TexHandle[CacheSlot], Multi);
+#ifdef __LINUX_ARM__
+            glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
+#else
+            glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
+#endif
             CHECK_GL_ERROR();
 
-            if (!Bind->TexHandle[CacheSlot])
-            {
-                debugf(TEXT("No bindless handle for: %ls!"), Info.Texture->GetFullName());
-                Bind->TexHandle[CacheSlot] = 0;
-                Bind->TexNum[CacheSlot] = 0;
-            }
-            else if (TexNum < NUMTEXTURES)
-            {
-                //debugf(TEXT("Making %ls with TexNum %i resident 0x%08x%08x"),Info.Texture->GetFullName(),FCachedTextureInfo->TexNum[CacheSlot], FCachedTextureInfo->TexHandle[CacheSlot]);
-#ifdef __LINUX_ARM__
-                glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
-#else
-                glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
-#endif
-                CHECK_GL_ERROR();
+            if (GlobalUniformTextureHandles.Sync[0])
+                WaitBuffer(GlobalUniformTextureHandles, 0);
+            
+            GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
 
-                if (GlobalUniformTextureHandles.Sync[0])
-                    WaitBuffer(GlobalUniformTextureHandles, 0);
-            	
-                GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
-
-                LockBuffer(GlobalUniformTextureHandles, 0);				
-
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-                // avoid lookups by storing information directly into texture. Add bindless information if available.
-                // Should save quite some CPU.
-                // To make use of this, add "void* TextureHandle" into class ENGINE_API UTexture : public UBitmap
-                FCachedTexture* FCachedTextureInfo = (FCachedTexture*)Info.Texture->TextureHandle;
-#else
-				FCachedTexture* FCachedTextureInfo = BindlessMap.FindRef(Info.CacheID);
-#endif
-
-				if (!FCachedTextureInfo)
-				{
-					FCachedTextureInfo = new (TEXT("XOpenGL")) FCachedTexture;
-					memset(FCachedTextureInfo, 0, sizeof(FCachedTexture));
-
-#if XOPENGL_TEXTUREHANDLE_SUPPORT
-					Info.Texture->TextureHandle = FCachedTextureInfo;
-					// Marco: Hookup for linked list for mem cleanup later.
-					FCachedTextureInfo->Next = BindlessList;
-					BindlessList = FCachedTextureInfo;
-#else					
-					BindlessMap.Set(Info.CacheID, FCachedTextureInfo);
-					checkSlow(BindlessMap.FindRef(Info.CacheID) == FCachedTextureInfo);
-#endif
-				}
-
-                FCachedTextureInfo->Ids[CacheSlot] = Bind->Ids[CacheSlot];
-                FCachedTextureInfo->BaseMip = Bind->BaseMip;
-                FCachedTextureInfo->MaxLevel = Bind->MaxLevel;
-                FCachedTextureInfo->Sampler[CacheSlot] = Bind->Sampler[CacheSlot];
-                FCachedTextureInfo->TexHandle[CacheSlot] = Bind->TexHandle[CacheSlot];
-				FCachedTextureInfo->TexNum[CacheSlot] = Bind->TexNum[CacheSlot];
-                TexNum++;
-            }
-			else
-			{
-				debugf(NAME_DevGraphics, TEXT("Bindless overflow"));
-				BindlessFail = true;
-				Bind->TexHandle[CacheSlot] = 0;
-				Bind->TexNum[CacheSlot] = 0;
-			}
+            LockBuffer(GlobalUniformTextureHandles, 0);	
+            TexNum++;
         }
     }
-    else
+    else if (!ExistingBind)
     {
-		//debugf(TEXT("Bindless fail %ls"), *FObjectPathName(Info.Texture));
-		BindlessFail = UsingBindlessTextures;
+    	//debugf(TEXT("Bindless fail %ls"), Info.Texture->GetPathName());
         Bind->TexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
-	if (UsingBindlessTextures)
-		Tex.TexNum = Bind->TexNum[CacheSlot];
-    else Tex.TexNum  = 0;
+
+	Tex.TexNum = Bind->TexNum[CacheSlot];    
 
     CHECK_GL_ERROR();
 	STAT(unclockFast(Stats.ImageCycles));
