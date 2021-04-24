@@ -192,7 +192,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
 	INT MaxUniformBufferBindings = 0;
 	glGetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &MaxUniformBufferBindings);
-	debugf(TEXT("XOpenGL: MaxUniformBufferBindings: %i"), MaxUniformBufferBindings);
+	debugf(TEXT("XOpenGL: MaxUniformBufferBindings: %i"), MaxUniformBufferBindings);    
 
 	if (OpenGLVersion == GL_Core)
 	{
@@ -271,6 +271,24 @@ void UXOpenGLRenderDevice::CheckExtensions()
     MaxClippingPlanes = 0;
     glGetIntegerv(GL_MAX_CLIP_DISTANCES, &MaxClippingPlanes);
     debugf(TEXT("XOpenGL: GL_MAX_CLIP_DISTANCES found: %i"), MaxClippingPlanes);
+
+    INT MaxUniformBlockSize = 0;
+    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &MaxUniformBlockSize);
+    //debugf(TEXT("XOpenGL: MaxUniformBlockSize: %i"), MaxUniformBlockSize);
+
+    if (UseBindlessTextures)
+    {
+        if (MaxBindlessTextures == 0)
+        {
+            MaxBindlessTextures = MaxUniformBlockSize / 16;
+            debugf(TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
+        }
+        else if (MaxUniformBlockSize < MaxBindlessTextures * 16)
+        {
+            debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxUniformBlockSize / 16);
+            MaxBindlessTextures = MaxUniformBlockSize / 16;
+        }
+    }
 
 
 	CHECK_GL_ERROR();
