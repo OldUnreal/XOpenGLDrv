@@ -34,7 +34,7 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 					return TRUE;
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
-				if (Info.Texture->RealtimeChangeCount == Texture->RealtimeChangeCount)
+				if (Info.Texture->RealtimeChangeCount == CachedTexture->RealtimeChangeCount)
 					return FALSE;
 #endif
 				return TRUE;
