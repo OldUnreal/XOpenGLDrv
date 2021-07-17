@@ -21,7 +21,7 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 {
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
 	CachedTexture = nullptr;
-	
+
 	if (UsingBindlessTextures)
 	{
 		CachedTexture = BindMap->Find(Info.CacheID);
@@ -43,7 +43,7 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 			return FALSE;
 		}
 	}
-	
+
 	// not bindless or not cached
 	if (TexInfo[Multi].CurrentCacheID != Info.CacheID)
 		return TRUE;
@@ -60,7 +60,7 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 	{
 		if (!CachedTexture)
 			CachedTexture = BindMap->Find(Info.CacheID);
-		
+
 		if (CachedTexture
 #if UNREAL_TOURNAMENT_OLDUNREAL
 			&& CachedTexture->RealtimeChangeCount != Info.Texture->RealtimeChangeCount
@@ -121,7 +121,7 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 	{
 		if (NoFiltering)
 			return;
-		
+
 		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_LINEAR : (UseTrilinear ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_NEAREST));
 		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
@@ -183,7 +183,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		STAT(unclockFast(Stats.BindCycles));
 		return;
 	}
-	
+
 	if (Bind)
 	{
 		// We found the texture in the bindmap but WillTextureChange indicates that it is going to change...
@@ -205,7 +205,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
     // Make current.
 	Tex.CurrentCacheSlot = CacheSlot;
-	Tex.CurrentCacheID   = Info.CacheID;	        
+	Tex.CurrentCacheID   = Info.CacheID;
 
 	//debugf(NAME_DevGraphics, TEXT("Info.Texture %ls Tex.CurrentCacheID 0x%016llx, Multi %i, Bind %08x Format %d"), Info.Texture->GetPathName(), Tex.CurrentCacheID, Multi, Bind, Info.Format);
 
@@ -281,7 +281,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	}
 
 	switch (ShaderProg)
-	{	
+	{
 		case Tile_Prog:
 		{
 			glUniform1i(DrawTileTexture, Multi);
@@ -293,7 +293,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			glUniform1i(DrawGouraudTexture[Multi], Multi);
 			CHECK_GL_ERROR();
 			break;
-		}		
+		}
 		case ComplexSurfaceSinglePass_Prog:
 		{
 			glUniform1i(DrawComplexSinglePassTexture[Multi], Multi);
@@ -432,10 +432,10 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					// "Undersized" DXT1 mips are fine and we have them in UT99 (e.g., the 2x128 animated texture on the liandri tower).
 					// All gl drivers can unpack them with no issues whatsoever.
 					// The only trouble with undersized textures and DXT1 is that you have to pad the mips _BEFORE_ you compress them.
-					// 
+					//
 					// FYI: Han originally added this check, but he told me on several occasions that it wasn't necessary.
 					// Last time we discussed this was on 06 OCT 2020.
-					// 
+					//
 					//if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
 					//{
 					//	GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
@@ -831,12 +831,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	// Try to make the texture resident as a bindless texture
     if (UsingBindlessTextures && !Unsupported && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures
 #if ENGINE_VERSION==227
-		//&& (Info.Texture || (Multi != 1 && Multi != 2)) // stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in)
-#endif		
+		&& Multi != 1 && Multi != 2 // stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in)
+#endif
 		)
     {
         Bind->TexNum[CacheSlot] = TexNum;
-    	
+
 #ifdef __LINUX_ARM__
         Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleNV(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
 #else
@@ -862,10 +862,10 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
             if (GlobalUniformTextureHandles.Sync[0])
                 WaitBuffer(GlobalUniformTextureHandles, 0);
-            
+
             GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
 
-            LockBuffer(GlobalUniformTextureHandles, 0);	
+            LockBuffer(GlobalUniformTextureHandles, 0);
             TexNum++;
         }
     }
@@ -876,7 +876,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         Bind->TexNum[CacheSlot] = 0;
     }
 
-	Tex.TexNum = Bind->TexNum[CacheSlot];    
+	Tex.TexNum = Bind->TexNum[CacheSlot];
 
     CHECK_GL_ERROR();
 	STAT(unclockFast(Stats.ImageCycles));
@@ -929,7 +929,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 #endif
 
 		CurrentAdditionalPolyFlags=PolyFlags;
-	}	
+	}
 
 	Xor = CurrentPolyFlags^PolyFlags;
 	// Detect changes in the blending modes.
@@ -951,13 +951,21 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			}
 			else if (PolyFlags & PF_Translucent)
 			{
-                if (1)//( !(PolyFlags & PF_Mirrored) )
-                    glBlendFunc( GL_ONE, GL_ONE_MINUS_SRC_COLOR );
+                if (SimulateMultiPass && ActiveProgram == ComplexSurfaceSinglePass_Prog && PrevProgram != GouraudPolyVert_Prog)//( !(PolyFlags & PF_Mirrored)
+                {
+                    //debugf(TEXT("PolyFlags %ls"), *GetPolyFlagString(PolyFlags));
+                    //glBlendFunc(GL_ONE, GL_SRC1_COLOR);
+					//glBlendEquation(GL_FUNC_ADD);
+					glBlendFunc(GL_ONE, GL_SRC1_COLOR);
+                }
+                else glBlendFunc( GL_ONE, GL_ONE_MINUS_SRC_COLOR );
+                /*
                 else
                 {
                     glBlendFunc( GL_ZERO, GL_SRC_COLOR ); //Mirrors!
                     //debugf(TEXT("Mirror"));
                 }
+                */
 				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_Modulated)

@@ -192,7 +192,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
 	INT MaxUniformBufferBindings = 0;
 	glGetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &MaxUniformBufferBindings);
-	debugf(TEXT("XOpenGL: MaxUniformBufferBindings: %i"), MaxUniformBufferBindings);    
+	debugf(TEXT("XOpenGL: MaxUniformBufferBindings: %i"), MaxUniformBufferBindings);
 
 	if (OpenGLVersion == GL_Core)
 	{

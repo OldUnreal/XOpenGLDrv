@@ -87,7 +87,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		if (Frame->Viewport->Actor && (Frame->Viewport->IsOrtho() || Abs(Z) <= SMALL_NUMBER))
 			Z = 1.0f; // Probably just needed because projection done below assumes non ortho projection.
 
-		Color = FOpenGLGammaDecompress_sRGB(Color);
+		//Color = FOpenGLGammaDecompress_sRGB(Color);
 	}
 
 	if (PolyFlags & PF_Modulated)

@@ -47,7 +47,11 @@ protected:
 		guardSlow(TOpenGLMapBase::Rehash);
 		checkSlow(!(HashCount&(HashCount-1)));
 		checkSlow(HashCount>=8);
+#if ENGINE_VERSION==227
+		INT* NewHash = NewTagged(TEXT("HashMapHash"))INT[HashCount];
+#else
 		INT* NewHash = new(TEXT("HashMapHash"))INT[HashCount];
+#endif
 		{for( INT i=0; i<HashCount; i++ )
 		{
 			NewHash[i] = INDEX_NONE;

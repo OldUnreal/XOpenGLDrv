@@ -56,7 +56,7 @@ inline glm::vec4 FPlaneToVec4(FPlane Plane)
 
 inline void UXOpenGLRenderDevice::DrawGouraudBufferVert( DrawGouraudBufferedVert* Vert, FTransTexture* P, DrawGouraudBuffer& BufferData )
 {
-	Vert->Point  = glm::vec3(P->Point.X, P->Point.Y, P->Point.Z);	
+	Vert->Point  = glm::vec3(P->Point.X, P->Point.Y, P->Point.Z);
 	Vert->Normal = glm::vec3(P->Normal.X, P->Normal.Y, P->Normal.Z);
 	Vert->UV     = glm::vec2(P->U, P->V);
 	Vert->Light  = glm::vec4(P->Light.X, P->Light.Y, P->Light.Z, P->Light.W);
@@ -68,12 +68,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	SetProgram(GouraudPolyVert_Prog);
 
 	DWORD NextPolyFlags = SetFlags(PolyFlags);
-	
+
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
-	if (!UsingShaderDrawParameters || 
+	if (!UsingShaderDrawParameters ||
 		// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
-		((DrawGouraudDrawParams.PolyFlags()^PolyFlags) & PF_ForceViewZone) || 
+		((DrawGouraudDrawParams.PolyFlags()^PolyFlags) & PF_ForceViewZone) ||
 		// Check if the blending mode will change
 		WillItBlend(DrawGouraudDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the texture will change
@@ -88,7 +88,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 			clockFast(Stats.GouraudPolyCycles);
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
 		}
-		
+
 		SetBlend(NextPolyFlags, false);
 	}
 
@@ -120,14 +120,14 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 			DrawGouraudDrawParams.HitTesting() = 0;
 			DrawGouraudDrawParams.DrawData[EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, Info.Texture->Alpha);
 		}
-		
+
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
 			DrawGouraudDrawParams.RendMap() = Frame->Viewport->Actor->RendMap;
 	}
-	
+
 	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, GouraudPolyVert_Prog, NORMALTEX);
 	DrawGouraudDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, Info.Texture->Alpha);
-	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;	
+	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
 
 	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture;
 
@@ -201,8 +201,8 @@ void UXOpenGLRenderDevice::DrawGouraudReleaseState(FTextureInfo& Info)
 }
 
 void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
-{	
-	guard(UXOpenGLRenderDevice::DrawGouraudPolygon);	
+{
+	guard(UXOpenGLRenderDevice::DrawGouraudPolygon);
 
 	if (NumPts < 3 || Frame->Recursion > MAX_FRAME_RECURSION || NoDrawGouraud) //reject invalid.
 		return;
@@ -242,18 +242,18 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 
 	auto Out = reinterpret_cast<DrawGouraudBufferedVert*>(
 		&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
-	
+
 	for ( INT i=0; i<NumPts-2; i++ )
     {
         DrawGouraudBufferVert(Out++, Pts[0    ], DrawGouraudBufferData);
 		DrawGouraudBufferVert(Out++, Pts[i + 1], DrawGouraudBufferData);
-		DrawGouraudBufferVert(Out++, Pts[i + 2], DrawGouraudBufferData);		
+		DrawGouraudBufferVert(Out++, Pts[i + 2], DrawGouraudBufferData);
     }
 
 	DrawGouraudMultiDrawVertices      += (NumPts - 2) * 3;
 	DrawGouraudBufferData.IndexOffset += (NumPts - 2) * 3 * (sizeof(DrawGouraudBufferedVert) / sizeof(FLOAT));
 	DrawGouraudMultiDrawVertexCountArray[DrawGouraudMultiDrawCount++] = (NumPts - 2) * 3;
-	
+
 	DrawGouraudReleaseState(Info);
 	unclockFast(Stats.GouraudPolyCycles);
 	unguard;
@@ -285,6 +285,8 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	auto Out = reinterpret_cast<DrawGouraudBufferedVert*>(
 		&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
+	auto End = reinterpret_cast<DrawGouraudBufferedVert*>(
+		&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DRAWGOURAUDPOLY_SIZE - 1]);
 
 	INT PolyListSize = 0;
     for (INT i = 0; i < NumPts; i++)
@@ -292,25 +294,30 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		// stijn: this was the previous condition but this was all wrong! if we flush the buffer before the triangle we
 		// were pushing is complete, all subsequent triangles we push will be borked as well!!
 		//if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLY_SIZE - DrawGouraudStrideSize))
-		if (DrawGouraudBufferData.IndexOffset >= (DRAWGOURAUDPOLY_SIZE - 3 * DrawGouraudStrideSize) && i % 3 == 0)
+		if ((i % 3 == 0) && (Out + 2 > End))
 		{
+			DrawGouraudMultiDrawVertices += PolyListSize;
+			DrawGouraudBufferData.IndexOffset += PolyListSize * (sizeof(DrawGouraudBufferedVert) / sizeof(FLOAT));
 			DrawGouraudMultiDrawVertexCountArray[DrawGouraudMultiDrawCount++] = PolyListSize;
-			
+
 			unclockFast(Stats.GouraudPolyCycles);
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
+			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
 			clockFast(Stats.GouraudPolyCycles);
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
+			
 			DrawGouraudSetState(Frame, Info, PolyFlags);
+			Out = reinterpret_cast<DrawGouraudBufferedVert*>(
+				&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
 
 			if (UsingShaderDrawParameters)
 				memcpy(DrawGouraudGetDrawParamsRef(), &DrawGouraudDrawParams, sizeof(DrawGouraudDrawParams));
 
 			PolyListSize = 0;
 		}
-    	
+
 		DrawGouraudBufferVert(Out++, &Pts[i], DrawGouraudBufferData);
-		PolyListSize++;    			
+		PolyListSize++;
     }
 
 	DrawGouraudMultiDrawVertices      += PolyListSize;
@@ -392,7 +399,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	// stijn: push the remaining triangles
 	if (i - StartOffset > 0)
-		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);	
+		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
 
 	if (Frame->NearClip.W != 0.0)
 	{
@@ -410,7 +417,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData)
 {
 	clockFast(Stats.GouraudPolyCycles);
-	
+
 	// Using one huge buffer instead of 3, interleaved data.
 	// This is to reduce overhead by reducing API calls.
 	GLuint TotalSize = BufferData.IndexOffset;
@@ -441,7 +448,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 
 #if defined(__LINUX_ARM__)
 			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawGouraudMultiDrawCount * sizeof(DrawGouraudShaderDrawParams), DrawGouraudSSBORange.Buffer, GL_DYNAMIC_DRAW);
-#else		
+#else
 			glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawGouraudMultiDrawCount * sizeof(DrawGouraudShaderDrawParams), DrawGouraudSSBORange.Buffer);
 #endif
 		}
@@ -490,7 +497,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 		glUniform1uiv(DrawGouraudTexNum, 4, reinterpret_cast<const GLuint*>(&DrawGouraudDrawParams.TexNum[0]));
 		glUniform4fv(DrawGouraudDrawData, ARRAY_COUNT(DrawGouraudDrawParams.DrawData), reinterpret_cast<const GLfloat*>(DrawGouraudDrawParams.DrawData));
 
-	}	
+	}
 
     CHECK_GL_ERROR();
 
@@ -501,7 +508,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	DrawGouraudMultiDrawVertices = DrawGouraudMultiDrawCount = 0;
 
 	if (UsingPersistentBuffersGouraud)
-	{		
+	{
 		LockBuffer(DrawGouraudBufferRange, BufferData.Index);
 		BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
 		CHECK_GL_ERROR();
@@ -533,7 +540,7 @@ void UXOpenGLRenderDevice::DrawGouraudStart()
 {
 	clockFast(Stats.GouraudPolyCycles);
 	WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-	
+
 	glUseProgram(DrawGouraudProg);
 
 #if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__

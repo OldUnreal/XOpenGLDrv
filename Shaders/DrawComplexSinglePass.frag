@@ -59,8 +59,10 @@ in vec2 vEnvironmentTexCoords;
 #ifdef GL_ES
 layout ( location = 0 ) out vec4 FragColor;
 #else
+# if SIMULATEMULTIPASS
+layout ( location = 0, index = 1) out vec4 FragColor1;
+#endif
 layout ( location = 0, index = 0) out vec4 FragColor;
-//layout ( location = 0, index = 1) out vec4 FragColor1;
 #endif
 
 #if SHADERDRAWPARAMETERS
@@ -351,7 +353,7 @@ void main (void)
 # else
 			TotalColor*=vec4(LightColor.rgb,1.0);
 # endif
-			TotalColor=clamp(TotalColor*2.0,0.0,1.0); //saturate.
+			TotalColor.rgb=clamp(TotalColor.rgb*2.0,0.0,1.0); //saturate.
 		}
 
 #endif
@@ -375,7 +377,8 @@ void main (void)
 		hsvDetailTex = hsv2rgb(hsvDetailTex);
 		DetailTexColor=vec4(hsvDetailTex,0.0);
 		DetailTexColor = mix(vec4(1.0,1.0,1.0,1.0), DetailTexColor, bNear); //fading out.
-		TotalColor*=DetailTexColor;
+
+		TotalColor.rgb*=DetailTexColor.rgb;
 	}
 #endif
 
@@ -412,7 +415,6 @@ void main (void)
 		TotalColor*=MacrotexColor;
 	}
 #endif
-
 
 	// BumpMap (Normal Map)
 #if BUMPMAPS
@@ -500,7 +502,7 @@ void main (void)
             FogColor = texture(Textures[vFogMapTexNum], vFogMapCoords);
 		else
 		    FogColor = texture(Texture2, vFogMapCoords);
-		
+
 #else
 		FogColor = texture(Texture2, vFogMapCoords);
 #endif
@@ -537,7 +539,7 @@ void main (void)
 	TotalColor=clamp(TotalColor,0.0,1.0); //saturate.
 
 	// Add DistanceFog
-#if ENGINE_VERSION==227 && 0
+#if ENGINE_VERSION==227
 	// stijn: Very slow! Went from 135 to 155FPS on CTF-BT-CallousV3 by just disabling this branch even tho 469 doesn't do distance fog
 	if (vDistanceFogInfo.w >= 0.0)
 	{
@@ -616,6 +618,10 @@ void main (void)
 	if (bHitTesting)
 		TotalColor = vDrawColor; // Use ONLY DrawColor.
 
+#endif
+
+# if SIMULATEMULTIPASS
+	FragColor1	= (vec4(1.0,1.0,1.0,1.0)-TotalColor)*LightColor;
 #endif
 
 	//FragColor1	= mix(TotalColor,LightColor,1.0);// way to fix skybox etc??

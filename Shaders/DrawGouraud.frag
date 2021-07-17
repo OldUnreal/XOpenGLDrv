@@ -183,7 +183,8 @@ void main(void)
 		hsvDetailTex = hsv2rgb(hsvDetailTex);
 		DetailTexColor=vec4(hsvDetailTex,0.0);
 		DetailTexColor = mix(vec4(1.0,1.0,1.0,1.0), DetailTexColor, bNear); //fading out.
-		TotalColor*=DetailTexColor;
+
+		TotalColor.rgb*=DetailTexColor.rgb;
 	}
 #endif
 

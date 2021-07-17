@@ -53,7 +53,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 			GLVersionString = TEXT("#version 460 core\n");
 		else if (UsingBindlessTextures || UsingPersistentBuffers)
 			GLVersionString = TEXT("#version 450 core\n");
-		else 
+		else
 			GLVersionString = TEXT("#version 330 core\n");
 	}
 
@@ -73,6 +73,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
     Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
 	Definitions += *FString::Printf(TEXT("#define MAX_CLIPPINGPLANES %i \n"), MaxClippingPlanes);
 	Definitions += *FString::Printf(TEXT("#define SHADERDRAWPARAMETERS %i \n"), UsingShaderDrawParameters);
+	Definitions += *FString::Printf(TEXT("#define SIMULATEMULTIPASS %i \n"), SimulateMultiPass);
 
     // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
     Definitions += *FString::Printf(TEXT("#line 1 \n"));
@@ -403,9 +404,9 @@ void UXOpenGLRenderDevice::InitShaders()
 	CHECK_GL_ERROR();
 
 	glGenBuffers(1, &DrawComplexSSBO);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);	
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOBindingIndex, DrawComplexSSBO);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);	
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
 	//DrawGouraud
 	glGenBuffers(1, &DrawGouraudVertBuffer);

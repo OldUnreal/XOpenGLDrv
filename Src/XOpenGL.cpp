@@ -97,7 +97,8 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("BumpMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(BumpMaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NoAATiles"), RF_Public)UBoolProperty(CPP_PROPERTY(NoAATiles), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GenerateMipMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(GenerateMipMaps), TEXT("Options"), CPF_Config);
-	
+	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
+
 #if ENGINE_VERSION==227
 	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
@@ -282,6 +283,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("EnvironmentMaps %i"), EnvironmentMaps);
 	debugf(NAME_DevLoad, TEXT("NoAATiles %i"), NoAATiles);
 	debugf(NAME_DevLoad, TEXT("GenerateMipMaps %i"), GenerateMipMaps);
+	//debugf(NAME_DevLoad, TEXT("UseLightmapAtlas %i"), UseLightmapAtlas);
+
 	//debugf(NAME_DevLoad, TEXT("EnableShadows %i"), EnableShadows);
 
 	debugf(NAME_DevLoad, TEXT("DetailTextures %i"), DetailTextures);
@@ -813,7 +816,7 @@ InitContext:
 		if (wglGetExtensionsStringARB)
 			AllExtensions += appFromAnsi(wglGetExtensionsStringARB(hDC));
 
-		
+
 
 		FString ExtensionString = AllExtensions;
 		FString SplitString;
@@ -870,7 +873,7 @@ InitContext:
 
 
 	if (ShareLists && AllContexts.Num())
-		verify(wglShareLists(AllContexts(0), hRC) == 1);
+		check(wglShareLists(AllContexts(0), hRC) == 1);
 	AllContexts.AddItem(hRC);
 
 	if (UseOpenGLDebug)
@@ -976,7 +979,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::SetRes);
-	
+
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 #ifdef SDL2BUILD
 	if (glContext && CurrentGLContext && glContext == CurrentGLContext)
@@ -1282,7 +1285,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 					glMakeTextureHandleNonResidentARB(It.Value().TexHandle[i]);
 #endif
 			}
-			
+
 			It.Value().TexHandle[i] = 0;
 			It.Value().TexNum[i] = 1;
 			if (It.Value().Ids[i])
@@ -1420,6 +1423,11 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 {
     guard(UXOpenGLRenderDevice::UpdateCoords);
 
+    FVector _ClientCameraLocation = Frame->Viewport->Actor->Location;
+
+    //debugf(TEXT("_ClientCameraLocation %f %f %f"),_ClientCameraLocation.X,_ClientCameraLocation.Y,_ClientCameraLocation.Z);
+    //debugf(TEXT("Frame->Coords.Origin %f %f %f"), Frame->Coords.Origin.X,Frame->Coords.Origin.Y,Frame->Coords.Origin.Z);
+
     // Update Coords:  World to Viewspace projection.
 	FrameCoords[0] = glm::vec4(Frame->Coords.Origin.X, Frame->Coords.Origin.Y, Frame->Coords.Origin.Z, 0.0f);
 	FrameCoords[1] = glm::vec4(Frame->Coords.XAxis.X, Frame->Coords.XAxis.Y, Frame->Coords.XAxis.Z, 0.0f);
@@ -1450,7 +1458,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	{
 		if (GIsEditor)
 			StaticLightList.Empty();
-		
+
 		for (INT i = 0; i < Level->Actors.Num(); ++i)
 		{
 			AActor* Actor = Level->Actors(i);
@@ -1533,7 +1541,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	// Disable clipping
 	while (NumClipPlanes > 0)
 		PopClipPlane();
-	
+
 	unguard;
 }
 
@@ -1563,7 +1571,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 
 	modelviewprojMat=projMat*viewMat*modelMat; //yes, this is right.
 	modelviewMat=viewMat*modelMat;
-	
+
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0                    , sizeof(glm::mat4), glm::value_ptr(modelMat));
 	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMat));
@@ -1583,7 +1591,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	guard(UXOpenGLRenderDevice::SetProjection);
 
 	// Precompute stuff.
-    FLOAT zNear = 0.5f;
+    FLOAT zNear = 1.0f;
     StoredbNearZ = 0;
 
 	if (bNearZ)
@@ -1610,7 +1618,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	modelviewprojMat=projMat*viewMat*modelMat;
 	modelviewMat=viewMat*modelMat;
-	
+
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0                    , sizeof(glm::mat4), glm::value_ptr(modelMat));
 	glBufferSubData(GL_UNIFORM_BUFFER,     sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(viewMat));
@@ -1980,6 +1988,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("Coronas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(Coronas)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("ShinySurfaces"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(ShinySurfaces)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("VolumetricLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(VolumetricLighting)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("SimulateMultiPass"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(SimulateMultiPass)));
 
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("MaxAnisotropy"), *FString::Printf(TEXT("%f"), MaxAnisotropy));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("LODBias"), *FString::Printf(TEXT("%f"), LODBias));

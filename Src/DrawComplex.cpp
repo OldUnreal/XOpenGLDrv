@@ -70,7 +70,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
-	if (!UsingShaderDrawParameters || HitTesting() || 
+	if (!UsingShaderDrawParameters || HitTesting() ||
 		// Check if the blending mode will change
 		WillItBlend(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the surface textures will change

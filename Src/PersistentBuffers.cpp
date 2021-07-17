@@ -110,9 +110,9 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
 		DrawGouraudSSBORange.Buffer = (FLOAT*)new DrawGouraudShaderDrawParams[MAX_DRAWGOURAUD_BATCH];
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawGouraudShaderDrawParams) * MAX_DRAWGOURAUD_BATCH, DrawGouraudSSBORange.Buffer, GL_STREAM_DRAW);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);		
+		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}
-	
+
     if (UsingPersistentBuffersComplex)
     {
         // DrawComplexSurface
@@ -146,7 +146,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawComplexShaderDrawParams) * MAX_DRAWCOMPLEX_BATCH, DrawComplexSSBORange.Buffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 	}
-	
+
     if (UsingPersistentBuffersTile)
     {
         // DrawComplexSurface
@@ -177,7 +177,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 #ifndef __LINUX_ARM__
 		GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapNamedBufferRange(GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 #else
-        GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(GLuint64) * NUMTEXTURES * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+        GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
 #endif
 		if (!GlobalUniformTextureHandles.UniformBuffer)
 		{
@@ -216,12 +216,12 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			DrawGouraudSSBORange.Buffer = nullptr;
 		}
 	}
-	else 
+	else
 	{
 		delete[] DrawGouraudBufferRange.Buffer;
 		delete[] DrawGouraudSSBORange.Buffer;
 	}
-	
+
 	if (UsingPersistentBuffersComplex)
 	{
 		glGetNamedBufferParameteriv(DrawComplexVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
@@ -243,7 +243,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 		delete[] DrawComplexSinglePassRange.Buffer;
 		delete[] DrawComplexSSBORange.Buffer;
 	}
-	
+
 	if (UsingPersistentBuffersTile)
 	{
 		glGetNamedBufferParameteriv(DrawTileVertBuffer, GL_BUFFER_MAPPED, &IsMapped);
@@ -254,7 +254,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 		}
 	}
 	else
-	{		
+	{
 		delete[] DrawTileRange.Buffer;
 	}
 
@@ -271,7 +271,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 		glUnmapBuffer(GL_UNIFORM_BUFFER);
 		GlobalUniformTextureHandles.UniformBuffer = 0;
 #endif
-	}	
+	}
 
 	delete[] Draw2DLineVertsBuf;
 	delete[] Draw2DPointVertsBuf;

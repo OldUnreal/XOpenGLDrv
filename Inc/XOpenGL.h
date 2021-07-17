@@ -358,7 +358,7 @@ enum DrawFlags
 	DF_FogMap          	= 0x00000004,
 	DF_DetailTexture	= 0x00000008,
 	DF_MacroTexture	 	= 0x00000010,
-	DF_BumpMap			= 0x00000020,	
+	DF_BumpMap			= 0x00000020,
 	DF_EnvironmentMap   = 0x00000040,
 };
 
@@ -519,6 +519,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     BITFIELD BumpMaps;
     BITFIELD NoAATiles;
     BITFIELD GenerateMipMaps;
+    BITFIELD SimulateMultiPass;
     //BITFIELD SyncToDraw; // stijn: removed! this kills buffering
     BITFIELD UseOpenGLDebug;
     BITFIELD NoBuffering;
@@ -556,7 +557,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	INT MaxBindlessTextures;
 
-	INT MaxTextureSize;
 	BYTE OpenGLVersion;
 	BYTE UseVSync;
 	bool NeedsInit;
@@ -608,7 +608,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		VMult(0),
 		UPan(0),
 		VPan(0),
-		TexNum(0)		
+		TexNum(0)
 		{}
 	} TexInfo[8];
 	FLOAT RFX2, RFY2;
@@ -656,7 +656,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint FloatSize4_4				= 2 * FloatSize4;
 
 	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
-	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;	
+	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
 
 
 	//DrawSimple
@@ -705,7 +705,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLsizei DrawComplexMultiDrawVertexCountArray[MAX_DRAWCOMPLEX_BATCH];
 	INT DrawComplexMultiDrawCount;
 	INT DrawComplexMultiDrawVertices;
-	
+
     BufferRange DrawTileRange;
 	INT PrevDrawTileBeginOffset;
 
@@ -786,7 +786,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	struct DrawGouraudShaderDrawParams
 	{
 		glm::vec4 DrawData[6];
-		glm::uvec4 TexNum;				
+		glm::uvec4 TexNum;
 		glm::uvec4 _DrawFlags;
 
 		DWORD& DrawFlags()
@@ -808,7 +808,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			return reinterpret_cast<DWORD&>(_DrawFlags.w);
 		}
-		
+
 	} DrawGouraudDrawParams;
 
 	struct DrawGouraudBufferedVert
@@ -818,7 +818,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec2 UV;
 		glm::vec4 Light;
 		glm::vec4 Fog;
-	};	
+	};
 	GLuint DrawGouraudStrideSize = sizeof(DrawGouraudBufferedVert);
 	static_assert(sizeof(DrawGouraudBufferedVert) == 64, "Invalid gouraud buffered vertex size");
 
@@ -827,7 +827,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint Index;
 		GLuint IndexOffset;
 		GLuint BeginOffset;
-		
+
 		DrawGouraudBuffer()
 			: Index(0),
 			IndexOffset(0),
@@ -870,7 +870,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			return reinterpret_cast<DWORD&>(_DrawFlags.y);
 		}
-		
+
 		DWORD& PolyFlags()
 		{
 			return reinterpret_cast<DWORD&>(_DrawFlags.z);
@@ -901,7 +901,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint IndexOffset;
 		GLuint BeginOffset;
 		GLuint Iteration;
-		
+
 		DrawComplexBuffer()
 			: Index(0),
 			IndexOffset(0),
@@ -1026,7 +1026,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// TexNum for bindless textures in shaders.
 	GLuint DrawTileTexNum;
-	GLuint DrawComplexSinglePassTexNum;	
+	GLuint DrawComplexSinglePassTexNum;
 	GLuint DrawGouraudTexNum;
 
 	// Gamma handling
@@ -1046,7 +1046,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawTileVertsVao;
 	GLuint DrawGouraudPolyVertsVao;
 	GLuint DrawComplexVertsSinglePassVao;
-	GLuint SimpleDepthVao;	
+	GLuint SimpleDepthVao;
 
 	struct GouraudBufferData
 	{
@@ -1162,7 +1162,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);
 	void DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
-	void DrawGouraudReleaseState(FTextureInfo& Info);	
+	void DrawGouraudReleaseState(FTextureInfo& Info);
 
 	void DrawTileBufferTile(FLOAT* DrawTilesTemp, FLOAT* TileData);
 	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
@@ -1171,7 +1171,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
 	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
 	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
-	
+
 	void DrawPass(FSceneNode* Frame, INT Pass);
 	void ClearZ(FSceneNode* Frame);
 	void GetStats(TCHAR* Result);
