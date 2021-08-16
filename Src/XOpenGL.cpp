@@ -1,7 +1,7 @@
 ﻿/*=============================================================================
 XOpenGL.cpp: Unreal XOpenGL implementation for OpenGL 3.3+ and GL ES 3.0+
 
-Copyright 2014-2019 Oldunreal
+Copyright 2014-2021 Oldunreal
 
 Revision history:
 * Created by Smirftsch
@@ -79,6 +79,12 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(OpenGLVersions->Names)FName(TEXT("Core"));
 	new(OpenGLVersions->Names)FName(TEXT("ES"));
 
+	UEnum* ParallaxVersions = new(GetClass(), TEXT("Parallax"))UEnum(NULL);
+	new(ParallaxVersions->Names)FName(TEXT("Disabled"));
+	new(ParallaxVersions->Names)FName(TEXT("Basic"));
+	new(ParallaxVersions->Names)FName(TEXT("Occlusion"));
+	new(ParallaxVersions->Names)FName(TEXT("Relief"));
+
 	new(GetClass(), TEXT("OpenGLVersion"), RF_Public)UByteProperty(CPP_PROPERTY(OpenGLVersion), TEXT("Options"), CPF_Config, OpenGLVersions);
 	new(GetClass(), TEXT("UseVSync"), RF_Public)UByteProperty(CPP_PROPERTY(UseVSync), TEXT("Options"), CPF_Config, VSyncs);
 	new(GetClass(), TEXT("RefreshRate"), RF_Public)UIntProperty(CPP_PROPERTY(RefreshRate), TEXT("Options"), CPF_Config);
@@ -95,6 +101,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("GammaCorrectScreenshots"), RF_Public)UBoolProperty(CPP_PROPERTY(GammaCorrectScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MacroTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(MacroTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("BumpMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(BumpMaps), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("ParallaxVersion"), RF_Public)UByteProperty(CPP_PROPERTY(ParallaxVersion), TEXT("Options"), CPF_Config, ParallaxVersions);
 	new(GetClass(), TEXT("NoAATiles"), RF_Public)UBoolProperty(CPP_PROPERTY(NoAATiles), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GenerateMipMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(GenerateMipMaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
@@ -152,6 +159,13 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	GammaCorrectScreenshots = 1;
 	MacroTextures = 1;
 	BumpMaps = 1;
+#ifdef __EMSCRIPTEN__
+	ParallaxVersion = Parallax_Disabled;
+#elif __LINUX_ARM__
+	ParallaxVersion = Parallax_Disabled;
+#else
+	ParallaxVersion = Parallax_Disabled;
+#endif
 	UseTrilinear = 1;
 	NoAATiles = 1;
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
@@ -247,7 +261,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	BufferCount = 0;
 	TexNum = 1;
 	SwapControlExt = false;
-	SwapControlTearExt = false;
+	SwapControlTearExt = false;	SupportsClipDistance = true;
 
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
 	BindlessList = NULL;
@@ -280,6 +294,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("GammaCorrectScreenshots %i"), GammaCorrectScreenshots);
 	debugf(NAME_DevLoad, TEXT("MacroTextures %i"), MacroTextures);
 	debugf(NAME_DevLoad, TEXT("BumpMaps %i"), BumpMaps);
+	debugf(NAME_DevLoad, TEXT("ParallaxVersion %i (%ls)"),ParallaxVersion, ParallaxVersion == Parallax_Basic ? TEXT("Basic") : ParallaxVersion == Parallax_Occlusion ? TEXT("Occlusion") : ParallaxVersion == Parallax_Relief ? TEXT("Relief") : TEXT("Disabled"));
 	debugf(NAME_DevLoad, TEXT("EnvironmentMaps %i"), EnvironmentMaps);
 	debugf(NAME_DevLoad, TEXT("NoAATiles %i"), NoAATiles);
 	debugf(NAME_DevLoad, TEXT("GenerateMipMaps %i"), GenerateMipMaps);
@@ -381,6 +396,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 		UsingBindlessTextures = UseBindlessTextures ? true : false;
 		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
 		UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
+
+		if (OpenGLVersion == GL_ES)
+        {
+            UsingShaderDrawParameters = false;
+            GWarn->Logf(TEXT("OpenGL ES does not support gl_DrawID at this time, disabling UseShaderDrawParameters"));
+        }
 #else
 		UsingBindlessTextures = false;
 		UsingPersistentBuffers = false;
@@ -1977,6 +1998,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("DetailTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(DetailTextures)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("MacroTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(MacroTextures)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("BumpMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(BumpMaps)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("ParallaxVersion"), *FString::Printf(TEXT("%ls"), ParallaxVersion == Parallax_Basic ? TEXT("Basic") : ParallaxVersion == Parallax_Occlusion ? TEXT("Occlusion") : ParallaxVersion == Parallax_Relief ? TEXT("Relief") : TEXT("None")));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GammaCorrectScreenshots"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GammaCorrectScreenshots)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseAA"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseAA)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseTrilinear"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseTrilinear)));

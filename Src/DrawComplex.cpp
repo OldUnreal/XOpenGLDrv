@@ -2,7 +2,7 @@
 	DrawComplex.cpp: Unreal XOpenGL DrawComplexSurface routines.
 	Used for BSP drawing.
 
-	Copyright 2014-2017 Oldunreal
+	Copyright 2014-2021 Oldunreal
 
     Todo:
     * implement proper usage of persistent buffers.
@@ -328,7 +328,15 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 	}
 
 	// Draw
-	glMultiDrawArrays(GL_TRIANGLES, DrawComplexMultiDrawFacetArray, DrawComplexMultiDrawVertexCountArray, DrawComplexMultiDrawCount);
+	if (OpenGLVersion == GL_Core)
+	{
+		glMultiDrawArrays(GL_TRIANGLES, DrawComplexMultiDrawFacetArray, DrawComplexMultiDrawVertexCountArray, DrawComplexMultiDrawCount);
+	}
+	else
+	{
+		for (INT i = 0; i < DrawComplexMultiDrawCount; ++i)
+			glDrawArrays(GL_TRIANGLES, DrawComplexMultiDrawFacetArray[i], DrawComplexMultiDrawVertexCountArray[i]);
+	}
     CHECK_GL_ERROR();
 
 	// reset

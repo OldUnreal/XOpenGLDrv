@@ -104,7 +104,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		Color.W = 1.0f;
 #else
 	else Color.W = 1.0f;
-#endif	
+#endif
 
 	if (OpenGLVersion == GL_ES)
 	{
@@ -246,7 +246,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         DrawTileVerts(DrawTileBufferData);
         WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
         debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
-    }    
+    }
     if (NoBuffering) // No buffering at this time for Editor.
     {
         DrawTileVerts(DrawTileBufferData);
@@ -386,7 +386,7 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
 void UXOpenGLRenderDevice::DrawTileStart()
 {
     WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
-	
+
 #if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
     if (UseAA && NoAATiles && PrevProgram != Simple_Prog)
         glDisable(GL_MULTISAMPLE);

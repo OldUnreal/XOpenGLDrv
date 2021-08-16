@@ -1,7 +1,7 @@
 /*=============================================================================
 	XOpenGLDrv.h: Unreal OpenGL support header.
 
-	Copyright 2014-2017 Oldunreal
+	Copyright 2014-2021 Oldunreal
 
 	Revision history:
 		* Created by Smirftsch
@@ -9,7 +9,7 @@
 =============================================================================*/
 
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
-//#define DEBUGGL 1
+// #define DEBUGGL 1
 
 // Maybe for future release. Not in use yet.
 // #define QTBUILD 1
@@ -90,10 +90,10 @@ Globals.
 // maximum number of polys in one drawgouraud multi-draw
 #define MAX_DRAWGOURAUD_BATCH 16384
 
-#define DRAWSIMPLE_SIZE 262144
-#define DRAWTILE_SIZE 524288
+#define DRAWSIMPLE_SIZE 524288
+#define DRAWTILE_SIZE 1048576
 #define DRAWCOMPLEX_SIZE 8 * 32 * MAX_DRAWCOMPLEX_BATCH
-#define DRAWGOURAUDPOLY_SIZE 1048576
+#define DRAWGOURAUDPOLY_SIZE 2097152
 #define NUMBUFFERS 6
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
@@ -193,6 +193,13 @@ enum DrawSimpleMode
 	Draw2DLineMode      = 2,
 	Draw3DLineMode      = 3,
 	DrawEndFlashMode    = 4,
+};
+enum eParallaxVersion
+{
+    Parallax_Disabled = 0,
+    Parallax_Basic = 1,
+    Parallax_Occlusion = 2,
+    Parallax_Relief = 3,
 };
 
 // stijn: missing defs in UT469 tree
@@ -558,11 +565,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 	INT MaxBindlessTextures;
 
 	BYTE OpenGLVersion;
+	BYTE ParallaxVersion;
 	BYTE UseVSync;
 	bool NeedsInit;
 	bool bMappedBuffers;
 	bool bInitializedShaders;
 	BYTE* ScaleByte;
+	BYTE SupportsClipDistance;
 
 	#if ENGINE_VERSION==227
 	FLightInfo *FirstLight,*LastLight;

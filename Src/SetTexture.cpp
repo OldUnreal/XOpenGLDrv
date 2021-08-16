@@ -1,7 +1,7 @@
 /*=============================================================================
 	SetTexture.cpp: Unreal XOpenGL Texture handling.
 
-	Copyright 2014-2017 Oldunreal
+	Copyright 2014-2021 Oldunreal
 
 	Revision history:
 		* Created by Smirftsch
@@ -425,7 +425,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 
 				// S3TC -- Ubiquitous Extension.
-				case TEXF_DXT1:
+				case TEXF_BC1:
 					//
 					// stijn: please, please, for the love of god, do not bring this check back.
 					// I'm leaving it here commented out so you can see why it's gone.
@@ -476,7 +476,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					break;
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-				case TEXF_DXT3:
+				case TEXF_BC2:
                     if (OpenGLVersion == GL_Core)
                     {
                         if ( GL_EXT_texture_compression_s3tc )
@@ -506,7 +506,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					Unsupported = 1;
 					break;
 
-				case TEXF_DXT5:
+				case TEXF_BC3:
                     if (OpenGLVersion == GL_Core)
                     {
                         if ( GL_EXT_texture_compression_s3tc )
@@ -537,28 +537,28 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					break;
 
 				// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10. Not in GLES it seems.
-				case TEXF_RGTC_R:
+				case TEXF_BC4:
 					InternalFormat = GL_COMPRESSED_RED_RGTC1;
 					break;
-				case TEXF_RGTC_R_SIGNED:
+				case TEXF_BC4_S:
 					InternalFormat = GL_COMPRESSED_SIGNED_RED_RGTC1;
 					break;
-				case TEXF_RGTC_RG:
+				case TEXF_BC5:
 					InternalFormat = GL_COMPRESSED_RG_RGTC2;
 					break;
-				case TEXF_RGTC_RG_SIGNED:
+				case TEXF_BC5_S:
 					InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
 					break;
 
 				// BPTC Core since 4.2. BC6H and BC7 in D3D11.
 #ifndef __LINUX_ARM__
-				case TEXF_BPTC_RGB_SF:
+				case TEXF_BC6H_S:
 					InternalFormat = GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT; //BC6H
 					break;
-				case TEXF_BPTC_RGB_UF:
+				case TEXF_BC6H:
 					InternalFormat = GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT; //BC6H
 					break;
-				case TEXF_BPTC_RGBA:
+				case TEXF_BC7:
 					InternalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM; //BC7
 						break;
 #endif
@@ -951,12 +951,10 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			}
 			else if (PolyFlags & PF_Translucent)
 			{
-                if (SimulateMultiPass && ActiveProgram == ComplexSurfaceSinglePass_Prog && PrevProgram != GouraudPolyVert_Prog)//( !(PolyFlags & PF_Mirrored)
+                if (SimulateMultiPass)//( !(PolyFlags & PF_Mirrored)
                 {
-                    //debugf(TEXT("PolyFlags %ls"), *GetPolyFlagString(PolyFlags));
-                    //glBlendFunc(GL_ONE, GL_SRC1_COLOR);
-					//glBlendEquation(GL_FUNC_ADD);
-					glBlendFunc(GL_ONE, GL_SRC1_COLOR);
+                    //debugf(TEXT("PolyFlags %ls ActiveProgram %i"), *GetPolyFlagString(PolyFlags), ActiveProgram);
+					glBlendFunc(GL_SRC_COLOR, GL_SRC1_COLOR);
                 }
                 else glBlendFunc( GL_ONE, GL_ONE_MINUS_SRC_COLOR );
                 /*

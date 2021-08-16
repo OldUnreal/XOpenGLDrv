@@ -43,7 +43,9 @@ out vec2 gMacroTexCoords;
 out vec4 gEyeSpacePos;
 out vec4 gLightColor;
 out vec4 gFogColor;
-out mat3 TBNMat;
+out mat3 gTBNMat;
+out vec3 gTangentViewPos;
+out vec3 gTangentFragPos;
 
 # if EDITOR
 flat out vec4 gDrawColor;
@@ -113,7 +115,6 @@ flat out uint vHitTesting;
 void main(void)
 {
 #ifdef GL_ES
-
 	gEyeSpacePos      = modelviewMat*vec4(Coords, 1.0);
 
 	gCoords           = Coords;
@@ -132,7 +133,7 @@ void main(void)
 	gDrawFlags        = DrawFlags[0];
 	gTextureFormat    = uint(DrawData[IDX_MISC_INFO].w);
 	gPolyFlags        = DrawFlags[2];
-	gGamma            = DrawData[IDX_MISC_INFO].z;
+	gGamma            = DrawData[IDX_MISC_INFO].y;
 
 	gTextureInfo      = vec3(DrawData[IDX_DIFFUSE_INFO].zw, DrawData[IDX_MISC_INFO].x);
 	gDistanceFogColor = DrawData[IDX_DISTANCE_FOG_COLOR];
@@ -149,14 +150,19 @@ void main(void)
 	vec3 N = normalize(Normals.xyz); //Normals.
 
 	// TBN must have right handed coord system.
-	if (dot(cross(N, T), B) < 0.0)
-		T = T * -1.0;
+	//if (dot(cross(N, T), B) < 0.0)
+	//	T = T * -1.0;
 
-	TBNMat = transpose(mat3(T, B, N));
-
+	gTBNMat = transpose(mat3(T, B, N));
+    gTangentViewPos  = gTBNMat * normalize(FrameCoords[0].xyz);
+    gTangentFragPos  = gTBNMat * gCoords.xyz;
 
 	gl_Position = modelviewprojMat * vec4(Coords, 1.0);
+
+#if SUPPORTSCLIPDISTANCE
+	uint ClipIndex = uint(ClipParams.x);
     gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane,gEyeSpacePos.xyz);
+#endif // SUPPORTSCLIPDISTANCE
 
 #else
 	vEyeSpacePos      = modelviewMat*vec4(Coords, 1.0);
@@ -221,6 +227,7 @@ void main(void)
 # endif
 
 	gl_Position = vec4(Coords, 1.0);
+
 #endif
 
 }

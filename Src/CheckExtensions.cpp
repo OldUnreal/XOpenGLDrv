@@ -56,6 +56,17 @@ void UXOpenGLRenderDevice::CheckExtensions()
                 UseBindlessTextures = false;
             }
         }
+		//usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
+        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")))
+        {
+            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance found."));
+        }
+        else
+        {
+            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance not found."));
+            SupportsClipDistance = false; // have to disable this functionality.
+        }
+
         NVIDIAMemoryInfo = false; // found no such info available...yet?
         AMDMemoryInfo = false;
 	#else
@@ -110,6 +121,17 @@ void UXOpenGLRenderDevice::CheckExtensions()
                 debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
                 UseBindlessTextures = false;
             }
+        }
+
+        //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
+        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")))
+        {
+            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance found."));
+        }
+        else
+        {
+            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance not found."));
+            SupportsClipDistance = false; // have to disable this functionality.
         }
 
 		if (UseShaderDrawParameters)
@@ -273,8 +295,8 @@ void UXOpenGLRenderDevice::CheckExtensions()
     debugf(TEXT("XOpenGL: GL_MAX_CLIP_DISTANCES found: %i"), MaxClippingPlanes);
 
     INT MaxUniformBlockSize = 0;
-    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &MaxUniformBlockSize);
-    //debugf(TEXT("XOpenGL: MaxUniformBlockSize: %i"), MaxUniformBlockSize);
+    glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &MaxUniformBlockSize); //Check me!!! For whatever reason this appears to return on (some?) AMD drivers a value of 572657868
+    debugf(TEXT("XOpenGL: MaxUniformBlockSize: %i"), MaxUniformBlockSize);
 
     if (UseBindlessTextures)
     {

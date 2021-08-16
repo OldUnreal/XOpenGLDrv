@@ -160,14 +160,14 @@ void UXOpenGLRenderDevice::EndFlash()
 	guard(UXOpenGLRenderDevice::EndFlash);
 
 	if (NoDrawSimple)
-		return;	
+		return;
 
 	if( FlashScale!=FPlane(0.5,0.5,0.5,0) || FlashFog!=FPlane(0,0,0,0) )
 	{
 		SetProgram(Simple_Prog);
-		SetBlend(PF_Highlighted, false);
+		SetBlend(PF_AlphaBlend, false);
 		checkSlow(ActiveProgram == Simple_Prog);
-		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0-Min(FlashScale.X*2.f,1.f));
+		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0 - Min(FlashScale.X, 1.0f));
 
 		FLOAT RFX2 = 2.0*RProjZ       /Viewport->SizeX;
 		FLOAT RFY2 = 2.0*RProjZ*Aspect/Viewport->SizeY;
@@ -208,7 +208,7 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 	SetProgram(Simple_Prog);
 	SetBlend(PF_AlphaBlend, false);
 	CHECK_GL_ERROR();
-	
+
 	checkSlow(ActiveProgram == Simple_Prog);
 
 	clockFast(Stats.Draw2DPoint);

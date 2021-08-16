@@ -57,10 +57,6 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 			GLVersionString = TEXT("#version 330 core\n");
 	}
 
-	// LOAD EXTENSIONS
-    if (!appLoadFileToString(Extensions, TEXT("xopengl/Extensions.incl"))) // Load extensions config.
-		appErrorf(TEXT("XOpenGL: Failed loading global Extensions file xopengl/Extensions.incl"));
-
     // ADD DEFINITIONS
 	Definitions += *FString::Printf(TEXT("#define EDITOR %d\n"), GIsEditor ? 1 : 0);
     Definitions += *FString::Printf(TEXT("#define BINDLESSTEXTURES %d\n"), UsingBindlessTextures ? 1 : 0);
@@ -74,6 +70,14 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	Definitions += *FString::Printf(TEXT("#define MAX_CLIPPINGPLANES %i \n"), MaxClippingPlanes);
 	Definitions += *FString::Printf(TEXT("#define SHADERDRAWPARAMETERS %i \n"), UsingShaderDrawParameters);
 	Definitions += *FString::Printf(TEXT("#define SIMULATEMULTIPASS %i \n"), SimulateMultiPass);
+	Definitions += *FString::Printf(TEXT("#define BASIC_PARALLAX %d\n"), ParallaxVersion==Parallax_Basic ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define OCCLUSION_PARALLAX %d\n"), ParallaxVersion==Parallax_Occlusion ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define RELIEF_PARALLAX %i\n"), ParallaxVersion==Parallax_Relief ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define SUPPORTSCLIPDISTANCE %d\n"), SupportsClipDistance ? 1 : 0);
+
+    // LOAD EXTENSIONS
+    if (!appLoadFileToString(Extensions, TEXT("xopengl/Extensions.incl"))) // Load extensions config.
+		appErrorf(TEXT("XOpenGL: Failed loading global Extensions file xopengl/Extensions.incl"));
 
     // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
     Definitions += *FString::Printf(TEXT("#line 1 \n"));

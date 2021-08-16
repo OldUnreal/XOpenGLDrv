@@ -6,7 +6,7 @@
 	list instead of vertice by vertice. Currently this method improves
 	performance 10x and more compared to unbuffered calls. Buffering
 	catches up quite some.
-	Copyright 2014-2017 Oldunreal
+	Copyright 2014-2021 Oldunreal
 
 	Todo:
         * On a long run this should be replaced with a more mode
@@ -302,10 +302,10 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 			unclockFast(Stats.GouraudPolyCycles);
 			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
+			debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
 			clockFast(Stats.GouraudPolyCycles);
 			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-			
+
 			DrawGouraudSetState(Frame, Info, PolyFlags);
 			Out = reinterpret_cast<DrawGouraudBufferedVert*>(
 				&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
@@ -502,7 +502,15 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
     CHECK_GL_ERROR();
 
 	// Draw
-	glMultiDrawArrays(Mode, DrawGouraudMultiDrawPolyListArray, DrawGouraudMultiDrawVertexCountArray, DrawGouraudMultiDrawCount);
+	if (OpenGLVersion == GL_Core)
+	{
+		glMultiDrawArrays(Mode, DrawGouraudMultiDrawPolyListArray, DrawGouraudMultiDrawVertexCountArray, DrawGouraudMultiDrawCount);
+	}
+	else
+	{
+		for (INT i = 0; i < DrawGouraudMultiDrawCount; ++i)
+			glDrawArrays(Mode, DrawGouraudMultiDrawPolyListArray[i], DrawGouraudMultiDrawVertexCountArray[i]);
+	}
 
 	// reset
 	DrawGouraudMultiDrawVertices = DrawGouraudMultiDrawCount = 0;
