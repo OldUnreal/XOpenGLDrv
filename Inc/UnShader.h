@@ -41,7 +41,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	GLint IsCompiled = 0;
 	GLint length = 0;
 
-	FString Extensions, Definitions, Globals, Shaderdata;
+	FString Extensions, Definitions, Globals, Statics, Shaderdata;
 
 
 	// VERSION
@@ -74,6 +74,8 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	Definitions += *FString::Printf(TEXT("#define OCCLUSION_PARALLAX %d\n"), ParallaxVersion==Parallax_Occlusion ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define RELIEF_PARALLAX %i\n"), ParallaxVersion==Parallax_Relief ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define SUPPORTSCLIPDISTANCE %d\n"), SupportsClipDistance ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define SRGB %d\n"), UseSRGBTextures ? 1 : 0);
+
 
     // LOAD EXTENSIONS
     if (!appLoadFileToString(Extensions, TEXT("xopengl/Extensions.incl"))) // Load extensions config.
@@ -86,6 +88,12 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	if (!appLoadFileToString(Globals, TEXT("xopengl/Globals.incl"))) // Load global config.
 		appErrorf(TEXT("XOpenGL: Failed loading global shader file xopengl/Globals.incl"));
 
+    // append static config vars
+    Statics += *FString::Printf(TEXT("const int DetailMax=%i; \n"), DetailMax);
+    Statics += *FString::Printf(TEXT("const float GammaMultiplier=%f; \n"), GammaMultiplier);
+    Statics += *FString::Printf(TEXT("const float GammaMultiplierUED=%f; \n"), GammaMultiplierUED);
+    Statics += *FString::Printf(TEXT("#line 1 \n"));
+
     // LOAD SHADER
     if (!appLoadFileToString(Shaderdata, Filename))
 		appErrorf(TEXT("XOpenGL: Failed loading shader file %ls"), Filename);
@@ -96,9 +104,10 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 		debugf(TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
 		debugf(TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);
 		debugf(TEXT("Globals %ls: \n %ls \n\n"), Filename, *Globals);
+		debugf(TEXT("Statics %ls: \n %ls \n\n"), Filename, *Globals);
 		debugf(TEXT("Shaderdata %ls: \n %ls \n\n"), Filename, *Shaderdata);
 	}
-	FString Text = (GLVersionString + Definitions + Extensions + Globals + Shaderdata);
+	FString Text = (GLVersionString + Definitions + Extensions + Globals + Statics + Shaderdata);
 
 	const GLchar* Shader = TCHAR_TO_ANSI(*Text);
 	length = (GLint)appStrlen(*Text);

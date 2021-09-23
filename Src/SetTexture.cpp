@@ -559,14 +559,23 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					InternalFormat = GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT; //BC6H
 					break;
 				case TEXF_BC7:
+                    if (UnpackSRGB)
+                    {
+                        if (GL_EXT_texture_sRGB)
+                        {
+                            InternalFormat = GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
+                            break;
+                        }
+                        debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_BPTC_UNORM as fallback for %ls."), Info.Texture->GetPathName());
+                    }
 					InternalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM; //BC7
-						break;
+                    break;
 #endif
 
 #endif
 				// Default: Mark as unsupported.
 				default:
-					GWarn->Logf( TEXT("Unknown texture format %ls on texture %ls."), *FTextureFormatString(Info.Format), Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("Unknown texture format %ls on texture %ls."), FTextureFormatString(Info.Format), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
 			}
@@ -705,12 +714,15 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// Should not happen (TM).
 						default:
-							appErrorf( TEXT("Unpacking unknown format %ls on %ls."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
+							appErrorf( TEXT("Unpacking unknown format %ls on %ls."), FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
 							break;
 					}
 				}
 				else {
-					appErrorf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
+                    if (GIsEditor)
+                        appMsgf(TEXT("Unpacking %ls on %ls failed due to invalid data."), FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
+                    else
+                        GWarn->Logf(TEXT("Unpacking %ls on %ls failed due to invalid data."), FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
 					break;
 				}
                 CHECK_GL_ERROR();
@@ -890,7 +902,7 @@ DWORD UXOpenGLRenderDevice::SetFlags(DWORD PolyFlags)
 	if( (PolyFlags & (PF_RenderFog|PF_Translucent))!=PF_RenderFog )
 		PolyFlags &= ~PF_RenderFog;
 
-	if (!(PolyFlags & (PF_Translucent | PF_Modulated | PF_AlphaBlend)))
+	if (!(PolyFlags & (PF_Translucent | PF_Modulated | PF_AlphaBlend | PF_Highlighted)))
 		PolyFlags |= PF_Occlude;
 	else if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
 		PolyFlags &= ~PF_Masked;

@@ -133,10 +133,14 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 
 	if (Info.Texture->DetailTexture && DetailTextures)
 	{
+#if XOPENGL_MODIFIED_LOCK
+		DrawGouraudDetailTextureInfo = Info.Texture->DetailTexture->GetTexture(INDEX_NONE, this);
+#else
 		Info.Texture->DetailTexture->Lock(DrawGouraudDetailTextureInfo, Frame->Viewport->CurrentTime, -1, this);
+#endif
 		DrawGouraudDrawParams.DrawFlags() |= DF_DetailTexture;
 
-		SetTexture(1, DrawGouraudDetailTextureInfo, Info.Texture->DetailTexture->PolyFlags, 0.0, GouraudPolyVert_Prog, DETAILTEX);
+		SetTexture(1, FTEXTURE_GET(DrawGouraudDetailTextureInfo), Info.Texture->DetailTexture->PolyFlags, 0.0, GouraudPolyVert_Prog, DETAILTEX);
 		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
 		DrawGouraudDrawParams.TexNum[1] = TexInfo[1].TexNum;
 	}
@@ -148,10 +152,14 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 #if ENGINE_VERSION==227
 	if (Info.Texture->BumpMap && BumpMaps)
 	{
+#if XOPENGL_MODIFIED_LOCK
+		DrawGouraudBumpMapInfo = Info.Texture->BumpMap->GetTexture(INDEX_NONE, this);
+#else
 		Info.Texture->BumpMap->Lock(DrawGouraudBumpMapInfo, Frame->Viewport->CurrentTime, -1, this);
+#endif
 		DrawGouraudDrawParams.DrawFlags() |= DF_BumpMap;
 
-		SetTexture(2, DrawGouraudBumpMapInfo, Info.Texture->BumpMap->PolyFlags, 0.0, GouraudPolyVert_Prog, BUMPMAP);
+		SetTexture(2, FTEXTURE_GET(DrawGouraudBumpMapInfo), Info.Texture->BumpMap->PolyFlags, 0.0, GouraudPolyVert_Prog, BUMPMAP);
 		DrawGouraudDrawParams.DrawData[MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
 		DrawGouraudDrawParams.TexNum[2] = TexInfo[2].TexNum; //using Base Texture UV.
 	}
@@ -165,11 +173,14 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 
 	if (Info.Texture->MacroTexture && MacroTextures)
 	{
-
+#if XOPENGL_MODIFIED_LOCK
+		DrawGouraudMacroTextureInfo = Info.Texture->MacroTexture->GetTexture(INDEX_NONE, this);
+#else
 		Info.Texture->MacroTexture->Lock(DrawGouraudMacroTextureInfo, Frame->Viewport->CurrentTime, -1, this);
+#endif
 		DrawGouraudDrawParams.DrawFlags() |= DF_MacroTexture;
 
-		SetTexture(3, DrawGouraudMacroTextureInfo, Info.Texture->MacroTexture->PolyFlags, 0.0, GouraudPolyVert_Prog, MACROTEX);
+		SetTexture(3, FTEXTURE_GET(DrawGouraudMacroTextureInfo), Info.Texture->MacroTexture->PolyFlags, 0.0, GouraudPolyVert_Prog, MACROTEX);
 		DrawGouraudDrawParams.TexNum[3] = TexInfo[3].TexNum;
 
 		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO].z = TexInfo[3].UMult;
@@ -190,6 +201,7 @@ void UXOpenGLRenderDevice::DrawGouraudReleaseState(FTextureInfo& Info)
 		WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
 	}
 
+#if !XOPENGL_MODIFIED_LOCK
 	if (DrawGouraudDrawParams.DrawFlags() & DF_DetailTexture)
 		Info.Texture->DetailTexture->Unlock(DrawGouraudDetailTextureInfo);
 
@@ -198,13 +210,14 @@ void UXOpenGLRenderDevice::DrawGouraudReleaseState(FTextureInfo& Info)
 
 	if (DrawGouraudDrawParams.DrawFlags() & DF_MacroTexture)
 		Info.Texture->MacroTexture->Unlock(DrawGouraudMacroTextureInfo);
+#endif
 }
 
 void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolygon);
 
-	if (NumPts < 3 || Frame->Recursion > MAX_FRAME_RECURSION || NoDrawGouraud) //reject invalid.
+	if (NumPts < 3 || /*Frame->Recursion > MAX_FRAME_RECURSION ||*/ NoDrawGouraud) //reject invalid.
 		return;
 
 	clockFast(Stats.GouraudPolyCycles);
@@ -263,7 +276,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolyList);
-	if (NumPts < 3 || Frame->Recursion > MAX_FRAME_RECURSION || NoDrawGouraudList)		//reject invalid.
+	if (NumPts < 3 || /*Frame->Recursion > MAX_FRAME_RECURSION ||*/ NoDrawGouraudList)		//reject invalid.
 		return;
 
 	clockFast(Stats.GouraudPolyCycles);

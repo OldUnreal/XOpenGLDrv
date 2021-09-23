@@ -89,9 +89,12 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UseVSync"), RF_Public)UByteProperty(CPP_PROPERTY(UseVSync), TEXT("Options"), CPF_Config, VSyncs);
 	new(GetClass(), TEXT("RefreshRate"), RF_Public)UIntProperty(CPP_PROPERTY(RefreshRate), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NumAASamples"), RF_Public)UIntProperty(CPP_PROPERTY(NumAASamples), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("DetailMax"), RF_Public)UIntProperty(CPP_PROPERTY(DetailMax), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GammaOffsetScreenshots"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaOffsetScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("LODBias"), RF_Public)UFloatProperty(CPP_PROPERTY(LODBias), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxAnisotropy"), RF_Public)UFloatProperty(CPP_PROPERTY(MaxAnisotropy), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("GammaMultiplier"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaMultiplier), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("GammaMultiplierUED"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaMultiplierUED), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NoFiltering"), RF_Public)UBoolProperty(CPP_PROPERTY(NoFiltering), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("ShareLists"), RF_Public)UBoolProperty(CPP_PROPERTY(ShareLists), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("AlwaysMipmap"), RF_Public)UBoolProperty(CPP_PROPERTY(AlwaysMipmap), TEXT("Options"), CPF_Config);
@@ -104,6 +107,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("ParallaxVersion"), RF_Public)UByteProperty(CPP_PROPERTY(ParallaxVersion), TEXT("Options"), CPF_Config, ParallaxVersions);
 	new(GetClass(), TEXT("NoAATiles"), RF_Public)UBoolProperty(CPP_PROPERTY(NoAATiles), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GenerateMipMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(GenerateMipMaps), TEXT("Options"), CPF_Config);
+
+	// Experimental stuff (still being worked on).
+	new(GetClass(), TEXT("UseSRGBTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseSRGBTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
 
 #if ENGINE_VERSION==227
@@ -159,6 +165,8 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	GammaCorrectScreenshots = 1;
 	MacroTextures = 1;
 	BumpMaps = 1;
+	GammaMultiplier = 1.f;
+	GammaMultiplierUED  = 1.f;
 #ifdef __EMSCRIPTEN__
 	ParallaxVersion = Parallax_Disabled;
 #elif __LINUX_ARM__
@@ -231,6 +239,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	TexNum = 1;
 	iPixelFormat = 0;
 
+	DetailMax = Clamp(DetailMax,0,3);
+
 	LastZMode = 255;
 	NumClipPlanes = 0;
 
@@ -252,6 +262,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #if ENGINE_VERSION==227
 	SupportsHDLightmaps = UseEnhancedLightmaps;
 	UnsupportHDLightFlags = 0;
+	SupportsAlphaBlend = 1;
 #endif
 
 	// Extensions & other inits.
@@ -289,7 +300,10 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("ShareLists %i"), ShareLists);
 	debugf(NAME_DevLoad, TEXT("AlwaysMipmap %i"), AlwaysMipmap);
 	debugf(NAME_DevLoad, TEXT("NoFiltering %i"), NoFiltering);
-	//debugf(NAME_DevLoad, TEXT("UseSRGBTextures %i"),UseSRGBTextures);
+	debugf(NAME_DevLoad, TEXT("UseSRGBTextures %i"),UseSRGBTextures);
+	debugf(NAME_DevLoad, TEXT("SimulateMultiPass %i"),SimulateMultiPass);
+	debugf(NAME_DevLoad, TEXT("GammaMultiplier %i"),GammaMultiplier);
+    debugf(NAME_DevLoad, TEXT("GammaMultiplierUED %i"),GammaMultiplierUED);
 
 	debugf(NAME_DevLoad, TEXT("GammaCorrectScreenshots %i"), GammaCorrectScreenshots);
 	debugf(NAME_DevLoad, TEXT("MacroTextures %i"), MacroTextures);
@@ -401,6 +415,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
         {
             UsingShaderDrawParameters = false;
             GWarn->Logf(TEXT("OpenGL ES does not support gl_DrawID at this time, disabling UseShaderDrawParameters"));
+
+            SimulateMultiPass = false;
+            GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
+
+            UseSRGBTextures = true;
+            GWarn->Logf(TEXT("UseSRGBTextures enabled for OpenGL ES"));
         }
 #else
 		UsingBindlessTextures = false;
@@ -1286,7 +1306,11 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	if (StaticLightList.Num())
 		StaticLightList.Empty();
 
+	if (LightList.Num())
+		LightList.Empty();
+
 	NumStaticLights = 0;
+	NumLights = 0;
 
 	TArray<GLuint> Binds;
 	for (TOpenGLMap<QWORD, FCachedTexture>::TIterator It(*BindMap); It; ++It)
@@ -1475,7 +1499,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	guard(UXOpenGLRenderDevice::SetSceneNode);
 
 	Level = Frame->Level;
-	if (Level && (!NumStaticLights || GIsEditor))
+	if ( !UseHWLighting && Level && (!NumStaticLights || GIsEditor))
 	{
 		if (GIsEditor)
 			StaticLightList.Empty();
@@ -1515,7 +1539,66 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->LightRadius * 10, 1.0, 0.0, 0.0);
 #else
 			StaticLightData.LightData4[i] = glm::vec4(StaticLightList(i)->WorldLightRadius(), NumStaticLights, (GLfloat)StaticLightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
-			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->NormalLightRadius, (GLfloat)StaticLightList(i)->bZoneNormalLight, 0.0, 0.0);
+			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->NormalLightRadius, (GLfloat)StaticLightList(i)->bZoneNormalLight, StaticLightList(i)->LightBrightness, 0.0);
+#endif
+			if (i == MAX_LIGHTS - 1)
+				break;
+		}
+
+		glBindBuffer(GL_UNIFORM_BUFFER, GlobalStaticLightInfoUBO);
+		CHECK_GL_ERROR();
+
+		glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightPos);
+		CHECK_GL_ERROR();
+		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData1);
+		CHECK_GL_ERROR();
+		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 2, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData2);
+		CHECK_GL_ERROR();
+		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 3, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData3);
+		CHECK_GL_ERROR();
+		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 4, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData4);
+		CHECK_GL_ERROR();
+		glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 5, sizeof(glm::vec4) * MAX_LIGHTS, StaticLightData.LightData5);
+		CHECK_GL_ERROR();
+
+		glBindBuffer(GL_UNIFORM_BUFFER, 0);
+		CHECK_GL_ERROR();
+	}
+	else if (UseHWLighting && Level)
+	{
+		LightList.Empty();
+
+		for (INT i = 0; i < Level->Actors.Num(); ++i)
+		{
+			AActor* Actor = Level->Actors(i);
+			if (Actor && !Actor->bDeleteMe && Actor->LightBrightness && Actor->LightType && Actor->LightRadius)
+            {
+                    LightList.AddItem(Actor);
+            }
+		}
+		NumLights = LightList.Num();
+
+		for (INT i = 0; i < NumLights; i++)
+		{
+			//debugf(TEXT("LightList: %ls %f %f %f"), LightList(i)->GetName(), LightList(i)->Location.X, LightList(i)->Location.Y, LightList(i)->Location.Z);
+
+			StaticLightData.LightPos[i] = glm::vec4(LightList(i)->Location.X, LightList(i)->Location.Y, LightList(i)->Location.Z, 1.f);
+
+			FPlane RGBColor = FGetHSV(LightList(i)->LightHue, LightList(i)->LightSaturation, LightList(i)->LightBrightness);
+
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+			StaticLightData.LightData1[i] = glm::vec4(RGBColor.X, RGBColor.Y, RGBColor.Z, LightList(i)->LightCone);
+#else
+			StaticLightData.LightData1[i] = glm::vec4(RGBColor.R, RGBColor.G, RGBColor.B, LightList(i)->LightCone);
+#endif
+			StaticLightData.LightData2[i] = glm::vec4(LightList(i)->LightEffect, LightList(i)->LightPeriod, LightList(i)->LightPhase, LightList(i)->LightRadius);
+			StaticLightData.LightData3[i] = glm::vec4(LightList(i)->LightType, LightList(i)->VolumeBrightness, LightList(i)->VolumeFog, LightList(i)->VolumeRadius);
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+			StaticLightData.LightData4[i] = glm::vec4(LightList(i)->WorldLightRadius(), NumLights, (GLfloat)LightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
+			StaticLightData.LightData5[i] = glm::vec4(LightList(i)->LightRadius * 10, 1.0, 0.0, 0.0);
+#else
+			StaticLightData.LightData4[i] = glm::vec4(LightList(i)->WorldLightRadius(), NumLights, (GLfloat)LightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
+			StaticLightData.LightData5[i] = glm::vec4(LightList(i)->NormalLightRadius, (GLfloat)LightList(i)->bZoneNormalLight, LightList(i)->LightBrightness, 0.0);
 #endif
 			if (i == MAX_LIGHTS - 1)
 				break;
@@ -1664,10 +1747,6 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	MakeCurrent();
 	CHECK_GL_ERROR();
-
-	// Compensate UED coloring for sRGB.
-	if (GIsEditor)
-		ScreenClear = FOpenGLGammaDecompress_sRGB(ScreenClear);
 
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
@@ -1833,24 +1912,6 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	SetSceneNode(Frame);
 	SetBlend(PF_Occlude, false);
 	glClear(GL_DEPTH_BUFFER_BIT);
-	CHECK_GL_ERROR();
-	unguard;
-}
-
-void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
-{
-	guard(UXOpenGLRenderDevice::GetStats);
-	appSprintf // stijn: mem safety NOT OK
-		(
-		Result,
-		TEXT("XOpenGL stats: Bind=%04.1f Image=%04.1f Complex=%04.1f Gouraud=%04.1f Tile Buffer/Draw=%04.1f/%04.1f"),
-		GSecondsPerCycle * 1000.f * Stats.BindCycles,
-		GSecondsPerCycle * 1000.f * Stats.ImageCycles,
-		GSecondsPerCycle * 1000.f * Stats.ComplexCycles,
-		GSecondsPerCycle * 1000.f * Stats.GouraudPolyCycles,
-		GSecondsPerCycle * 1000.f * Stats.TileBufferCycles,
-		GSecondsPerCycle * 1000.f * Stats.TileDrawCycles
-		);
 	CHECK_GL_ERROR();
 	unguard;
 }
@@ -2080,6 +2141,73 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	TimerEnd();
 #endif
 
+	unguard;
+}
+
+void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
+{
+	guard(UXOpenGLRenderDevice::GetStats);
+	const double msPerCycle = GSecondsPerCycle * 1000.0f;
+	appSprintf // stijn: mem safety NOT OK
+	(
+		Result,
+		TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\n")
+#if ENGINE_VERSION==227
+		TEXT("Num static Lights: %i")
+#else
+		TEXT("Persistent buffer stalls: %i")
+#endif
+		,
+		msPerCycle * Stats.BindCycles,
+		msPerCycle * Stats.ImageCycles,
+		msPerCycle * Stats.ComplexCycles,
+		msPerCycle * Stats.GouraudPolyCycles,
+		msPerCycle * Stats.TileBufferCycles,
+		msPerCycle * Stats.TileDrawCycles,
+		msPerCycle * Stats.Draw2DLine,
+		msPerCycle * Stats.Draw3DLine,
+		msPerCycle * Stats.Draw2DPoint,
+#if ENGINE_VERSION==227
+		NumStaticLights
+#else
+		Stats.StallCount
+#endif
+	);
+	TCHAR* EndBuf = Result;
+#ifndef __LINUX_ARM__
+	if (NVIDIAMemoryInfo)
+	{
+		while (*EndBuf)
+			++EndBuf;
+		GLint CurrentAvailableVideoMemory = 0;
+		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &CurrentAvailableVideoMemory);
+		GLint TotalAvailableVideoMemory = 0;
+		glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &TotalAvailableVideoMemory);
+		FLOAT Percent = (FLOAT)CurrentAvailableVideoMemory / (FLOAT)TotalAvailableVideoMemory * 100.0f;
+		appSprintf(EndBuf, TEXT("\nNVidia VRAM=%d MB\nUsed=%d MB\nUsage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
+		glGetError();
+	}
+	if (AMDMemoryInfo)
+	{
+		while (*EndBuf)
+			++EndBuf;
+		GLint CurrentAvailableTextureMemory = 0;
+		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, &CurrentAvailableTextureMemory);
+		GLint CurrentAvailableVBOMemory = 0;
+		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, &CurrentAvailableVBOMemory);
+		GLint CurrentAvailableRenderbufferMemory = 0;
+		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, &CurrentAvailableRenderbufferMemory);
+		appSprintf(EndBuf, TEXT("\nAMD CurrentAvailableTextureMemory=%d MB\nCurrentAvailableVBOMemory=%d MB\nCurrentAvailableRenderbufferMemory=%d MB"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
+		glGetError();
+	}
+#endif
+	if (UsingBindlessTextures)
+	{
+		while (*EndBuf)
+			++EndBuf;
+		appSprintf(EndBuf, TEXT("\nNum bindless Textures: %i"), TexNum);
+	}
+	CHECK_GL_ERROR();
 	unguard;
 }
 

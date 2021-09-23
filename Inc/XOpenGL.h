@@ -9,7 +9,7 @@
 =============================================================================*/
 
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
-// #define DEBUGGL 1
+//#define DEBUGGL 1
 
 // Maybe for future release. Not in use yet.
 // #define QTBUILD 1
@@ -75,9 +75,20 @@
 // another crash during cleanup. This would change your crash message and hide the original
 // cause of the crash.
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
+#define XOPENGL_MODIFIED_LOCK 1
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 // stijn: Just do what other devices do!
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
+#endif
+
+#if XOPENGL_MODIFIED_LOCK
+#define FTEXTURE_PTR FTextureInfo*
+#define FTEXTURE_GET(ptr) *ptr
+#define TEXTURE_SCALE_NAME DrawScale
+#else
+#define FTEXTURE_PTR FTextureInfo
+#define FTEXTURE_GET(ptr) ptr
+#define TEXTURE_SCALE_NAME Scale
 #endif
 
 /*-----------------------------------------------------------------------------
@@ -139,7 +150,8 @@ enum TexType
 	FOGMAP,
 	ENVIRONMENTMAP,
 	BUMPMAP,
-	SHADOWMAP
+	SHADOWMAP,
+	HEIGHTMAP
 };
 
 //these values have to match the corresponding location in shader (such as "layout (location = 0) in vec3 v_coord;")
@@ -300,10 +312,6 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
         String+=TEXT("PF_BigWavy ");
     if (PolyFlags & PF_SpecialPoly)
         String+=TEXT("PF_SpecialPoly ");
-#if ENGINE_VERSION==227
-	if (PolyFlags & PF_HeightMap)
-        String+=TEXT("PF_HeightMap ");
-#endif
     if (PolyFlags & PF_Flat)
         String+=TEXT("PF_Flat ");
     if (PolyFlags & PF_ForceViewZone)
@@ -367,6 +375,7 @@ enum DrawFlags
 	DF_MacroTexture	 	= 0x00000010,
 	DF_BumpMap			= 0x00000020,
 	DF_EnvironmentMap   = 0x00000040,
+	DF_HeightMap	 	= 0x00000080,
 };
 
 /*-----------------------------------------------------------------------------
@@ -480,6 +489,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	TArray<FLightInfo*> LightCache;
 	#endif
 	TArray<AActor*> StaticLightList;
+	TArray<AActor*> LightList;
 
 
 	// Context specifics.
@@ -513,6 +523,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	INT NumAASamples;
     INT MaxClippingPlanes;
     INT NumberOfExtensions;
+    INT DetailMax;
+    FLOAT GammaMultiplier;
+    FLOAT GammaMultiplierUED;
 
     // Config
 	BITFIELD NoFiltering;
@@ -863,11 +876,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 	}StaticLightData;
 	LightInfo LightData;
 	INT NumStaticLights = 0;
+	INT NumLights = 0;
 
 	struct DrawComplexShaderDrawParams
 	{
 		glm::vec4 DrawData[16];
-		glm::uvec4 TexNum[2];
+		glm::uvec4 TexNum[4];
 		glm::uvec4 _DrawFlags;
 
 		DWORD& DrawFlags()
@@ -892,7 +906,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		DWORD& HitTesting()
 		{
-			return reinterpret_cast<DWORD&>(TexNum[1].w);
+			return reinterpret_cast<DWORD&>(TexNum[3].x);
 		}
 	} DrawComplexDrawParams;
 
@@ -1080,11 +1094,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawGouraudDetailTexUV;
 
 	// Cached Texture Infos
-	FTextureInfo DrawGouraudDetailTextureInfo;
-	FTextureInfo DrawGouraudMacroTextureInfo;
-	FTextureInfo DrawGouraudBumpMapInfo;
+	FTEXTURE_PTR DrawGouraudDetailTextureInfo;
+	FTEXTURE_PTR DrawGouraudMacroTextureInfo;
+	FTEXTURE_PTR DrawGouraudBumpMapInfo;
 
-	FTextureInfo DrawComplexBumpMapInfo;
+	FTEXTURE_PTR DrawComplexBumpMapInfo;
 
 	//Gamma
 	struct FGammaRamp

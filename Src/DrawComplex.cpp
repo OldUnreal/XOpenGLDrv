@@ -28,11 +28,11 @@ enum DrawComplexTexCoordsIndices
 	FOGMAP_COORDS,
 	DETAIL_COORDS,
 	MACRO_COORDS,
-	BUMPMAP_COORDS,
 	ENVIROMAP_COORDS,
 	DIFFUSE_INFO,
 	MACRO_INFO,
 	BUMPMAP_INFO,
+	HEIGHTMAP_INFO,
 	X_AXIS,
 	Y_AXIS,
 	Z_AXIS,
@@ -58,7 +58,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	guard(UXOpenGLRenderDevice::DrawComplexSurface);
 	check(Surface.Texture);
 
-	if(Frame->Recursion > MAX_FRAME_RECURSION || NoDrawComplexSurface)
+	if(/*Frame->Recursion > MAX_FRAME_RECURSION ||*/ NoDrawComplexSurface)
 		return;
 
 	clockFast(Stats.ComplexCycles);
@@ -110,14 +110,9 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		{
 			DrawComplexDrawParams.HitTesting() = 0;
 			if (Surface.PolyFlags & PF_FlatShaded)
-			{
 				FPlane Flat = Surface.FlatColor.Plane();
-				DrawComplexDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(FOpenGLGammaDecompress_sRGB(Flat));
-			}
-			else
-			{
-				DrawComplexDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(Surface.FlatColor.Plane());
-			}
+
+            DrawComplexDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(Surface.FlatColor.Plane());
 		}
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
@@ -131,9 +126,11 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	SetTexture(0, *Surface.Texture, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, NORMALTEX);
 	DrawComplexDrawParams.DrawData[DIFFUSE_COORDS] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
-	DrawComplexDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->Scale);
+	if(Surface.Texture->Texture)
+		DrawComplexDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->TEXTURE_SCALE_NAME);
+	else DrawComplexDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(1.f, 0.f, 0.f, 1.f);
 	DrawComplexDrawParams.TexNum[0].x = TexInfo[0].TexNum;
-	DrawComplexDrawParams.TextureFormat() = Surface.Texture->Texture->Format;
+	DrawComplexDrawParams.TextureFormat() = Surface.Texture->Format;
 
 	if (Surface.LightMap) //can not make use of bindless, to many single textures. Determined by Info->Texture.
 	{
@@ -161,7 +158,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		DrawComplexDrawParams.DrawFlags() |= DF_MacroTexture;
 		SetTexture(4, *Surface.MacroTexture, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
 		DrawComplexDrawParams.DrawData[MACRO_COORDS] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
-		DrawComplexDrawParams.DrawData[MACRO_INFO] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->Scale);
+		DrawComplexDrawParams.DrawData[MACRO_INFO] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->TEXTURE_SCALE_NAME);
 		DrawComplexDrawParams.TexNum[1].x = TexInfo[4].TexNum;
 	}
 #if ENGINE_VERSION==227
@@ -169,8 +166,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_BumpMap;
 		SetTexture(5, *Surface.BumpMap, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
-		DrawComplexDrawParams.DrawData[BUMPMAP_COORDS] = glm::vec4(TexInfo[5].UMult, TexInfo[5].VMult, TexInfo[5].UPan, TexInfo[5].VPan);
-		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->Scale);
+		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->TEXTURE_SCALE_NAME);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
 #else
@@ -184,7 +180,6 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 # endif
 		DrawComplexDrawParams.DrawFlags() |= DF_BumpMap;
 		SetTexture(5, BumpMapInfo, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
-		DrawComplexDrawParams.DrawData[BUMPMAP_COORDS] = glm::vec4(TexInfo[5].UMult, TexInfo[5].VMult, TexInfo[5].UPan, TexInfo[5].VPan);
 		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
@@ -197,8 +192,15 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		DrawComplexDrawParams.DrawData[ENVIROMAP_COORDS] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
 		DrawComplexDrawParams.TexNum[1].z = TexInfo[6].TexNum;
 	}
+    if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
+	{
+		DrawComplexDrawParams.DrawFlags() |= DF_HeightMap;
+		SetTexture(7, *Surface.HeightMap, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, HEIGHTMAP);
+		DrawComplexDrawParams.DrawData[HEIGHTMAP_INFO] = glm::vec4(Surface.HeightMap->Texture->Diffuse, Surface.HeightMap->Texture->Specular, Surface.HeightMap->Texture->TEXTURE_SCALE_NAME, Surface.Level->TimeSeconds.GetFloat());
+		DrawComplexDrawParams.TexNum[1].w = TexInfo[7].TexNum;
+	}
 #endif
-
+    // Timer
 	DrawComplexDrawParams.DrawData[DISTANCE_FOG_COLOR] = DistanceFogColor;
 	DrawComplexDrawParams.DrawData[DISTANCE_FOG_INFO] = DistanceFogValues;
 
@@ -322,7 +324,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 	if (!UsingShaderDrawParameters)
 	{
 		glUniform1uiv(DrawComplexSinglePassDrawFlags, 4, &DrawComplexDrawParams._DrawFlags[0]);
-		glUniform1uiv(DrawComplexSinglePassTexNum, 8, reinterpret_cast<const GLuint*>(&DrawComplexDrawParams.TexNum[0]));
+		glUniform1uiv(DrawComplexSinglePassTexNum, 16, reinterpret_cast<const GLuint*>(&DrawComplexDrawParams.TexNum[0]));
 		glUniform4fv(DrawComplexSinglePassTexCoords, ARRAY_COUNT(DrawComplexDrawParams.DrawData), reinterpret_cast<const GLfloat*>(DrawComplexDrawParams.DrawData));
 		CHECK_GL_ERROR();
 	}

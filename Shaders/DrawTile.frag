@@ -41,6 +41,15 @@ void main(void)
     Color = texture(Texture0, gTexCoords);
     #endif
 
+    #if SRGB
+    if((PolyFlags & PF_Modulated)!=PF_Modulated)
+	{
+		Color.r=max(1.055 * pow(Color.r, 0.416666667) - 0.055, 0.0);
+		Color.g=max(1.055 * pow(Color.g, 0.416666667) - 0.055, 0.0);
+        Color.b=max(1.055 * pow(Color.b, 0.416666667) - 0.055, 0.0);
+    }
+    #endif
+
 	// Handle PF_Masked.
 	if ( (PolyFlags&PF_Masked) == PF_Masked )
 	{
@@ -55,17 +64,18 @@ void main(void)
 
 	if((PolyFlags & PF_Modulated)!=PF_Modulated)
 	{
-		// Gamma
-#ifdef GL_ES
-		// 1.055*pow(x,(1.0 / 2.4) ) - 0.055
-		// FixMe: ugly rough srgb to linear conversion.
-		TotalColor.r=(1.055*pow(TotalColor.r,(1.0-Gamma / 2.4))-0.055);
-		TotalColor.g=(1.055*pow(TotalColor.g,(1.0-Gamma / 2.4))-0.055);
-		TotalColor.b=(1.055*pow(TotalColor.b,(1.0-Gamma / 2.4))-0.055);
+#if EDITOR
+        // Gamma
+        float InGamma = Gamma*GammaMultiplierUED;
+        TotalColor.r=pow(TotalColor.r,1.0/InGamma);
+        TotalColor.g=pow(TotalColor.g,1.0/InGamma);
+        TotalColor.b=pow(TotalColor.b,1.0/InGamma);
 #else
-		TotalColor.r=pow(TotalColor.r,2.7-Gamma*1.7);
-		TotalColor.g=pow(TotalColor.g,2.7-Gamma*1.7);
-		TotalColor.b=pow(TotalColor.b,2.7-Gamma*1.7);
+		// Gamma
+		float InGamma = Gamma*GammaMultiplier; // Gamma is a value from 0.1 to 1.0
+        TotalColor.r=pow(TotalColor.r,1.0/InGamma);
+        TotalColor.g=pow(TotalColor.g,1.0/InGamma);
+        TotalColor.b=pow(TotalColor.b,1.0/InGamma);
 #endif
 	}
 
@@ -83,8 +93,9 @@ void main(void)
 #endif
 
 # if SIMULATEMULTIPASS
-    FragColor1	= vec4(1.0,1.0,1.0,1.0)-TotalColor;
+	FragColor	= TotalColor;
+	FragColor1	= vec4(1.0,1.0,1.0,1.0)-TotalColor;
+#else
+    FragColor	= TotalColor;
 #endif
-
-	FragColor = TotalColor;
 }

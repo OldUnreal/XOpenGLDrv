@@ -88,6 +88,15 @@ void main(void)
     Color = texture(Texture0, gTexCoords);
 #endif
 
+    #if SRGB
+	if((gPolyFlags & PF_Modulated)!=PF_Modulated)
+	{
+		Color.r=max(1.055 * pow(Color.r, 0.416666667) - 0.055, 0.0);
+		Color.g=max(1.055 * pow(Color.g, 0.416666667) - 0.055, 0.0);
+        Color.b=max(1.055 * pow(Color.b, 0.416666667) - 0.055, 0.0);
+    }
+    #endif
+
     if (gTextureInfo.x > 0.0)
         Color *= gTextureInfo.x; // Diffuse factor.
 
@@ -179,25 +188,42 @@ void main(void)
 
 
 #if DETAILTEXTURES
-	float bNear = clamp(1.0-(gCoords.z/380.0),0.0,1.0);
-	if( ((gDrawFlags & DF_DetailTexture) == DF_DetailTexture) && bNear > 0.0)
+	if (((gDrawFlags & DF_DetailTexture) == DF_DetailTexture))
 	{
+        float NearZ = gCoords.z/512.0;
+        float DetailScale = 1.0;
+        float bNear;
 	    vec4 DetailTexColor;
-	    #if BINDLESSTEXTURES
-	    if (gDetailTexNum > 0u)
-            DetailTexColor = texture(Textures[gDetailTexNum], gDetailTexCoords);
-        else
-            DetailTexColor = texture(Texture1, gDetailTexCoords); // DetailTexture
-        #else
-        DetailTexColor = texture(Texture1, gDetailTexCoords); // DetailTexture
-        #endif
-		vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb);
-		hsvDetailTex.b += (DetailTexColor.r - 0.1);
-		hsvDetailTex = hsv2rgb(hsvDetailTex);
-		DetailTexColor=vec4(hsvDetailTex,0.0);
-		DetailTexColor = mix(vec4(1.0,1.0,1.0,1.0), DetailTexColor, bNear); //fading out.
+	    vec3 hsvDetailTex;
 
-		TotalColor.rgb*=DetailTexColor.rgb;
+	    for(int i=0; i < DetailMax; ++i)
+        {
+            if (i > 0)
+            {
+                NearZ *= 4.223f;
+                DetailScale *= 4.223f;
+            }
+            bNear = clamp(0.65-NearZ,0.0,1.0);
+
+            if (bNear > 0.0)
+            {
+            # if BINDLESSTEXTURES
+                if (vDetailTexNum > 0u)
+                  DetailTexColor = texture(Textures[gDetailTexNum], gDetailTexCoords * DetailScale);
+                else DetailTexColor = texture(Texture3, gDetailTexCoords * DetailScale);
+            # else
+                DetailTexColor = texture(Texture3, gDetailTexCoords * DetailScale);
+            # endif
+
+                vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
+                hsvDetailTex.b += (DetailTexColor.r - 0.1);
+                hsvDetailTex = hsv2rgb(hsvDetailTex);
+                DetailTexColor=vec4(hsvDetailTex,0.0);
+                DetailTexColor = mix(vec4(1.0,1.0,1.0,1.0), DetailTexColor, bNear); //fading out.
+
+                TotalColor.rgb*=DetailTexColor.rgb;
+            }
+        }
 	}
 #endif
 
@@ -244,8 +270,11 @@ void main(void)
 
 		for(int i=0; i<NumLights; ++i)
 		{
+		    vec3 CurrentLightColor = vec3(LightData1[i].x,LightData1[i].y,LightData1[i].z);
+
 			float NormalLightRadius = LightData5[i].x;
             bool bZoneNormalLight = bool(LightData5[i].y);
+            float LightBrightness = LightData5[i].z/255.0;
 
             if (NormalLightRadius == 0.0)
                 NormalLightRadius = LightData2[i].w * 64.0;
@@ -278,8 +307,9 @@ void main(void)
             // specular
             vec3 halfwayDir = normalize(TangentlightDir + TangentViewDir);
             float spec = pow(max(dot(TextureNormal, halfwayDir), 0.0), 8.0);
-            vec3 specular = vec3(0.01) * spec;
-            TotalBumpColor = ambient + diffuse + specular;
+            vec3 specular = vec3(0.01) * spec * CurrentLightColor * LightBrightness;
+
+            TotalBumpColor += (ambient + diffuse + specular) * attenuation;
 
 		}
 		TotalColor+=vec4(clamp(TotalBumpColor,0.0,1.0),1.0);
@@ -310,17 +340,18 @@ void main(void)
 
 	if((gPolyFlags & PF_Modulated)!=PF_Modulated)
 	{
-		// Gamma
-#ifdef GL_ES
-		// 1.055*pow(x,(1.0 / 2.4) ) - 0.055
-		// FixMe: ugly rough srgb to linear conversion.
-		TotalColor.r=(1.055*pow(TotalColor.r,(1.0-gGamma / 2.4))-0.055);
-		TotalColor.g=(1.055*pow(TotalColor.g,(1.0-gGamma / 2.4))-0.055);
-		TotalColor.b=(1.055*pow(TotalColor.b,(1.0-gGamma / 2.4))-0.055);
+#if EDITOR
+        // Gamma
+        float InGamma = gGamma*GammaMultiplierUED;
+        TotalColor.r=pow(TotalColor.r,1.0/InGamma);
+        TotalColor.g=pow(TotalColor.g,1.0/InGamma);
+        TotalColor.b=pow(TotalColor.b,1.0/InGamma);
 #else
-		TotalColor.r=pow(TotalColor.r,2.7-gGamma*1.7);
-		TotalColor.g=pow(TotalColor.g,2.7-gGamma*1.7);
-		TotalColor.b=pow(TotalColor.b,2.7-gGamma*1.7);
+		// Gamma
+		float InGamma = gGamma*GammaMultiplier; // gGamma is a value from 0.1 to 1.0
+        TotalColor.r=pow(TotalColor.r,1.0/InGamma);
+        TotalColor.g=pow(TotalColor.g,1.0/InGamma);
+        TotalColor.b=pow(TotalColor.b,1.0/InGamma);
 #endif
 	}
 
@@ -367,9 +398,20 @@ void main(void)
 #endif
 
 # if SIMULATEMULTIPASS
-    FragColor1	= vec4(1.0,1.0,1.0,1.0)-TotalColor;
+    if((gPolyFlags & PF_Modulated) == PF_Modulated)
+    {
+        FragColor	= TotalColor;
+        FragColor1	= (vec4(1.0,1.0,1.0,1.0)-TotalColor);
+	}
+	else
+    {
+        FragColor	= TotalColor;
+        FragColor1	= (vec4(1.0,1.0,1.0,1.0)-TotalColor)*LightColor;
+	}
+#else
+    FragColor	= TotalColor;
 #endif
-	FragColor = TotalColor;
+
 }
 
 // Blending translation table

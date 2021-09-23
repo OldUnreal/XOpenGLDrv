@@ -39,19 +39,21 @@ void main(void)
 	if ( (LineFlags&LINE_Transparent)==LINE_Transparent )
 	{
 	}
-#ifndef EDITOR
-	#ifdef GL_ES
-			// 1.055*pow(x,(1.0 / 2.4) ) - 0.055
-			// FixMe: ugly rough srgb to linear conversion.
-			TotalColor.r=(1.055*pow(TotalColor.r,(1.0-Gamma / 2.4))-0.055);
-			TotalColor.g=(1.055*pow(TotalColor.g,(1.0-Gamma / 2.4))-0.055);
-			TotalColor.b=(1.055*pow(TotalColor.b,(1.0-Gamma / 2.4))-0.055);
-	#else
-			TotalColor.r=pow(TotalColor.r,2.7-Gamma*1.7);
-			TotalColor.g=pow(TotalColor.g,2.7-Gamma*1.7);
-			TotalColor.b=pow(TotalColor.b,2.7-Gamma*1.7);
-	#endif
+#if EDITOR
+        TotalColor.rgb=clamp(TotalColor.rgb*1.2,0.0,0.8);
+        // Gamma
+        float InGamma = Gamma*GammaMultiplierUED;
+        TotalColor.r=pow(TotalColor.r,1.0/InGamma);
+        TotalColor.g=pow(TotalColor.g,1.0/InGamma);
+        TotalColor.b=pow(TotalColor.b,1.0/InGamma);
+#else
+		// Gamma
+		float InGamma = Gamma*GammaMultiplier;
+        TotalColor.r=pow(TotalColor.r,1.0/InGamma);
+        TotalColor.g=pow(TotalColor.g,1.0/InGamma);
+        TotalColor.b=pow(TotalColor.b,1.0/InGamma);
 #endif
+
 # if SIMULATEMULTIPASS
     FragColor1	= vec4(1.0,1.0,1.0,1.0)-TotalColor;
 #endif

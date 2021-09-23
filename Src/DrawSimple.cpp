@@ -168,7 +168,6 @@ void UXOpenGLRenderDevice::EndFlash()
 		SetBlend(PF_AlphaBlend, false);
 		checkSlow(ActiveProgram == Simple_Prog);
 		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0 - Min(FlashScale.X, 1.0f));
-
 		FLOAT RFX2 = 2.0*RProjZ       /Viewport->SizeX;
 		FLOAT RFY2 = 2.0*RProjZ*Aspect/Viewport->SizeY;
 
@@ -252,10 +251,6 @@ void UXOpenGLRenderDevice::DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLui
 
 	// Set depth mode.
 	SetDepth(LineFlags);
-
-	//Compensate coloring for sRGB.
-	if (GIsEditor)
-        DrawColor = FOpenGLGammaDecompress_sRGB(DrawColor);
 
 	switch (DrawMode)
 	{
