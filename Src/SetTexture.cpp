@@ -19,6 +19,7 @@
 
 BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture)
 {
+    guard(WillTextureChange);
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
 	CachedTexture = nullptr;
 
@@ -70,6 +71,7 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 	}
 
 	return FALSE;
+	unguard;
 }
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -603,6 +605,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		INT MaxLevel = -1;
 		if ( !Unsupported )
 		{
+		    guard(Unpack texture data);
 			for ( INT MipIndex=Bind->BaseMip; MipIndex<Info.NumMips; MipIndex++ )
 			{
 				// Convert the mipmap.
@@ -612,7 +615,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				GLsizei      USize          = Mip->USize;
 				GLsizei      VSize          = Mip->VSize;
 
-				if ( Mip->DataPtr )
+				if ( Mip && Mip->DataPtr )
 				{
 					switch ( (BYTE)Info.Format ) //!!
 					{
@@ -796,10 +799,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				if (GenerateMipMaps)
 					break;
 			}
+			unguardf((TEXT("Unpacking %ls on %ls crashed due to invalid data."), FTextureFormatString(Info.Format), Info.Texture->GetFullName()));
 
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
-				GWarn->Logf( TEXT("No mip map unpacked for texture %ls."), Info.Texture->GetPathName() );
+				GWarn->Logf(TEXT("No mip map unpacked for texture %ls."), Info.Texture->GetPathName() );
 		}
 
 		// Create and unpack a chequerboard fallback texture texture for an unsupported format.
@@ -847,6 +851,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 		)
     {
+        guard(MakeTextureHandleResident);
         Bind->TexNum[CacheSlot] = TexNum;
 
 #ifdef __LINUX_ARM__
@@ -880,6 +885,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
             LockBuffer(GlobalUniformTextureHandles, 0);
             TexNum++;
         }
+        unguard;
     }
     else if (!ExistingBind)
     {
