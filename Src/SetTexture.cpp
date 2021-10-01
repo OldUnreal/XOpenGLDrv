@@ -87,6 +87,15 @@ UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
 		case TEXF_BC1:
 		case TEXF_BC2:
 		case TEXF_BC3:
+		case TEXF_BC4:
+		case TEXF_BC4_S:
+		case TEXF_BC5:
+		case TEXF_BC5_S:
+# ifndef __LINUX_ARM__
+		case TEXF_BC6H_S:
+		case TEXF_BC6H:
+		case TEXF_BC7:
+# endif
 			return SupportsTC;
 		default:
 			return false;

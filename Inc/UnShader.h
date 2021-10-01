@@ -101,10 +101,10 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	if (UseOpenGLDebug && LogLevel >= 2)
 	{
 		debugf(TEXT("GLVersion %ls: \n %ls \n\n"), Filename, *GLVersionString);
-		debugf(TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
 		debugf(TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);
+		debugf(TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
 		debugf(TEXT("Globals %ls: \n %ls \n\n"), Filename, *Globals);
-		debugf(TEXT("Statics %ls: \n %ls \n\n"), Filename, *Globals);
+		debugf(TEXT("Statics %ls: \n %ls \n\n"), Filename, *Statics);
 		debugf(TEXT("Shaderdata %ls: \n %ls \n\n"), Filename, *Shaderdata);
 	}
 	FString Text = (GLVersionString + Definitions + Extensions + Globals + Statics + Shaderdata);

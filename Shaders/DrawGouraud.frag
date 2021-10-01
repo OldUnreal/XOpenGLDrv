@@ -5,6 +5,13 @@
 		* Created by Smirftsch
 =============================================================================*/
 
+#if BINDLESSTEXTURES
+layout(std140) uniform TextureHandles
+{
+	sampler2D Textures[NUMTEXTURES];
+};
+#endif
+
 uniform sampler2D Texture0;	// Base Texture
 uniform sampler2D Texture1;	// DetailTexture
 uniform sampler2D Texture2;	// BumpMap
@@ -208,7 +215,7 @@ void main(void)
             if (bNear > 0.0)
             {
             # if BINDLESSTEXTURES
-                if (vDetailTexNum > 0u)
+                if (gDetailTexNum > 0u)
                   DetailTexColor = texture(Textures[gDetailTexNum], gDetailTexCoords * DetailScale);
                 else DetailTexColor = texture(Texture3, gDetailTexCoords * DetailScale);
             # else
