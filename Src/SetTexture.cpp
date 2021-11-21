@@ -586,7 +586,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #endif
 				// Default: Mark as unsupported.
 				default:
-					GWarn->Logf( TEXT("Unknown texture format %ls on texture %ls."), FTextureFormatString(Info.Format), Info.Texture->GetPathName() );
+					GWarn->Logf( TEXT("Unknown texture format %ls on texture %ls."), *FTextureFormatString(Info.Format), Info.Texture->GetPathName() );
 					Unsupported = 1;
 					break;
 			}
@@ -726,15 +726,15 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 						// Should not happen (TM).
 						default:
-							appErrorf( TEXT("Unpacking unknown format %ls on %ls."), FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
+							appErrorf( TEXT("Unpacking unknown format %ls on %ls."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
 							break;
 					}
 				}
 				else {
                     if (GIsEditor)
-                        appMsgf(TEXT("Unpacking %ls on %ls failed due to invalid data."), FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
+                        appMsgf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
                     else
-                        GWarn->Logf(TEXT("Unpacking %ls on %ls failed due to invalid data."), FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
+                        GWarn->Logf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName() );
 					break;
 				}
                 CHECK_GL_ERROR();
@@ -808,7 +808,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 				if (GenerateMipMaps)
 					break;
 			}
-			unguardf((TEXT("Unpacking %ls on %ls crashed due to invalid data."), FTextureFormatString(Info.Format), Info.Texture->GetFullName()));
+			unguardf((TEXT("Unpacking %ls on %ls crashed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName()));
 
 			// This should not happen. If it happens, a sanity check is missing above.
 			if (!GenerateMipMaps && MaxLevel == -1)
