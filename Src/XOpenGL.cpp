@@ -1700,7 +1700,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	if (bNearZ)
     {
-        zNear = 0.4f;
+        zNear = 0.7f;
         StoredbNearZ = 1;
     }
 
@@ -2148,16 +2148,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 {
 	guard(UXOpenGLRenderDevice::GetStats);
 	const double msPerCycle = GSecondsPerCycle * 1000.0f;
-	appSprintf // stijn: mem safety NOT OK
-	(
-		Result,
-		TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\n")
-#if ENGINE_VERSION==227
-		TEXT("Num static Lights: %i")
-#else
-		TEXT("Persistent buffer stalls: %i")
-#endif
-		,
+	FString StatsString = *FString::Printf(TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\nPersistent buffer stalls: %i\n"),
 		msPerCycle * Stats.BindCycles,
 		msPerCycle * Stats.ImageCycles,
 		msPerCycle * Stats.ComplexCycles,
@@ -2167,46 +2158,40 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		msPerCycle * Stats.Draw2DLine,
 		msPerCycle * Stats.Draw3DLine,
 		msPerCycle * Stats.Draw2DPoint,
-#if ENGINE_VERSION==227
-		NumStaticLights
-#else
 		Stats.StallCount
-#endif
 	);
-	TCHAR* EndBuf = Result;
+
+    if (UsingBindlessTextures)
+		StatsString += *FString::Printf(TEXT("Num bindless Textures: %i\n"), TexNum);
+
+#if ENGINE_VERSION==227
+    StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumStaticLights);
+#endif
+
 #ifndef __LINUX_ARM__
 	if (NVIDIAMemoryInfo)
 	{
-		while (*EndBuf)
-			++EndBuf;
 		GLint CurrentAvailableVideoMemory = 0;
 		glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &CurrentAvailableVideoMemory);
 		GLint TotalAvailableVideoMemory = 0;
 		glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &TotalAvailableVideoMemory);
 		FLOAT Percent = (FLOAT)CurrentAvailableVideoMemory / (FLOAT)TotalAvailableVideoMemory * 100.0f;
-		appSprintf(EndBuf, TEXT("\nNVidia VRAM=%d MB\nUsed=%d MB\nUsage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
+		StatsString += *FString::Printf(TEXT("\nNVidia VRAM=%d MB\nUsed=%d MB\nUsage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
 		glGetError();
 	}
 	if (AMDMemoryInfo)
 	{
-		while (*EndBuf)
-			++EndBuf;
 		GLint CurrentAvailableTextureMemory = 0;
 		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, &CurrentAvailableTextureMemory);
 		GLint CurrentAvailableVBOMemory = 0;
 		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, &CurrentAvailableVBOMemory);
 		GLint CurrentAvailableRenderbufferMemory = 0;
 		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, &CurrentAvailableRenderbufferMemory);
-		appSprintf(EndBuf, TEXT("\nAMD CurrentAvailableTextureMemory=%d MB\nCurrentAvailableVBOMemory=%d MB\nCurrentAvailableRenderbufferMemory=%d MB"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
+		StatsString += *FString::Printf(TEXT("\nAMD CurrentAvailableTextureMemory=%d MB\nCurrentAvailableVBOMemory=%d MB\nCurrentAvailableRenderbufferMemory=%d MB"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
 		glGetError();
 	}
 #endif
-	if (UsingBindlessTextures)
-	{
-		while (*EndBuf)
-			++EndBuf;
-		appSprintf(EndBuf, TEXT("\nNum bindless Textures: %i"), TexNum);
-	}
+	appSprintf(Result,*StatsString);
 	CHECK_GL_ERROR();
 	unguard;
 }

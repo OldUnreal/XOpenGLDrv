@@ -30,7 +30,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 {
 	guard(UXOpenGLRenderDevice::CheckExtensions);
 
-	#ifdef __LINUX_ARM__
+#ifdef __LINUX_ARM__
         if (GenerateMipMaps)
         {
             if (GLExtensionSupported(TEXT("GL_EXT_texture_storage"))  && GenerateMipMaps)
@@ -57,19 +57,22 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
         }
 		//usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
-        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")))
+        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
         {
-            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance found."));
+            debugf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance found."));
         }
         else
         {
-            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance not found."));
+            debugf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
             SupportsClipDistance = false; // have to disable this functionality.
         }
 
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
+        debugf(TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
+
         NVIDIAMemoryInfo = false; // found no such info available...yet?
         AMDMemoryInfo = false;
-	#else
+#else
         if (UsePersistentBuffers)
         {
             if (GLExtensionSupported(TEXT("GL_ARB_buffer_storage")))
@@ -112,25 +115,38 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
         if (UseBindlessTextures)
         {
-            if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
+            if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")) && GLExtensionSupported(TEXT("GL_ARB_shading_language_420pack")) && GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
             {
-                debugf(TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
+                debugf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, and GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
             }
             else
             {
-                debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
+                debugf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, or GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
                 UseBindlessTextures = false;
             }
         }
 
-        //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
-        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")))
+        if (UseShaderDrawParameters)
         {
-            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance found."));
+            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")))
+            {
+                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters found. UseShaderDrawParameters enabled."));
+            }
+            else
+            {
+                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
+                UseShaderDrawParameters = false;
+            }
+        }
+
+        //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
+        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
+        {
+            debugf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance found."));
         }
         else
         {
-            debugf(TEXT("XOpenGL: GL_EXT_clip_cull_distance not found."));
+            debugf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
             SupportsClipDistance = false; // have to disable this functionality.
         }
 
@@ -185,14 +201,17 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
 #endif
 
-        INT MaxTextureImageUnits = 0;
-        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
-        debugf(TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
+    debugf(TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
 
-        INT MaxImageUnits = 0;
-        glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
-        debugf(TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
-	#endif
+    INT MaxVertexTextureImageUnits = 0;
+    glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &MaxVertexTextureImageUnits);
+    debugf(TEXT("XOpenGL: MaxVertexTextureImageUnits: %i"), MaxVertexTextureImageUnits);
+
+    INT MaxImageUnits = 0;
+    glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
+    debugf(TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
+#endif
 
     if (GLExtensionSupported(TEXT("GL_KHR_debug")) && UseOpenGLDebug)
     {

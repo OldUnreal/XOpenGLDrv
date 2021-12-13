@@ -34,7 +34,10 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 				if (!Info.Texture)
 					return TRUE;
 
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if ENGINE_VERSION==227
+				if (Info.RenderTag == CachedTexture->RealtimeChangeCount)
+					return FALSE;
+#elif UNREAL_TOURNAMENT_OLDUNREAL
 				if (Info.Texture->RealtimeChangeCount == CachedTexture->RealtimeChangeCount)
 					return FALSE;
 #endif
@@ -63,7 +66,9 @@ BOOL UXOpenGLRenderDevice::WillTextureChange(INT Multi, FTextureInfo& Info, DWOR
 			CachedTexture = BindMap->Find(Info.CacheID);
 
 		if (CachedTexture
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if ENGINE_VERSION==227
+			&& CachedTexture->RealtimeChangeCount != Info.RenderTag
+#elif UNREAL_TOURNAMENT_OLDUNREAL
 			&& CachedTexture->RealtimeChangeCount != Info.Texture->RealtimeChangeCount
 #endif
 			)
@@ -198,7 +203,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	if (Bind)
 	{
 		// We found the texture in the bindmap but WillTextureChange indicates that it is going to change...
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if ENGINE_VERSION==227
+		Bind->RealtimeChangeCount = Info.RenderTag;
+#elif UNREAL_TOURNAMENT_OLDUNREAL
 		if (Info.Texture)
 			Bind->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
 #endif
@@ -240,7 +247,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		Bind->TexHandle[1]  = 0;
 		Bind->TexNum[0]     = 0;
 		Bind->TexNum[1]     = 0;
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if ENGINE_VERSION==227
+		Bind->RealtimeChangeCount = Info.RenderTag;
+#elif UNREAL_TOURNAMENT_OLDUNREAL
 		Bind->RealtimeChangeCount = Info.Texture ? Info.Texture->RealtimeChangeCount : 0;
 #endif
 
@@ -856,7 +865,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	// Try to make the texture resident as a bindless texture
     if (UsingBindlessTextures && !Unsupported && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures
 #if ENGINE_VERSION==227
-		&& Multi != 1 && Multi != 2 // stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in)
+		&& Info.Texture // stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in)
 #endif
 		)
     {
@@ -872,7 +881,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
         if (!Bind->TexHandle[CacheSlot])
         {
-            debugf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture->GetFullName());
+            debugf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture?Info.Texture->GetFullName():TEXT("LightMap/FogMap"));
             Bind->TexHandle[CacheSlot] = 0;
             Bind->TexNum[CacheSlot] = 0;
         }

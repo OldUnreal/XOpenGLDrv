@@ -165,9 +165,10 @@ void UXOpenGLRenderDevice::EndFlash()
 	if( FlashScale!=FPlane(0.5,0.5,0.5,0) || FlashFog!=FPlane(0,0,0,0) )
 	{
 		SetProgram(Simple_Prog);
-		SetBlend(PF_AlphaBlend, false);
+		SetBlend(PF_Highlighted, false);
 		checkSlow(ActiveProgram == Simple_Prog);
-		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0 - Min(FlashScale.X, 1.0f));
+		FPlane Color(FlashFog.X, FlashFog.Y, FlashFog.Z, 1.0f - Min(FlashScale.X*2.f,1.f));
+
 		FLOAT RFX2 = 2.0*RProjZ       /Viewport->SizeX;
 		FLOAT RFY2 = 2.0*RProjZ*Aspect/Viewport->SizeY;
 

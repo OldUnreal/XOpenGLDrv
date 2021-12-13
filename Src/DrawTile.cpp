@@ -42,8 +42,11 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	*/
 	SetProgram(Tile_Prog);
 
+    if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags & PF_Translucent))
+        PolyFlags |= PF_Highlighted;
+
 #if ENGINE_VERSION==227
-    if (PolyFlags & (PF_AlphaBlend | PF_Translucent | PF_Modulated)) // Make sure occlusion is correctly set.
+    if (PolyFlags & (PF_AlphaBlend | PF_Translucent | PF_Modulated | PF_Highlighted)) // Make sure occlusion is correctly set.
 #else
     if (PolyFlags & (PF_Translucent | PF_Modulated))
 #endif
@@ -51,9 +54,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
     else PolyFlags |= PF_Occlude;
 
 	PolyFlags &= ~(PF_RenderHint | PF_Unlit); // Using PF_RenderHint internally for CW/CCW switch.
-
-    if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags&PF_Translucent))
-		PolyFlags |= PF_Highlighted;
 
     FCachedTexture* Bind;
     DWORD NextPolyFlags = SetFlags(PolyFlags);
@@ -97,7 +97,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		Color.Z = 1.0f;
 		Color.W = 1.0f;
 	}
-	if (Info.Texture->Alpha > 0.f)
+	if (Info.Texture && Info.Texture->Alpha > 0.f)
 		Color.W = Info.Texture->Alpha;
 #if ENGINE_VERSION==227
 	else if (!(PolyFlags & PF_AlphaBlend))
@@ -236,6 +236,17 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
         // TexNum for Bindless
 		DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+19] = TexInfo[0].TexNum;
+
+#if ENGINE_VERSION==227 && 0 // TODO - Need to push 2x3 matrix transformation to UV mapping.
+        if (Info.Modifier)
+        {
+            Info.Modifier->TransformPoint(DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 7],
+                DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 8]);
+
+            Info.Modifier->TransformPoint(DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 9],
+                DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset + 10]);
+        }
+#endif
 
         DrawTileBufferData.VertSize    += 9;
         DrawTileBufferData.IndexOffset += 60;

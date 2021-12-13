@@ -449,9 +449,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint Sampler[2];
 		GLuint64 TexHandle[2];
 		GLuint TexNum[2];
-#if UNREAL_TOURNAMENT_OLDUNREAL
 		INT RealtimeChangeCount{};
-#endif
 	};
 
 	/*
@@ -526,6 +524,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     INT DetailMax;
     FLOAT GammaMultiplier;
     FLOAT GammaMultiplierUED;
+	INT MaxTextureImageUnits;
 
     // Config
 	BITFIELD NoFiltering;
