@@ -294,7 +294,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 		if (UseBufferInvalidation)
 			glInvalidateBufferData(DrawComplexVertBuffer);
 
-#if defined(__LINUX_ARM__)
+#if defined(__LINUX_ARM__) || __MACOSX__
 		// stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
 		glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer, GL_STREAM_DRAW);
 #else
@@ -305,7 +305,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 		{
 			if (UseBufferInvalidation)
 				glInvalidateBufferData(DrawComplexSSBO);
-#if defined(__LINUX_ARM__)
+#if defined(__LINUX_ARM__) || __MACOSX__
 			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderDrawParams), DrawComplexSSBORange.Buffer, GL_DYNAMIC_DRAW);
 #else
 			glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderDrawParams), DrawComplexSSBORange.Buffer);
