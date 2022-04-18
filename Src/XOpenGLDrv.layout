@@ -1,75 +1,40 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_layout_file>
 	<FileVersion major="1" minor="0" />
-	<ActiveTarget name="Debug Lin32" />
-	<File name="../Inc/XOpenGL.h" open="1" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<ActiveTarget name="Release Lin64" />
+	<File name="DrawSimple.cpp" open="1" top="0" tabpos="7" split="0" active="1" splitpos="0" zoom_1="4" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="3969" topLine="142" />
+			<Cursor1 position="9457" topLine="271" />
 		</Cursor>
 	</File>
-	<File name="XOpenGLDrv.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="SetProgram.cpp" open="0" top="0" tabpos="17" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="329" topLine="0" />
+			<Cursor1 position="1242" topLine="15" />
 		</Cursor>
 	</File>
-	<File name="PersistentBuffers.cpp" open="0" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="DrawGouraud.cpp" open="1" top="0" tabpos="8" split="0" active="1" splitpos="0" zoom_1="5" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="7897" topLine="179" />
+			<Cursor1 position="20068" topLine="521" />
 		</Cursor>
 	</File>
-	<File name="XOpenGL.cpp" open="1" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="EditorHit.cpp" open="0" top="0" tabpos="20" split="0" active="1" splitpos="0" zoom_1="8" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="54908" topLine="1539" />
+			<Cursor1 position="2200" topLine="40" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/DrawComplexSinglePass.frag" open="0" top="0" tabpos="7" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../Inc/glad.h" open="0" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="5" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="11642" topLine="327" />
+			<Cursor1 position="41714" topLine="1215" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/DrawTile.frag" open="0" top="0" tabpos="18" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="DrawTile.cpp" open="1" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="5" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="431" topLine="0" />
+			<Cursor1 position="20646" topLine="368" />
 		</Cursor>
 	</File>
-	<File name="DrawGouraud.cpp" open="1" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../../System/xopengl/DrawTile.geo" open="0" top="0" tabpos="11" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="8814" topLine="192" />
-		</Cursor>
-	</File>
-	<File name="../../System/xopengl/DrawSimple.vert" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="313" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="../../System/xopengl/DrawSimple.frag" open="0" top="0" tabpos="4" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="281" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="ClipPlanes.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="881" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="../../System/xopengl/DrawGouraud.vert" open="0" top="0" tabpos="11" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="1794" topLine="18" />
-		</Cursor>
-	</File>
-	<File name="../../System/xopengl/DrawTile.vert" open="0" top="0" tabpos="13" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="582" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="SetProgram.cpp" open="1" top="0" tabpos="4" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="1548" topLine="9" />
-		</Cursor>
-	</File>
-	<File name="CheckExtensions.cpp" open="0" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="5779" topLine="131" />
+			<Cursor1 position="735" topLine="0" />
 		</Cursor>
 	</File>
 	<File name="../Inc/XOpenGLDrv.h" open="0" top="0" tabpos="14" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
@@ -77,34 +42,19 @@
 			<Cursor1 position="574" topLine="0" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/Extensions.incl" open="0" top="0" tabpos="2" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="PersistentBuffers.cpp" open="1" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="9" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="79" topLine="0" />
+			<Cursor1 position="9770" topLine="223" />
 		</Cursor>
 	</File>
-	<File name="glad.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="SetTexture.cpp" open="1" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="4" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="64523" topLine="1173" />
+			<Cursor1 position="29016" topLine="841" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/DrawComplexSinglePass.vert" open="0" top="0" tabpos="12" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../../System/xopengl/Extensions.incl" open="1" top="0" tabpos="17" split="0" active="1" splitpos="0" zoom_1="6" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="783" topLine="45" />
-		</Cursor>
-	</File>
-	<File name="DrawComplex.cpp" open="1" top="1" tabpos="9" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="2165" topLine="40" />
-		</Cursor>
-	</File>
-	<File name="../../System/xopengl/DrawTile.geo" open="0" top="0" tabpos="14" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="735" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="DebugLog.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="2830" topLine="10" />
+			<Cursor1 position="677" topLine="0" />
 		</Cursor>
 	</File>
 	<File name="DrawDistanceFog.cpp" open="0" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
@@ -112,49 +62,34 @@
 			<Cursor1 position="2624" topLine="16" />
 		</Cursor>
 	</File>
-	<File name="EditorHit.cpp" open="1" top="0" tabpos="5" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="XOpenGL.cpp" open="1" top="0" tabpos="4" split="0" active="1" splitpos="0" zoom_1="3" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="2240" topLine="37" />
+			<Cursor1 position="23247" topLine="585" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/Globals.incl" open="1" top="0" tabpos="8" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="ClipPlanes.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="289" topLine="6" />
+			<Cursor1 position="881" topLine="0" />
 		</Cursor>
 	</File>
-	<File name="DrawSimple.cpp" open="1" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../../System/xopengl/DrawGouraud.frag" open="0" top="0" tabpos="8" split="0" active="1" splitpos="0" zoom_1="7" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="5388" topLine="141" />
+			<Cursor1 position="10192" topLine="323" />
 		</Cursor>
 	</File>
-	<File name="../Inc/UnShader.h" open="0" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="CheckExtensions.cpp" open="1" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="5" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="2582" topLine="33" />
+			<Cursor1 position="1993" topLine="38" />
 		</Cursor>
 	</File>
-	<File name="../Inc/XOpenGLTemplate.h" open="0" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../Inc/XOpenGL.h" open="1" top="1" tabpos="2" split="0" active="1" splitpos="0" zoom_1="4" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="2860" topLine="23" />
+			<Cursor1 position="202" topLine="0" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/DrawGouraud.frag" open="0" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../../System/xopengl/DrawGouraud.geo" open="0" top="0" tabpos="7" split="0" active="1" splitpos="0" zoom_1="3" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="297" topLine="0" />
-		</Cursor>
-	</File>
-	<File name="SetTexture.cpp" open="1" top="0" tabpos="7" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="2148" topLine="78" />
-		</Cursor>
-	</File>
-	<File name="../Inc/glad.h" open="0" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="127556" topLine="2834" />
-		</Cursor>
-	</File>
-	<File name="DrawTile.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
-		<Cursor>
-			<Cursor1 position="2272" topLine="21" />
+			<Cursor1 position="1877" topLine="62" />
 		</Cursor>
 	</File>
 	<File name="../../System/xopengl/DrawSimple.geo" open="0" top="0" tabpos="3" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
@@ -162,9 +97,74 @@
 			<Cursor1 position="62" topLine="0" />
 		</Cursor>
 	</File>
-	<File name="../../System/xopengl/DrawGouraud.geo" open="0" top="0" tabpos="10" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+	<File name="../../System/xopengl/DrawTile.frag" open="0" top="0" tabpos="12" split="0" active="1" splitpos="0" zoom_1="3" zoom_2="0">
 		<Cursor>
-			<Cursor1 position="1272" topLine="12" />
+			<Cursor1 position="439" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="XOpenGLDrv.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="329" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/DrawComplexSinglePass.frag" open="1" top="0" tabpos="15" split="0" active="1" splitpos="0" zoom_1="2" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="23029" topLine="673" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/DrawGouraud.vert" open="1" top="0" tabpos="16" split="0" active="1" splitpos="0" zoom_1="5" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="4992" topLine="153" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/DrawComplexSinglePass.vert" open="1" top="0" tabpos="14" split="0" active="1" splitpos="0" zoom_1="2" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="4028" topLine="117" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/DrawTile.vert" open="0" top="0" tabpos="10" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="660" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/DrawSimple.vert" open="1" top="0" tabpos="13" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="638" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="DebugLog.cpp" open="0" top="0" tabpos="1" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="340" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/Globals.incl" open="1" top="0" tabpos="10" split="0" active="1" splitpos="0" zoom_1="4" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="537" topLine="60" />
+		</Cursor>
+	</File>
+	<File name="../../System/xopengl/DrawSimple.frag" open="1" top="0" tabpos="12" split="0" active="1" splitpos="0" zoom_1="5" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="427" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="glad.cpp" open="0" top="0" tabpos="0" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="848" topLine="0" />
+		</Cursor>
+	</File>
+	<File name="../Inc/UnShader.h" open="1" top="0" tabpos="11" split="0" active="1" splitpos="0" zoom_1="7" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="13506" topLine="276" />
+		</Cursor>
+	</File>
+	<File name="DrawComplex.cpp" open="1" top="0" tabpos="6" split="0" active="1" splitpos="0" zoom_1="4" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="12528" topLine="290" />
+		</Cursor>
+	</File>
+	<File name="../Inc/XOpenGLTemplate.h" open="0" top="0" tabpos="9" split="0" active="1" splitpos="0" zoom_1="0" zoom_2="0">
+		<Cursor>
+			<Cursor1 position="2860" topLine="23" />
 		</Cursor>
 	</File>
 </CodeBlocks_layout_file>

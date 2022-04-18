@@ -287,7 +287,7 @@ void UXOpenGLRenderDevice::InitShaders()
     //Global texture handles for bindless.
     if (UsingBindlessTextures)
     {
-        GetUniformBlockIndex(DrawSimpleProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawSimpleProg"));
+        //GetUniformBlockIndex(DrawSimpleProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawSimpleProg")); //not needed for DrawSimple
         GetUniformBlockIndex(DrawTileProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawTileProg"));
         GetUniformBlockIndex(DrawComplexProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawComplexProg"));
         GetUniformBlockIndex(DrawGouraudProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawGouraudProg"));

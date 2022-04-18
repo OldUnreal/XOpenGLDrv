@@ -269,7 +269,7 @@
 				<Option working_dir="../../System64" />
 				<Option object_output="ReleaseLin64" />
 				<Option type="3" />
-				<Option compiler="llvm_clang_compiler_debug_64" />
+				<Option compiler="llvm_clang_compiler_64" />
 				<Option createDefFile="1" />
 				<Compiler>
 					<Add option="-DGPackage=GPackageXOpenGLDrv" />
@@ -339,9 +339,6 @@
 			<Option virtualFolder="XOpenGLDrv/Inc/" />
 		</Unit>
 		<Extensions>
-			<code_completion />
-			<envvars />
-			<debugger />
 			<lib_finder disable_auto="1" />
 		</Extensions>
 	</Project>

@@ -9,7 +9,7 @@
 =============================================================================*/
 
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
-//#define DEBUGGL 1
+// #define DEBUGGL 1
 
 // Maybe for future release. Not in use yet.
 // #define QTBUILD 1
@@ -524,7 +524,6 @@ class UXOpenGLRenderDevice : public URenderDevice
     INT DetailMax;
     FLOAT GammaMultiplier;
     FLOAT GammaMultiplierUED;
-	INT MaxTextureImageUnits;
 
     // Config
 	BITFIELD NoFiltering;
@@ -533,6 +532,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     BITFIELD UsePrecache;
     BITFIELD UseTrilinear;
     BITFIELD UseAA;
+    BITFIELD UseAASmoothing;
     BITFIELD GammaCorrectScreenshots;
     BITFIELD MacroTextures;
     BITFIELD BumpMaps;
@@ -573,6 +573,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool NVIDIAMemoryInfo;
 	bool SwapControlExt;
 	bool SwapControlTearExt;
+    bool Compression_s3tcExt;
 
 	INT MaxBindlessTextures;
 
@@ -619,9 +620,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FLOAT UPan;
 		FLOAT VPan;
 		INT TexNum;
-#if UNREAL_TOURNAMENT_OLDUNREAL
 		INT RealTimeChangeCount{};
-#endif
 	FTexInfo()
 		:CurrentCacheID(0),
 		CurrentCacheSlot(0),

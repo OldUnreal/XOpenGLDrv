@@ -101,6 +101,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UsePrecache"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePrecache), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseTrilinear"), RF_Public)UBoolProperty(CPP_PROPERTY(UseTrilinear), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseAA"), RF_Public)UBoolProperty(CPP_PROPERTY(UseAA), TEXT("Options"), CPF_Config);
+	//new(GetClass(), TEXT("UseAASmoothing"), RF_Public)UBoolProperty(CPP_PROPERTY(UseAASmoothing), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GammaCorrectScreenshots"), RF_Public)UBoolProperty(CPP_PROPERTY(GammaCorrectScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MacroTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(MacroTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("BumpMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(BumpMaps), TEXT("Options"), CPF_Config);
@@ -162,6 +163,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UsePrecache = 1;
 	ShareLists = 1;
 	UseAA = 1;
+	UseAASmoothing = 0;
 	GammaCorrectScreenshots = 1;
 	MacroTextures = 1;
 	BumpMaps = 1;
@@ -192,15 +194,17 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	EnvironmentMaps = 0;
 	GenerateMipMaps = 0;
 	//EnableShadows = 0;
-	UseEnhancedLightmaps = 0;
 
 	MaxTextureSize = 4096;
 #ifdef __EMSCRIPTEN__
 	OpenGLVersion = GL_ES;
+    UseEnhancedLightmaps = 0; // CHECK ME! GL_ES and UseEnhancedLightmaps don't like each other very much (yet?).
 #elif __LINUX_ARM__
 	OpenGLVersion = GL_ES;
+    UseEnhancedLightmaps = 0;
 #else
 	OpenGLVersion = GL_Core;
+    UseEnhancedLightmaps = 1;
 #endif
 	UseVSync = VS_Adaptive;
 
@@ -272,7 +276,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	BufferCount = 0;
 	TexNum = 1;
 	SwapControlExt = false;
-	SwapControlTearExt = false;	SupportsClipDistance = true;
+	SwapControlTearExt = false;
+	SupportsClipDistance = true;
+	Compression_s3tcExt = true; //assume nowadays every hardware setup supports this, but its checked later anyway.
 
 #if XOPENGL_TEXTUREHANDLE_SUPPORT
 	BindlessList = NULL;
@@ -291,6 +297,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("UseTrilinear %i"), UseTrilinear);
 	debugf(NAME_DevLoad, TEXT("UsePrecache %i"), UsePrecache);
 	debugf(NAME_DevLoad, TEXT("UseAA %i"), UseAA);
+	//debugf(NAME_DevLoad, TEXT("UseAASmoothing %i"), UseAASmoothing);
 	debugf(NAME_DevLoad, TEXT("NumAASamples %i"), NumAASamples);
 
 	debugf(NAME_DevLoad, TEXT("RefreshRate %i"), RefreshRate);
@@ -545,6 +552,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
 
+	debugf(TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
+
 	INT MajorVersion = 3;
 	INT MinorVersion = 3;
 
@@ -553,16 +562,24 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		MajorVersion = 3;
 		MinorVersion = 1;
 	}
-	else if (UseShaderDrawParameters)
-	{
-		MajorVersion = 4;
-		MinorVersion = 6;
-	}
-	else if (UseBindlessTextures || UsePersistentBuffers)
-	{
-		MajorVersion = 4;
-		MinorVersion = 5;
-	}
+	else
+    {
+        if (UseOpenGLDebug)
+        {
+            MajorVersion = 4;
+            MinorVersion = 3;
+        }
+        if (UseBindlessTextures || UsePersistentBuffers)
+        {
+            MajorVersion = 4;
+            MinorVersion = 5;
+        }
+        if (UseShaderDrawParameters)
+        {
+            MajorVersion = 4;
+            MinorVersion = 6;
+        }
+    }
 
 	iPixelFormat = 0;
 
@@ -570,17 +587,37 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 #ifdef SDL2BUILD
 InitContext:
 
+    if (glContext)
+        SDL_GL_DeleteContext(glContext);
+
+    INT SDLError = 0;
+
 	// Tell SDL what kind of context we want
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
-	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, MinorVersion);
+    SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
+	SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, MinorVersion);
+	SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
+
+    if (UseAA)
+    {
+        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
+        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples); // Both attributes are not being considered in context creation ?!?
+    }
+	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits); // appears not to be respected as well and returns always 24 on check.
+
+    if (UseSRGBTextures)
+        SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,1); //Not even needed it seems, but bleh...
 
 	if (UseOpenGLDebug)
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 
 	if (OpenGLVersion == GL_ES)
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 	else
-		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
+		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
+
+    if (SDLError != 0)
+        debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in CreateOpenGLContext (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
 
 	// not checking for any existing SDL context, create a new one, since using
 	// SDL for splash already and it's getting confused.
@@ -588,36 +625,38 @@ InitContext:
 
 	// Init global GL.
 	// no need to do SDL_Init here, done in SDL2Drv (USDL2Viewport::ResizeViewport).
+
 	Window = (SDL_Window*)Viewport->GetWindow();
 
 	if (!Window)
 		appErrorf(TEXT("XOpenGL: No SDL Window found!"));
 
-	if (!glContext)
-		glContext = SDL_GL_CreateContext(Window);
+	glContext = SDL_GL_CreateContext(Window);
 
 	if (glContext == NULL)
 	{
+	    debugf(TEXT("XOpenGL: SDL Error in CreateOpenGLContext (fatal): %ls"), appFromAnsi(SDL_GetError()));
         if (OpenGLVersion == GL_Core)
         {
             if (UseBindlessTextures || UsePersistentBuffers)
             {
                 if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
                 {
-                    appErrorf(TEXT("XOpenGL: Failed to init OpenGL %i.%i context. SDL_GL_CreateContext: %ls"), MajorVersion, MinorVersion, appFromAnsi(SDL_GetError()));
+                    appErrorf(TEXT("XOpenGL: Failed to init minimum OpenGL (%i.%i context). SDL_GL_CreateContext: %ls"), MajorVersion, MinorVersion, appFromAnsi(SDL_GetError()));
                     return 0;
                 }
                 else
                 {
-                    //Try with lower context, disable 4.5 features.
+                    //Safemode, try with lowest supported context, disable >3.3 features.
                     MajorVersion = 3;
                     MinorVersion = 3;
 
                     UsingBindlessTextures = false;
                     UsingPersistentBuffers = false;
 					UsingShaderDrawParameters = false;
+					UseOpenGLDebug = false;
 
-                    debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
+                    debugf(NAME_Init, TEXT("XOpenGL: %i.%i context failed to initialize. Disabling UseShaderDrawParameters,UseBindlessTextures,UsePersistentBuffers and UseOpenGLDebug, switching to 3.3 context (min. version)."), MajorVersion, MinorVersion);
 
                     goto InitContext;
                 }
@@ -890,16 +929,16 @@ InitContext:
 				}
 				else
 				{
-					//Try with lower context, disable 4.5 features.
+					//Safemode, try with lowest supported context, disable >3.3 features.
 					MajorVersion = 3;
 					MinorVersion = 3;
 
 					UsingBindlessTextures = false;
 					UsingPersistentBuffers = false;
 					UsingShaderDrawParameters = false;
+                    UseOpenGLDebug = false;
 
-					debugf(NAME_Init, TEXT("OpenGL %i.%i failed to initialize. Disabling UsingBindlessTextures and UsingPersistentBuffers, switching to 3.3 context."), MajorVersion, MinorVersion);
-
+                    debugf(NAME_Init, TEXT("XOpenGL: %i.%i context failed to initialize. Disabling UseShaderDrawParameters,UseBindlessTextures,UsePersistentBuffers and UseOpenGLDebug, switching to 3.3 context (min. version)."), MajorVersion, MinorVersion);
 					goto InitContext;
 				}
 			}
@@ -940,7 +979,7 @@ void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
 #ifdef SDL2BUILD
-	if (CurrentGLContext != glContext)
+	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
 		//debugf(TEXT("XOpenGL: MakeCurrent"));
 		INT Result = SDL_GL_MakeCurrent(Window, glContext);
@@ -989,14 +1028,26 @@ void UXOpenGLRenderDevice::SetPermanentState()
     CHECK_GL_ERROR();
 
 	/*
-	GLES 3 supports sRGB functionality, but it does not expose the
-	GL_FRAMEBUFFER_SRGB enable/disable bit.  Instead the implementation
-	is     */
+	GLES 3 supports sRGB functionality, but it does not expose the GL_FRAMEBUFFER_SRGB enable/disable bit.
+	*/
 
 #ifndef __EMSCRIPTEN__
 	if (OpenGLVersion == GL_Core || GIsEditor)
 		glEnable(GL_FRAMEBUFFER_SRGB);
+    CHECK_GL_ERROR();
 #endif
+
+    if (UseAA && UseAASmoothing)
+    {
+        glEnable( GL_LINE_SMOOTH );
+        CHECK_GL_ERROR();
+        glEnable( GL_POLYGON_SMOOTH );
+        CHECK_GL_ERROR();
+        glHint( GL_LINE_SMOOTH_HINT, GL_NICEST );
+        CHECK_GL_ERROR();
+        glHint( GL_POLYGON_SMOOTH_HINT, GL_NICEST );
+        CHECK_GL_ERROR();
+    }
 
 	/*
 	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
@@ -1144,8 +1195,11 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		return 0;
 	}
 
-	if (glContext && glContext != CurrentGLContext)
-		MakeCurrent();
+	if (glContext)
+    {
+        if (glContext != CurrentGLContext)
+            MakeCurrent();
+    }
 	else
 		CreateOpenGLContext(Viewport, NewColorBytes);
 #endif
@@ -1322,7 +1376,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 			if (UsingBindlessTextures)
 			{
-#ifdef __LINUX_ARM__
+#if 0 // def __LINUX_ARM__
 				if (It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
 					glMakeTextureHandleNonResidentNV(It.Value().TexHandle[i]);
 #else
@@ -1986,11 +2040,6 @@ void UXOpenGLRenderDevice::Exit()
 		delete SharedBindMap;
 		SharedBindMap = NULL;
 	}
-#ifndef __EMSCRIPTEN__  // !!! FIXME: upsets Emscripten.
-	//Unmap persistent buffer.
-	glUnmapBuffer(GL_ARRAY_BUFFER);
-#endif
-
 	CurrentGLContext = NULL;
 # if !UNREAL_TOURNAMENT_OLDUNREAL
 	SDL_GL_DeleteContext(glContext);
@@ -2062,6 +2111,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("ParallaxVersion"), *FString::Printf(TEXT("%ls"), ParallaxVersion == Parallax_Basic ? TEXT("Basic") : ParallaxVersion == Parallax_Occlusion ? TEXT("Occlusion") : ParallaxVersion == Parallax_Relief ? TEXT("Relief") : TEXT("None")));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GammaCorrectScreenshots"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GammaCorrectScreenshots)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseAA"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseAA)));
+	//GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseAASmoothing"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseAASmoothing)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseTrilinear"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseTrilinear)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePrecache"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePrecache)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("AlwaysMipmap"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(AlwaysMipmap)));

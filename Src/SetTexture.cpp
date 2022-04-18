@@ -142,10 +142,10 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 		if (MaxAnisotropy)
-			glSamplerParameterf(Sampler, GL_TEXTURE_MAX_ANISOTROPY_EXT, MaxAnisotropy);
+			glSamplerParameterf(Sampler, GL_TEXTURE_MAX_ANISOTROPY, MaxAnisotropy);
 
 		if (LODBias)
-			glSamplerParameteri(Sampler, GL_TEXTURE_LOD_BIAS_EXT, LODBias);
+			glSamplerParameteri(Sampler, GL_TEXTURE_LOD_BIAS, LODBias);
 		CHECK_GL_ERROR();
 
 	}
@@ -390,6 +390,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		GLuint SourceFormat   = GL_RGBA;
 		GLuint SourceType = GL_UNSIGNED_BYTE;
 
+		if (!Compression_s3tcExt && bCompressedFormat(Info.Format))
+            Unsupported = true;
+
 		// Unsupported can already be set in case of only too large mip maps available.
 		if ( !Unsupported )
 		{
@@ -420,6 +423,12 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					SourceType     = GL_UNSIGNED_INT_2_10_10_10_REV; // This seems to make alpha to be placed in the right spot.
 					break;
 #endif
+				// TEXF_R5G6B5 (Just to make 0x02 supported).
+				case TEXF_R5G6B5:
+					InternalFormat = GL_RGB;
+					SourceFormat   = GL_RGB;
+					SourceType = GL_UNSIGNED_SHORT_5_6_5_REV;
+					break;
 
 				// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
 				case TEXF_RGB8:
@@ -443,152 +452,109 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 					SourceType = GL_UNSIGNED_SHORT;
 					break;
 #endif
-
-				// S3TC -- Ubiquitous Extension.
-				case TEXF_BC1:
-					//
-					// stijn: please, please, for the love of god, do not bring this check back.
-					// I'm leaving it here commented out so you can see why it's gone.
-					// "Undersized" DXT1 mips are fine and we have them in UT99 (e.g., the 2x128 animated texture on the liandri tower).
-					// All gl drivers can unpack them with no issues whatsoever.
-					// The only trouble with undersized textures and DXT1 is that you have to pad the mips _BEFORE_ you compress them.
-					//
-					// FYI: Han originally added this check, but he told me on several occasions that it wasn't necessary.
-					// Last time we discussed this was on 06 OCT 2020.
-					//
-					//if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
-					//{
-					//	GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
-					//	Unsupported = 1;
-					//	break;
-					//}
-					NoAlpha = CacheSlot;
+                // S3TC -- Ubiquitous Extension.
+                case TEXF_BC1:
+                    //
+                    // stijn: please, please, for the love of god, do not bring this check back.
+                    // I'm leaving it here commented out so you can see why it's gone.
+                    // "Undersized" DXT1 mips are fine and we have them in UT99 (e.g., the 2x128 animated texture on the liandri tower).
+                    // All gl drivers can unpack them with no issues whatsoever.
+                    // The only trouble with undersized textures and DXT1 is that you have to pad the mips _BEFORE_ you compress them.
+                    //
+                    // FYI: Han originally added this check, but he told me on several occasions that it wasn't necessary.
+                    // Last time we discussed this was on 06 OCT 2020.
+                    //
+                    //if ( Info.Mips[Bind->BaseMip]->USize<4 || Info.Mips[Bind->BaseMip]->VSize<4 )
+                    //{
+                    //	GWarn->Logf( TEXT("Undersized TEXF_DXT1 (USize=%i,VSize=%i)"), Info.Mips[Bind->BaseMip]->USize, Info.Mips[Bind->BaseMip]->VSize );
+                    //	Unsupported = 1;
+                    //	break;
+                    //}
+                    NoAlpha = CacheSlot;
                     if (OpenGLVersion == GL_Core)
                     {
-                        if ( GL_EXT_texture_compression_s3tc )
+                        /*
+                        Rather than expose a separate "sRGB_compression" extension, it makes more sense to specify a dependency between EXT_texture_compression_s3tc
+                        and EXT_texture_sRGB extension such that when BOTH extensions are exposed, the GL_COMPRESSED_SRGB*_S3TC_DXT*_EXT tokens are accepted.
+                        */
+                        if ( UnpackSRGB )
                         {
-                            if ( UnpackSRGB )
-                            {
-                                if ( GL_EXT_texture_sRGB )
-                                {
-                                    InternalFormat = NoAlpha ? GL_COMPRESSED_SRGB_S3TC_DXT1_EXT : GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
-                                    break;
-                                }
-                                if ( NoAlpha )
-                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGB_S3TC_DXT1_EXT as fallback for %ls."), Info.Texture->GetPathName() );
-                                else
-                                    GWarn->Logf( TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT1_EXT as fallback for %ls."), Info.Texture->GetPathName() );
-                            }
-                            InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                            InternalFormat = NoAlpha ? GL_COMPRESSED_SRGB_S3TC_DXT1_EXT : GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
                             break;
                         }
+                        InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                        break;
                     }
                     else
                     {
-                        if ( GL_EXT_texture_compression_dxt1 )
-                        {
-                            InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
-                            break;
-                        }
+                        InternalFormat = NoAlpha ? GL_COMPRESSED_RGB_S3TC_DXT1_EXT : GL_COMPRESSED_RGBA_S3TC_DXT1_EXT;
+                        break;
                     }
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
-					Unsupported = 1;
-					break;
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-				case TEXF_BC2:
+                case TEXF_BC2:
                     if (OpenGLVersion == GL_Core)
                     {
-                        if ( GL_EXT_texture_compression_s3tc )
+                        if (UnpackSRGB)
                         {
-                            if (UnpackSRGB)
-                            {
-                                if (GL_EXT_texture_sRGB)
-                                {
-                                    InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
-                                    break;
-                                }
-                                GWarn->Logf(TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT3_EXT as fallback for %ls."), Info.Texture->GetPathName());
-                            }
-                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+                            InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT;
                             break;
                         }
+                        InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_EXT;
+                        break;
                     }
                     else
                     {
-                        if(GL_ANGLE_texture_compression_dxt3)
-                        {
-                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_ANGLE;
-                            break;
-                        }
+                        InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT3_ANGLE;
+                        break;
                     }
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
-					Unsupported = 1;
-					break;
 
-				case TEXF_BC3:
+                case TEXF_BC3:
                     if (OpenGLVersion == GL_Core)
                     {
-                        if ( GL_EXT_texture_compression_s3tc )
+                        if (UnpackSRGB)
                         {
-                            if (UnpackSRGB)
-                            {
-                                if (GL_EXT_texture_sRGB)
-                                {
-                                    InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
-                                    break;
-                                }
-                                debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_S3TC_DXT5_EXT as fallback for %ls."), Info.Texture->GetPathName());
-                            }
-                            InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                            InternalFormat = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT;
                             break;
                         }
+                        InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                        break;
                     }
                     else
                     {
-                        if(GL_ANGLE_texture_compression_dxt5)
-                        {
                             InternalFormat = GL_COMPRESSED_RGBA_S3TC_DXT5_ANGLE;
                             break;
-                        }
                     }
-					GWarn->Logf( TEXT("GL_EXT_texture_compression_s3tc not supported on texture %ls."), Info.Texture->GetPathName() );
-					Unsupported = 1;
-					break;
 
-				// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10. Not in GLES it seems.
-				case TEXF_BC4:
-					InternalFormat = GL_COMPRESSED_RED_RGTC1;
-					break;
-				case TEXF_BC4_S:
-					InternalFormat = GL_COMPRESSED_SIGNED_RED_RGTC1;
-					break;
-				case TEXF_BC5:
-					InternalFormat = GL_COMPRESSED_RG_RGTC2;
-					break;
-				case TEXF_BC5_S:
-					InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
-					break;
+                // RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10. Not in GLES it seems.
+                case TEXF_BC4:
+                    InternalFormat = GL_COMPRESSED_RED_RGTC1;
+                    break;
+                case TEXF_BC4_S:
+                    InternalFormat = GL_COMPRESSED_SIGNED_RED_RGTC1;
+                    break;
+                case TEXF_BC5:
+                    InternalFormat = GL_COMPRESSED_RG_RGTC2;
+                    break;
+                case TEXF_BC5_S:
+                    InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
+                    break;
 
-				// BPTC Core since 4.2. BC6H and BC7 in D3D11.
+                // BPTC Core since 4.2. BC6H and BC7 in D3D11.
 #ifndef __LINUX_ARM__
-				case TEXF_BC6H_S:
-					InternalFormat = GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT; //BC6H
-					break;
-				case TEXF_BC6H:
-					InternalFormat = GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT; //BC6H
-					break;
-				case TEXF_BC7:
+                case TEXF_BC6H:
+                    InternalFormat = GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT; //BC6H
+                    break;
+                case TEXF_BC6H_S:
+                    InternalFormat = GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT; //BC6H
+                    break;
+                case TEXF_BC7:
                     if (UnpackSRGB)
                     {
-                        if (GL_EXT_texture_sRGB)
-                        {
-                            InternalFormat = GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
-                            break;
-                        }
-                        debugf(NAME_Warning, TEXT("GL_EXT_texture_sRGB not supported, using GL_COMPRESSED_RGBA_BPTC_UNORM as fallback for %ls."), Info.Texture->GetPathName());
+                        InternalFormat = GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM;
+                        break;
                     }
-					InternalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM; //BC7
+                    InternalFormat = GL_COMPRESSED_RGBA_BPTC_UNORM; //BC7
                     break;
 #endif
 
@@ -716,18 +682,18 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							break;
 
 						// S3TC -- Ubiquitous Extension.
-						case TEXF_DXT1:
+						case TEXF_BC1:
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-						case TEXF_DXT3:
-						case TEXF_DXT5:
+						case TEXF_BC2:
+						case TEXF_BC3:
 						// RGTC -- Core since OpenGL 3.0. Also available on Direct3D 10.
-						case TEXF_RGTC_R:
-						case TEXF_RGTC_R_SIGNED:
-						case TEXF_RGTC_RG:
-						case TEXF_RGTC_RG_SIGNED:
-						case TEXF_BPTC_RGBA:
-						case TEXF_BPTC_RGB_SF:
-						case TEXF_BPTC_RGB_UF:
+						case TEXF_BC4:
+						case TEXF_BC4_S:
+						case TEXF_BC5:
+						case TEXF_BC5_S:
+						case TEXF_BC6H:
+                        case TEXF_BC6H_S:
+						case TEXF_BC7:
 							CompImageSize = FTextureBytes(Info.Format, USize, VSize);
 							ImgSrc = Mip->DataPtr;
 							break;
@@ -872,7 +838,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         guard(MakeTextureHandleResident);
         Bind->TexNum[CacheSlot] = TexNum;
 
-#ifdef __LINUX_ARM__
+#if 0 // def __LINUX_ARM__
         Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleNV(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
 #else
 		Bind->TexHandle[CacheSlot] = glGetTextureSamplerHandleARB(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
@@ -888,7 +854,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         else
         {
             //debugf(TEXT("Making %ls %08x with TexNum %i resident 0x%016llx multi %i"),Info.Texture->GetFullName(),Bind,Bind->TexNum[CacheSlot], Bind->TexHandle[CacheSlot], Multi);
-#ifdef __LINUX_ARM__
+#if 0 // def __LINUX_ARM__
             glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
 #else
             glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);

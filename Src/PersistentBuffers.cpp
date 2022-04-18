@@ -215,6 +215,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(DrawGouraudSSBO);
 			DrawGouraudSSBORange.Buffer = nullptr;
 		}
+		CHECK_GL_ERROR();
 	}
 	else
 	{
@@ -237,6 +238,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(DrawComplexSSBO);
 			DrawComplexSSBORange.Buffer = nullptr;
 		}
+		CHECK_GL_ERROR();
 	}
 	else
 	{
@@ -252,6 +254,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(DrawTileVertBuffer);
 			DrawTileRange.Buffer = nullptr;
 		}
+		CHECK_GL_ERROR();
 	}
 	else
 	{
@@ -267,6 +270,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 			glUnmapNamedBuffer(GlobalTextureHandlesUBO);
 			GlobalUniformTextureHandles.UniformBuffer = nullptr;
 		}
+		CHECK_GL_ERROR();
 #else
 		glUnmapBuffer(GL_UNIFORM_BUFFER);
 		GlobalUniformTextureHandles.UniformBuffer = 0;

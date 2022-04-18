@@ -30,7 +30,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 {
 	guard(UXOpenGLRenderDevice::CheckExtensions);
 
-#ifdef __LINUX_ARM__
+	#ifdef __LINUX_ARM__
         if (GenerateMipMaps)
         {
             if (GLExtensionSupported(TEXT("GL_EXT_texture_storage"))  && GenerateMipMaps)
@@ -67,12 +67,9 @@ void UXOpenGLRenderDevice::CheckExtensions()
             SupportsClipDistance = false; // have to disable this functionality.
         }
 
-        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
-        debugf(TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
-
         NVIDIAMemoryInfo = false; // found no such info available...yet?
         AMDMemoryInfo = false;
-#else
+	#else
         if (UsePersistentBuffers)
         {
             if (GLExtensionSupported(TEXT("GL_ARB_buffer_storage")))
@@ -115,27 +112,14 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
         if (UseBindlessTextures)
         {
-            if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")) && GLExtensionSupported(TEXT("GL_ARB_shading_language_420pack")) && GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
+            if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
             {
-                debugf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, and GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
+                debugf(TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
             }
             else
             {
-                debugf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, or GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
+                debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
                 UseBindlessTextures = false;
-            }
-        }
-
-        if (UseShaderDrawParameters)
-        {
-            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")))
-            {
-                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters found. UseShaderDrawParameters enabled."));
-            }
-            else
-            {
-                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
-                UseShaderDrawParameters = false;
             }
         }
 
@@ -199,27 +183,49 @@ void UXOpenGLRenderDevice::CheckExtensions()
             debugf(TEXT("WGL_EXT_swap_control_tear is not supported by device."));
             SwapControlTearExt = false;
         }
+#else
+        // Just some additional info to check on...
+        INT r=0, g=0, b=0, a=0, db=0, srgb=0, dbu=0;
+        SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &r);
+        SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &g);
+        SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &b);
+        SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &a);
+        debugf(TEXT("XOpenGL: SDL_GL RED_SIZE:%i GREEN_SIZE:%i BLUE_SIZE:%i ALPHA_SIZE:%i"),r,g,b,a);
+
+        SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &db);
+        debugf(TEXT("XOpenGL: SDL_GL_DEPTH_SIZE DesiredDepthBits: %i, provided: %i"),DesiredDepthBits, db);
+
+        SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &dbu);
+        debugf(TEXT("XOpenGL: SDL_GL_DOUBLEBUFFER: %i"),dbu);
+
+        if (UseSRGBTextures)
+        {
+            SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, &srgb);
+            debugf(TEXT("XOpenGL: SDL_GL_FRAMEBUFFER_SRGB_CAPABLE: %i"),srgb);
+        }
+        CHECK_GL_ERROR();
 #endif
 
-    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
-    debugf(TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
+        INT MaxTextureImageUnits = 0;
+        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
+        debugf(TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
 
-    INT MaxVertexTextureImageUnits = 0;
-    glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &MaxVertexTextureImageUnits);
-    debugf(TEXT("XOpenGL: MaxVertexTextureImageUnits: %i"), MaxVertexTextureImageUnits);
+        INT MaxVertexTextureImageUnits = 0;
+        glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &MaxVertexTextureImageUnits);
+        debugf(TEXT("XOpenGL: MaxVertexTextureImageUnits: %i"), MaxVertexTextureImageUnits);
 
-    INT MaxImageUnits = 0;
-    glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
-    debugf(TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
-#endif
+        INT MaxImageUnits = 0;
+        glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
+        debugf(TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
+	#endif
 
     if (GLExtensionSupported(TEXT("GL_KHR_debug")) && UseOpenGLDebug)
     {
-        GWarn->Logf(TEXT("OpenGL debugging extension found!"));
+        GWarn->Logf(TEXT("XOpenGL: OpenGL debugging extension found!"));
     }
     else if (UseOpenGLDebug)
     {
-        GWarn->Logf(TEXT("OpenGL debugging extension not found! Disabling UseOpenGLDebug"));
+        GWarn->Logf(TEXT("XOpenGL: OpenGL debugging extension not found! Disabling UseOpenGLDebug"));
         UseOpenGLDebug = 0;
     }
 
@@ -245,29 +251,35 @@ void UXOpenGLRenderDevice::CheckExtensions()
 	glGetIntegerv(GL_MAX_TEXTURE_SIZE, &MaxTextureSize);
 	debugf(TEXT("XOpenGL: MaxTextureSize: %i"), MaxTextureSize);
 
-	if (!GL_EXT_texture_filter_anisotropic)
-	{
-		debugf(TEXT("XOpenGL: Anisotropic filter extension not found!"));
-		MaxAnisotropy = 0.f;
-	}
-
-	if (!GL_EXT_texture_lod_bias)
+	if (!GLExtensionSupported(TEXT("GL_EXT_texture_lod_bias")))
 	{
 		debugf(TEXT("XOpenGL: Texture lod bias extension not found!"));
 		LODBias = 0;
 	}
 
-	if (MaxAnisotropy < 0)
+    if (!GLExtensionSupported(TEXT("GL_EXT_texture_compression_s3tc")))
 	{
-		MaxAnisotropy = 0;
+		debugf(TEXT("XOpenGL: GL_EXT_texture_compression_s3tc extension not found!"));
+		Compression_s3tcExt = false;
 	}
 
-	if (MaxAnisotropy)
+    if (UseSRGBTextures && !GLExtensionSupported(TEXT("GL_EXT_texture_sRGB")) && !GLExtensionSupported(TEXT("GL_EXT_sRGB"))) //GL_EXT_sRGB for ES
+	{
+		debugf(TEXT("XOpenGL: GL_EXT_texture_sRGB extension not found, UseSRGBTextures disabled!"));
+		UseSRGBTextures = 0;
+	}
+
+    if (!GLExtensionSupported(TEXT("GL_EXT_texture_filter_anisotropic")))
+	{
+		debugf(TEXT("XOpenGL: Anisotropic filter extension not found!"));
+		MaxAnisotropy = 0.f;
+	}
+	if (MaxAnisotropy > 0.f)
 	{
 		FLOAT tmp;
-		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &tmp);
+		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &tmp);
 
-		if (tmp <= 0.f)
+		if (tmp < 0.f)
 			tmp = 0.f; // seems in Linux ARM with ODROID-XU4 the extension check fails. Better safe than sorry.
 
 		debugf(TEXT("XOpenGL: MaxAnisotropy = (%f/%f)"), MaxAnisotropy, tmp);
@@ -278,24 +290,33 @@ void UXOpenGLRenderDevice::CheckExtensions()
 		UseTrilinear = true; // Anisotropic filtering doesn't make much sense without trilinear filtering
 	}
 
-	if (NumAASamples < 0)
+	if (UseAA)
 	{
-		NumAASamples = 0;
-	}
+        if (NumAASamples < 2)
+        {
+            debugf(TEXT("XOpenGL: NumAASamples was set < 2 but UseAA enabled, increasing to minimum value of 2"));
+            NumAASamples = 2;
+        }
 
-	if (NumAASamples)
-	{
-		INT NumberOfAASamples = 0, MaxAASamples;
-		glGetIntegerv(GL_MAX_SAMPLES, &MaxAASamples);
+        INT MaxAASamples = 0;
+        glGetIntegerv(GL_MAX_SAMPLES, &MaxAASamples);
+        if (NumAASamples>MaxAASamples)
+        {
+            debugf(TEXT("XOpenGL: NumAASamples was set > maximum samples supported, setting to %i"),MaxAASamples);
+			NumAASamples = MaxAASamples;
+        }
+
+		INT NumberOfAASamples = 0, AABuffers = 0;
+	#ifdef SDL2BUILD
+        SDL_GL_GetAttribute( SDL_GL_MULTISAMPLEBUFFERS, &AABuffers );
+        SDL_GL_GetAttribute( SDL_GL_MULTISAMPLESAMPLES, &NumberOfAASamples );
+        debugf(TEXT("XOpenGL: SDL_GL_MULTISAMPLEBUFFERS: %i, requested NumAASamples: %i, provided NumAASamples/MaxSamples: (%i/%i)"), AABuffers, NumAASamples, NumberOfAASamples, MaxAASamples);
+    #else
+        glGetIntegerv(GL_MAX_SAMPLES, &MaxAASamples);
 		glGetIntegerv(GL_SAMPLES, &NumberOfAASamples);
 		debugf(TEXT("XOpenGL: NumAASamples: (%i/%i)"), NumberOfAASamples, MaxAASamples);
-
-		if (NumAASamples>MaxAASamples)
-			NumAASamples = MaxAASamples;
+    #endif
 	}
-
-	if (NumAASamples < 2 && UseAA)
-		NumAASamples = 2;
 
 	if (GenerateMipMaps && !UsePrecache)
 	{
@@ -330,8 +351,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
             MaxBindlessTextures = MaxUniformBlockSize / 16;
         }
     }
-
-
 	CHECK_GL_ERROR();
 
 	unguard;

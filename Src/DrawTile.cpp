@@ -302,7 +302,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
         {
             if (UseBufferInvalidation)
                 glInvalidateBufferData(DrawTileVertBuffer);
-#ifdef __LINUX_ARM__ || __MACOSX__
+#ifdef __LINUX_ARM__
 	        // stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
 	        glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_DYNAMIC_DRAW);
 #else
