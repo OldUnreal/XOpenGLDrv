@@ -123,6 +123,19 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
         }
 
+        if (UseShaderDrawParameters)
+        {
+            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")))
+            {
+                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters found. UseShaderDrawParameters enabled."));
+            }
+            else
+            {
+                debugf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
+                UseShaderDrawParameters = false;
+            }
+        }
+
         //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
         if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
         {
