@@ -112,13 +112,13 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
         if (UseBindlessTextures)
         {
-            if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
+            if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")) && GLExtensionSupported(TEXT("GL_ARB_shading_language_420pack")) && GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
             {
-                debugf(TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
+                debugf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, and GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
             }
             else
             {
-                debugf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
+                debugf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, or GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
                 UseBindlessTextures = false;
             }
         }
