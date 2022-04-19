@@ -137,7 +137,7 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\External\glm-0.9.9.6;..\..\deps\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\External\glm-0.9.9.8;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\deps\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
@@ -227,7 +227,7 @@
     <ClCompile>
       <Optimization>Full</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\External\glm-0.9.9.8;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\deps\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
