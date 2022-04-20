@@ -390,7 +390,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		GLuint SourceFormat   = GL_RGBA;
 		GLuint SourceType = GL_UNSIGNED_BYTE;
 
-		if (!Compression_s3tcExt && bCompressedFormat(Info.Format))
+		if (!Compression_s3tcExt && FIsCompressedFormat(Info.Format))
             Unsupported = true;
 
 		// Unsupported can already be set in case of only too large mip maps available.
