@@ -638,7 +638,7 @@ InitContext:
 	    debugf(TEXT("XOpenGL: SDL Error in CreateOpenGLContext (fatal): %ls"), appFromAnsi(SDL_GetError()));
         if (OpenGLVersion == GL_Core)
         {
-            if (UseBindlessTextures || UsePersistentBuffers)
+            if (UseBindlessTextures || UsePersistentBuffers || UseShaderDrawParameters)
             {
                 if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
                 {
