@@ -258,7 +258,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Driver flags.
 	FullscreenOnly = 0;
 	SpanBased = 0;
-	SupportsTC = 1;
+	SupportsTC = TRUE;
 	SupportsFogMaps = 1;
 	SupportsDistanceFog = 1;
 	SupportsLazyTextures = 0;
@@ -267,6 +267,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SupportsHDLightmaps = UseEnhancedLightmaps;
 	UnsupportHDLightFlags = 0;
 	SupportsAlphaBlend = 1;
+	SupportsNewBTC = TRUE;
+	DecompFormat = TEXF_RGBA8_;
 #endif
 
 	// Extensions & other inits.
