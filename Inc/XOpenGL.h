@@ -435,7 +435,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 				Msg = TEXT("GL_OUT_OF_MEMORY");
 				break;
 			};
-			debugf(TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
+			debugf(NAME_DevGraphics, TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
 		}
 		return 1;
 	}

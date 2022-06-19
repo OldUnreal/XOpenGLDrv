@@ -242,7 +242,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		// just in case...
 		if (DrawGouraudStrideSize * (NumPts - 2) * 3 >= DRAWGOURAUDPOLY_SIZE)
 		{
-			debugf(TEXT("DrawGouraudPolygon poly too big!"));
+			debugf(NAME_DevGraphics, TEXT("DrawGouraudPolygon poly too big!"));
 			return;
 		}
 	}

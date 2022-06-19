@@ -16,7 +16,7 @@ void UXOpenGLRenderDevice::GetUniformBlockIndex(GLuint &Program, GLuint BlockInd
     {
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
-            debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
     }
 	glUniformBlockBinding(Program, BlockIndex, BindingIndex);
 }
@@ -28,7 +28,7 @@ void UXOpenGLRenderDevice::GetUniformLocation(GLuint &Uniform, GLuint &Program, 
     {
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
-            debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
     }
 }
 
@@ -100,12 +100,12 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 
 	if (UseOpenGLDebug && LogLevel >= 2)
 	{
-		debugf(TEXT("GLVersion %ls: \n %ls \n\n"), Filename, *GLVersionString);
-		debugf(TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);
-		debugf(TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
-		debugf(TEXT("Globals %ls: \n %ls \n\n"), Filename, *Globals);
-		debugf(TEXT("Statics %ls: \n %ls \n\n"), Filename, *Statics);
-		debugf(TEXT("Shaderdata %ls: \n %ls \n\n"), Filename, *Shaderdata);
+		debugf(NAME_DevGraphics, TEXT("GLVersion %ls: \n %ls \n\n"), Filename, *GLVersionString);
+		debugf(NAME_DevGraphics, TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);
+		debugf(NAME_DevGraphics, TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
+		debugf(NAME_DevGraphics, TEXT("Globals %ls: \n %ls \n\n"), Filename, *Globals);
+		debugf(NAME_DevGraphics, TEXT("Statics %ls: \n %ls \n\n"), Filename, *Statics);
+		debugf(NAME_DevGraphics, TEXT("Shaderdata %ls: \n %ls \n\n"), Filename, *Shaderdata);
 	}
 	FString Text = (GLVersionString + Definitions + Extensions + Globals + Statics + Shaderdata);
 
@@ -123,10 +123,10 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	{
 		GLchar* compiler_log = new GLchar[blen + 1];
 		glGetShaderInfoLog(ShaderObject, blen, &slen, compiler_log);
-		debugf(TEXT("XOpenGL: Log compiling %ls %ls"), Filename, appFromAnsi(compiler_log));
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), Filename, appFromAnsi(compiler_log));
 		delete[] compiler_log;
 	}
-	else debugf(TEXT("XOpenGL: No compiler messages for %ls"), Filename);
+	else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls"), Filename);
 
 	CHECK_GL_ERROR();
 	unguard;
@@ -149,10 +149,10 @@ void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint &Shade
     {
         GLchar* linker_log = new GLchar[blen + 1];
         glGetProgramInfoLog(ShaderProg, blen, &slen, linker_log);
-        debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
         delete[] linker_log;
     }
-    else debugf(TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);
+    else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);
 
     CHECK_GL_ERROR();
     unguard;

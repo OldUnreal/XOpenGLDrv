@@ -82,7 +82,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 	if (UsingPersistentBuffersGouraud)
     {
         // DrawGouraud
-        debugf(TEXT("Mapping persistent DrawGouraudBuffer"));
+        debugf(NAME_DevGraphics, TEXT("Mapping persistent DrawGouraudBuffer"));
 
         GLsizeiptr DrawGouraudBufferSize = NUMBUFFERS * DRAWGOURAUDPOLY_SIZE * sizeof(FLOAT);
 
@@ -116,7 +116,7 @@ void UXOpenGLRenderDevice::MapBuffers()
     if (UsingPersistentBuffersComplex)
     {
         // DrawComplexSurface
-        debugf(TEXT("Mapping persistent DrawComplexSurfaceBuffer"));
+        debugf(NAME_DevGraphics, TEXT("Mapping persistent DrawComplexSurfaceBuffer"));
 
         GLsizeiptr DrawComplexBufferSize=(NUMBUFFERS * DRAWCOMPLEX_SIZE * sizeof(float));
 
@@ -150,7 +150,7 @@ void UXOpenGLRenderDevice::MapBuffers()
     if (UsingPersistentBuffersTile)
     {
         // DrawComplexSurface
-        debugf(TEXT("Mapping persistent DrawTileBuffer"));
+        debugf(NAME_DevGraphics, TEXT("Mapping persistent DrawTileBuffer"));
 
         GLsizeiptr DrawTileBufferSize=(NUMBUFFERS * DRAWTILE_SIZE * sizeof(float));
 
@@ -170,7 +170,7 @@ void UXOpenGLRenderDevice::MapBuffers()
     //Bindless textures
     if (UsingBindlessTextures)
     {
-        debugf(TEXT("Mapping persistent BindlessTexturesBuffer"));
+        debugf(NAME_DevGraphics, TEXT("Mapping persistent BindlessTexturesBuffer"));
 
         glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);
         glBufferStorage(GL_UNIFORM_BUFFER, sizeof(GLuint64) * MaxBindlessTextures * 2, 0, PersistentBufferFlags);

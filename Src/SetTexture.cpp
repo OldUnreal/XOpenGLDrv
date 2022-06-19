@@ -847,7 +847,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
         if (!Bind->TexHandle[CacheSlot])
         {
-            debugf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture?Info.Texture->GetFullName():TEXT("LightMap/FogMap"));
+            debugf(NAME_DevGraphics, TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture?Info.Texture->GetFullName():TEXT("LightMap/FogMap"));
             Bind->TexHandle[CacheSlot] = 0;
             Bind->TexNum[CacheSlot] = 0;
         }

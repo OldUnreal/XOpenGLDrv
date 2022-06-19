@@ -484,7 +484,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 void UXOpenGLRenderDevice::PostEditChange()
 {
 	guard(UXOpenGLRenderDevice::PostEditChange);
-	debugf(NAME_Dev, TEXT("XOpenGL: PostEditChange"));
+	debugf(NAME_DevGraphics, TEXT("XOpenGL: PostEditChange"));
 
 	if (AllContexts.Num() == 0)
 	{
@@ -524,13 +524,13 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 	#ifdef _WIN32
 	if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
 	{
-		debugf(NAME_Init, TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
 		iPixelFormat = ChoosePixelFormat(hDC, &pfd);
 		if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
 			GWarn->Logf(TEXT("XOpenGL: SetPixelFormat %i failed. Restart may required."), iPixelFormat);
 		return 0;
 	}
-	else debugf(NAME_Init, TEXT("XOpenGL: Setting PixelFormat: %i"), iPixelFormat);
+	else debugf(NAME_DevGraphics, TEXT("XOpenGL: Setting PixelFormat: %i"), iPixelFormat);
 	#endif
 	return 1;
 	unguard;
@@ -548,13 +548,13 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	}
 #endif
 
-	debugf(TEXT("XOpenGL: Creating new OpenGL context."));
+	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: Creating new OpenGL context."));
 
 	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
 
-	debugf(TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
+	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
 
 	INT MajorVersion = 3;
 	INT MinorVersion = 3;
@@ -637,7 +637,7 @@ InitContext:
 
 	if (glContext == NULL)
 	{
-	    debugf(TEXT("XOpenGL: SDL Error in CreateOpenGLContext (fatal): %ls"), appFromAnsi(SDL_GetError()));
+	    debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL Error in CreateOpenGLContext (fatal): %ls"), appFromAnsi(SDL_GetError()));
         if (OpenGLVersion == GL_Core)
         {
             if (UseBindlessTextures || UsePersistentBuffers || UseShaderDrawParameters)
@@ -750,7 +750,7 @@ InitContext:
 
 		if (RegisterClassEx(&WndClassEx) == 0)
 		{
-			debugf(TEXT("XOpenGL: RegisterClassEx failed!"));
+			debugf(NAME_DevGraphics, TEXT("XOpenGL: RegisterClassEx failed!"));
 		}
 		HWND TemphWnd = CreateWindowEx(WS_EX_APPWINDOW, WndClassEx.lpszClassName, L"InitWIndow", Style, 0, 0, Viewport->SizeX, Viewport->SizeY, NULL, NULL, hInstance, NULL);
 		HDC TemphDC = GetDC(TemphWnd);
@@ -967,7 +967,7 @@ InitContext:
 		GWarn->Logf(TEXT("OpenGL debugging enabled, this can cause severe performance drain!"));
 	}
 	else
-		debugf(TEXT("XOpenGL: OpenGL debugging disabled."));
+		debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: OpenGL debugging disabled."));
 #endif
 
 	// Check and validate extensions & settings.
@@ -1140,7 +1140,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, NewX, NewY, SWP_SHOWWINDOW);
 # endif
 
-		debugf(TEXT("XOpenGL: Fullscreen NewX %i NewY %i"), NewX, NewY);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: Fullscreen NewX %i NewY %i"), NewX, NewY);
 
 		if (RefreshRate)
 		{
@@ -1150,13 +1150,13 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 			if (ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL)
 			{
-				debugf(TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
+				debugf(NAME_DevGraphics, TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
 				dma.dmFields &= ~DM_DISPLAYFREQUENCY;
 				dmw.dmFields &= ~DM_DISPLAYFREQUENCY;
 			}
 			else
 			{
-				debugf(TEXT("ChangeDisplaySettings with RefreshRate: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
+				debugf(NAME_DevGraphics, TEXT("ChangeDisplaySettings with RefreshRate: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
 				tryNoRefreshRate = false;
 			}
 		}
@@ -1164,10 +1164,10 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		{
 			if (ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL)
 			{
-				debugf(TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i"), NewX, NewY);
+				debugf(NAME_DevGraphics, TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i"), NewX, NewY);
 				return 0;
 			}
-			debugf(TEXT("XOpenGL: ChangeDisplaySettings: %ix%i"), NewX, NewY);
+			debugf(NAME_DevGraphics, TEXT("XOpenGL: ChangeDisplaySettings: %ix%i"), NewX, NewY);
 		}
 	}
 	else UnsetRes();
@@ -1175,7 +1175,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
 	{
-		debugf(TEXT("XOpenGL: Change window size failed!"));
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: Change window size failed!"));
 		if (Fullscreen)
 		{
 			TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
@@ -1512,7 +1512,7 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 	}
 	else if (ParseCommand(&Cmd, TEXT("VideoFlush")))
 	{
-		debugf(NAME_Dev, TEXT("XOpenGL: VideoFlush"));
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: VideoFlush"));
 		Flush(1);
 		return 1;
 	}
