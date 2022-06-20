@@ -124,6 +124,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
+    	new(GetClass(), TEXT("UseBindlessLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessLightmaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxBindlessTextures"), RF_Public)UIntProperty(CPP_PROPERTY(MaxBindlessTextures), TEXT("Options"), CPF_Config);
 
@@ -207,6 +208,12 @@ void UXOpenGLRenderDevice::StaticConstructor()
     UseEnhancedLightmaps = 1;
 #endif
 	UseVSync = VS_Adaptive;
+
+#if ENGINE_VERSION==227
+	UseBindlessLightmaps = 0; //On modern hardware this may be working despite the very huge amount, so let the user decide if to enable.
+#else if UNREAL_TOURNAMENT_OLDUNREAL
+    UseBindlessLightmaps = 1;
+#endif
 
 	UseOpenGLDebug = 0;
 	DebugLevel = 2;
@@ -524,7 +531,7 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 	#ifdef _WIN32
 	if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
+		GWarn->Logf(TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
 		iPixelFormat = ChoosePixelFormat(hDC, &pfd);
 		if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
 			GWarn->Logf(TEXT("XOpenGL: SetPixelFormat %i failed. Restart may required."), iPixelFormat);
@@ -637,7 +644,7 @@ InitContext:
 
 	if (glContext == NULL)
 	{
-	    debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL Error in CreateOpenGLContext (fatal): %ls"), appFromAnsi(SDL_GetError()));
+	    appErrorf(TEXT("XOpenGL: SDL Error in CreateOpenGLContext: %ls"), appFromAnsi(SDL_GetError()));
         if (OpenGLVersion == GL_Core)
         {
             if (UseBindlessTextures || UsePersistentBuffers || UseShaderDrawParameters)
@@ -750,7 +757,7 @@ InitContext:
 
 		if (RegisterClassEx(&WndClassEx) == 0)
 		{
-			debugf(NAME_DevGraphics, TEXT("XOpenGL: RegisterClassEx failed!"));
+			GWarn->Logf(TEXT("XOpenGL: RegisterClassEx failed!"));
 		}
 		HWND TemphWnd = CreateWindowEx(WS_EX_APPWINDOW, WndClassEx.lpszClassName, L"InitWIndow", Style, 0, 0, Viewport->SizeX, Viewport->SizeY, NULL, NULL, hInstance, NULL);
 		HDC TemphDC = GetDC(TemphWnd);
@@ -1150,7 +1157,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 			if (ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL)
 			{
-				debugf(NAME_DevGraphics, TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
+				GWarn->Logf(TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i, %i Hz"), NewX, NewY, RefreshRate);
 				dma.dmFields &= ~DM_DISPLAYFREQUENCY;
 				dmw.dmFields &= ~DM_DISPLAYFREQUENCY;
 			}
@@ -1164,7 +1171,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		{
 			if (ChangeDisplaySettingsW(&dmw, CDS_FULLSCREEN) != DISP_CHANGE_SUCCESSFUL)
 			{
-				debugf(NAME_DevGraphics, TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i"), NewX, NewY);
+				GWarn->Logf(TEXT("XOpenGL: ChangeDisplaySettings failed: %ix%i"), NewX, NewY);
 				return 0;
 			}
 			debugf(NAME_DevGraphics, TEXT("XOpenGL: ChangeDisplaySettings: %ix%i"), NewX, NewY);
@@ -1175,7 +1182,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: Change window size failed!"));
+		GWarn->Logf(TEXT("XOpenGL: Change window size failed!"));
 		if (Fullscreen)
 		{
 			TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));

@@ -39,7 +39,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_EXT_texture_storage not found. GenerateMipMaps disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_EXT_texture_storage not found. GenerateMipMaps disabled."));
                 GenerateMipMaps = false;
             }
         }
@@ -52,8 +52,9 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_IMG_bindless_texture not found. UseBindlessTextures disabled"));
+                GWarn->Logf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. UseBindlessTextures disabled"));
                 UseBindlessTextures = false;
+                UseBindlessLightmaps = false;
             }
         }
 		//usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
@@ -63,7 +64,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
         else
         {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
             SupportsClipDistance = false; // have to disable this functionality.
         }
 
@@ -78,9 +79,10 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_buffer_storage not found. UsePersistentBuffers and UseBindlessTextures disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. UsePersistentBuffers and UseBindlessTextures disabled."));
                 UsePersistentBuffers = false;
                 UseBindlessTextures = false;
+                UseBindlessLightmaps = false;
             }
         }
 
@@ -92,7 +94,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_invalidate_subdata not found. UseBufferInvalidation disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_invalidate_subdata not found. UseBufferInvalidation disabled."));
                 UseBufferInvalidation = false;
             }
         }
@@ -105,7 +107,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_texture_storage not found. GenerateMipMaps disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_texture_storage not found. GenerateMipMaps disabled."));
                 GenerateMipMaps = false;
             }
         }
@@ -118,8 +120,9 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, or GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, or GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
                 UseBindlessTextures = false;
+                UseBindlessLightmaps = false;
             }
         }
 
@@ -131,7 +134,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
                 UseShaderDrawParameters = false;
             }
         }
@@ -143,7 +146,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
         else
         {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
             SupportsClipDistance = false; // have to disable this functionality.
         }
 
@@ -155,7 +158,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
             }
             else
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
                 UseShaderDrawParameters = false;
             }
 		}
@@ -182,7 +185,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
         else
         {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control not found. Can't set VSync options."));
+            GWarn->Logf(TEXT("XOpenGL: WGL_EXT_swap_control not found. Can't set VSync options."));
             SwapControlExt = false;
         }
 
@@ -193,7 +196,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
         else
         {
-            debugf(NAME_DevGraphics, TEXT("WGL_EXT_swap_control_tear is not supported by device."));
+            GWarn->Logf(TEXT("WGL_EXT_swap_control_tear is not supported by device."));
             SwapControlTearExt = false;
         }
 #else
@@ -266,25 +269,25 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
 	if (!GLExtensionSupported(TEXT("GL_EXT_texture_lod_bias")))
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: Texture lod bias extension not found!"));
+		GWarn->Logf(TEXT("XOpenGL: Texture lod bias extension not found!"));
 		LODBias = 0;
 	}
 
     if (!GLExtensionSupported(TEXT("GL_EXT_texture_compression_s3tc")))
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_EXT_texture_compression_s3tc extension not found!"));
+		GWarn->Logf(TEXT("XOpenGL: GL_EXT_texture_compression_s3tc extension not found!"));
 		Compression_s3tcExt = false;
 	}
 
     if (UseSRGBTextures && !GLExtensionSupported(TEXT("GL_EXT_texture_sRGB")) && !GLExtensionSupported(TEXT("GL_EXT_sRGB"))) //GL_EXT_sRGB for ES
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_EXT_texture_sRGB extension not found, UseSRGBTextures disabled!"));
+		GWarn->Logf(TEXT("XOpenGL: GL_EXT_texture_sRGB extension not found, UseSRGBTextures disabled!"));
 		UseSRGBTextures = 0;
 	}
 
     if (!GLExtensionSupported(TEXT("GL_EXT_texture_filter_anisotropic")))
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: Anisotropic filter extension not found!"));
+		GWarn->Logf(TEXT("XOpenGL: Anisotropic filter extension not found!"));
 		MaxAnisotropy = 0.f;
 	}
 	if (MaxAnisotropy > 0.f)
@@ -307,7 +310,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
 	{
         if (NumAASamples < 2)
         {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: NumAASamples was set < 2 but UseAA enabled, increasing to minimum value of 2"));
+            debugf(TEXT("XOpenGL: NumAASamples was set < 2 but UseAA enabled, increasing to minimum value of 2"));
             NumAASamples = 2;
         }
 
@@ -315,7 +318,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         glGetIntegerv(GL_MAX_SAMPLES, &MaxAASamples);
         if (NumAASamples>MaxAASamples)
         {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: NumAASamples was set > maximum samples supported, setting to %i"),MaxAASamples);
+            debugf(TEXT("XOpenGL: NumAASamples was set > maximum samples supported, setting to %i"),MaxAASamples);
 			NumAASamples = MaxAASamples;
         }
 
@@ -356,11 +359,11 @@ void UXOpenGLRenderDevice::CheckExtensions()
         if (MaxBindlessTextures == 0)
         {
             MaxBindlessTextures = MaxUniformBlockSize / 16;
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
+            debugf(TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
         }
         else if (MaxUniformBlockSize < MaxBindlessTextures * 16)
         {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxUniformBlockSize / 16);
+            debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxUniformBlockSize / 16);
             MaxBindlessTextures = MaxUniformBlockSize / 16;
         }
     }

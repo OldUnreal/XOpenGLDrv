@@ -16,7 +16,7 @@ void UXOpenGLRenderDevice::GetUniformBlockIndex(GLuint &Program, GLuint BlockInd
     {
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+            debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
     }
 	glUniformBlockBinding(Program, BlockIndex, BindingIndex);
 }
@@ -28,7 +28,7 @@ void UXOpenGLRenderDevice::GetUniformLocation(GLuint &Uniform, GLuint &Program, 
     {
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+            debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
     }
 }
 
@@ -100,12 +100,12 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 
 	if (UseOpenGLDebug && LogLevel >= 2)
 	{
-		debugf(NAME_DevGraphics, TEXT("GLVersion %ls: \n %ls \n\n"), Filename, *GLVersionString);
-		debugf(NAME_DevGraphics, TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);
-		debugf(NAME_DevGraphics, TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
-		debugf(NAME_DevGraphics, TEXT("Globals %ls: \n %ls \n\n"), Filename, *Globals);
-		debugf(NAME_DevGraphics, TEXT("Statics %ls: \n %ls \n\n"), Filename, *Statics);
-		debugf(NAME_DevGraphics, TEXT("Shaderdata %ls: \n %ls \n\n"), Filename, *Shaderdata);
+		debugf(TEXT("GLVersion %ls: \n %ls \n\n"), Filename, *GLVersionString);
+		debugf(TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);
+		debugf(TEXT("Extensions %ls: \n %ls \n\n"), Filename, *Extensions);
+		debugf(TEXT("Globals %ls: \n %ls \n\n"), Filename, *Globals);
+		debugf(TEXT("Statics %ls: \n %ls \n\n"), Filename, *Statics);
+		debugf(TEXT("Shaderdata %ls: \n %ls \n\n"), Filename, *Shaderdata);
 	}
 	FString Text = (GLVersionString + Definitions + Extensions + Globals + Statics + Shaderdata);
 

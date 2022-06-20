@@ -829,11 +829,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	}
 
 	// Try to make the texture resident as a bindless texture
-    if (UsingBindlessTextures && !Unsupported && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures
-#if ENGINE_VERSION==227
-		&& Info.Texture // stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in)
-#endif
-		)
+	bool BindTexture = true;
+	if (!UseBindlessLightmaps && !Info.Texture)// stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in) - Smirftsch: Added manual override UseBindlessLightmaps
+        BindTexture = false;
+
+    if (UsingBindlessTextures && !Unsupported && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures && BindTexture)
     {
         guard(MakeTextureHandleResident);
         Bind->TexNum[CacheSlot] = TexNum;
@@ -847,7 +847,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
         if (!Bind->TexHandle[CacheSlot])
         {
-            debugf(NAME_DevGraphics, TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture?Info.Texture->GetFullName():TEXT("LightMap/FogMap"));
+            GWarn->Logf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture?Info.Texture->GetFullName():TEXT("LightMap/FogMap"));
             Bind->TexHandle[CacheSlot] = 0;
             Bind->TexNum[CacheSlot] = 0;
         }
