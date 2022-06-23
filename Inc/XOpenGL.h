@@ -42,7 +42,7 @@
 	#endif
 
 	#ifdef SDL2BUILD
-		#include <SDL2/SDL.h>
+		#include <SDL.h>
 	#elif QTBUILD
 
 	#endif
@@ -61,7 +61,7 @@
 		}
 	#endif
 
-    #include <SDL2/SDL.h>
+    #include <SDL.h>
 #endif
 
 #include "XOpenGLTemplate.h" //thanks han!
@@ -553,6 +553,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
     //OpenGL 4 Config
 	BITFIELD UseBindlessTextures;
+	BITFIELD UseBindlessLightmaps;
 	BITFIELD UsePersistentBuffers;
 	BITFIELD UseBufferInvalidation;
 	BITFIELD UseShaderDrawParameters;
