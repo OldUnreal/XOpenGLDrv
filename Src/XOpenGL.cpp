@@ -124,7 +124,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
-    	new(GetClass(), TEXT("UseBindlessLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessLightmaps), TEXT("Options"), CPF_Config);
+    new(GetClass(), TEXT("UseBindlessLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessLightmaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxBindlessTextures"), RF_Public)UIntProperty(CPP_PROPERTY(MaxBindlessTextures), TEXT("Options"), CPF_Config);
 
