@@ -66,7 +66,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	//Draw polygons
 	SetProgram(ComplexSurfaceSinglePass_Prog);
 
-	const DWORD NextPolyFlags = SetFlags(Surface.PolyFlags);
+	const DWORD NextPolyFlags = SetFlags(Surface.PolyFlags) & ~PF_NoSmooth; // Marco: Do not keep NoSmooth flag here to pass on for lightmaps/detailtextures
 
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
@@ -124,7 +124,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	DrawComplexDrawParams.DrawData[Y_AXIS] = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
 	DrawComplexDrawParams.DrawData[Z_AXIS] = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, Gamma);
 
-	SetTexture(0, *Surface.Texture, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, NORMALTEX);
+	SetTexture(0, *Surface.Texture, NextPolyFlags | (Surface.PolyFlags & PF_NoSmooth), 0.0, ComplexSurfaceSinglePass_Prog, NORMALTEX);
 	DrawComplexDrawParams.DrawData[DIFFUSE_COORDS] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
 	if(Surface.Texture->Texture)
 		DrawComplexDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->TEXTURE_SCALE_NAME);
@@ -135,7 +135,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (Surface.LightMap) //can not make use of bindless, to many single textures. Determined by Info->Texture.
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_LightMap;
-		SetTexture(1, *Surface.LightMap, DrawComplexDrawParams.PolyFlags(), -0.5, ComplexSurfaceSinglePass_Prog, LIGHTMAP); //First parameter has to fit the uniform in the fragment shader
+		SetTexture(1, *Surface.LightMap, NextPolyFlags, -0.5, ComplexSurfaceSinglePass_Prog, LIGHTMAP); //First parameter has to fit the uniform in the fragment shader
 		DrawComplexDrawParams.DrawData[LIGHTMAP_COORDS] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, TexInfo[1].UPan, TexInfo[1].VPan);
 		DrawComplexDrawParams.TexNum[0].y = TexInfo[1].TexNum;
 	}
@@ -149,14 +149,14 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (Surface.DetailTexture && DetailTextures)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_DetailTexture;
-		SetTexture(3, *Surface.DetailTexture, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, DETAILTEX);
+		SetTexture(3, *Surface.DetailTexture, NextPolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, DETAILTEX);
 		DrawComplexDrawParams.DrawData[DETAIL_COORDS] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
 		DrawComplexDrawParams.TexNum[0].w = TexInfo[3].TexNum;
 	}
 	if (Surface.MacroTexture && MacroTextures)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_MacroTexture;
-		SetTexture(4, *Surface.MacroTexture, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
+		SetTexture(4, *Surface.MacroTexture, NextPolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, MACROTEX);
 		DrawComplexDrawParams.DrawData[MACRO_COORDS] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
 		DrawComplexDrawParams.DrawData[MACRO_INFO] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->TEXTURE_SCALE_NAME);
 		DrawComplexDrawParams.TexNum[1].x = TexInfo[4].TexNum;
@@ -165,7 +165,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (Surface.BumpMap && BumpMaps)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_BumpMap;
-		SetTexture(5, *Surface.BumpMap, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
+		SetTexture(5, *Surface.BumpMap, NextPolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->TEXTURE_SCALE_NAME);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
@@ -179,7 +179,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Surface.Texture->Texture->BumpMap->Lock(BumpMapInfo, FTime(), 0, this);
 # endif
 		DrawComplexDrawParams.DrawFlags() |= DF_BumpMap;
-		SetTexture(5, BumpMapInfo, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
+		SetTexture(5, BumpMapInfo, NextPolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, BUMPMAP);
 		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
@@ -188,14 +188,14 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (Surface.EnvironmentMap && EnvironmentMaps)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_EnvironmentMap;
-		SetTexture(6, *Surface.EnvironmentMap, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, ENVIRONMENTMAP);
+		SetTexture(6, *Surface.EnvironmentMap, NextPolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, ENVIRONMENTMAP);
 		DrawComplexDrawParams.DrawData[ENVIROMAP_COORDS] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
 		DrawComplexDrawParams.TexNum[1].z = TexInfo[6].TexNum;
 	}
     if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_HeightMap;
-		SetTexture(7, *Surface.HeightMap, DrawComplexDrawParams.PolyFlags(), 0.0, ComplexSurfaceSinglePass_Prog, HEIGHTMAP);
+		SetTexture(7, *Surface.HeightMap, NextPolyFlags, 0.0, ComplexSurfaceSinglePass_Prog, HEIGHTMAP);
 		DrawComplexDrawParams.DrawData[HEIGHTMAP_INFO] = glm::vec4(Surface.HeightMap->Texture->Diffuse, Surface.HeightMap->Texture->Specular, Surface.HeightMap->Texture->TEXTURE_SCALE_NAME, Surface.Level->TimeSeconds.GetFloat());
 		DrawComplexDrawParams.TexNum[1].w = TexInfo[7].TexNum;
 	}
