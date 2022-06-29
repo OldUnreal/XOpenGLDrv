@@ -120,15 +120,27 @@ void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode)
+void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode, DWORD DrawFlags)
 {
 	guard(UOpenGLRenderDevice::SetSampler);
 	CHECK_GL_ERROR();
 
-	// Set texture sampler state.
-	if (PolyFlags & PF_NoSmooth)
+	if (UClampMode)
 	{
-		// "PF_NoSmooth" implies that the worst filter method is used, so have to do this (even when NoFiltering is set) in order to get the expected results.
+		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		CHECK_GL_ERROR();
+	}
+	if (VClampMode)
+	{
+		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		CHECK_GL_ERROR();
+	}
+	CHECK_GL_ERROR();
+
+	// Set texture sampler state.
+	if ((PolyFlags & PF_NoSmooth) && (DrawFlags & DF_DiffuseTexture))
+	{
+		// "PF_NoSmooth" implies that the worst filter method is used, so have to do this (even if NoFiltering is set) in order to get the expected results.
 		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_NEAREST : GL_NEAREST_MIPMAP_NEAREST);
 		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		CHECK_GL_ERROR();
@@ -149,23 +161,10 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 		CHECK_GL_ERROR();
 
 	}
-
-	// TODO: check, just stumbled across it.
-	if (UClampMode)
-	{
-		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		CHECK_GL_ERROR();
-	}
-	if (VClampMode)
-	{
-		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		CHECK_GL_ERROR();
-	}
-	CHECK_GL_ERROR();
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType )
+void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, DWORD DrawFlags )
 {
 	guard(UXOpenGLRenderDevice::SetTexture);
 
@@ -288,7 +287,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 		CHECK_GL_ERROR();
 #if ENGINE_VERSION==227
-		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode, DrawFlags);
 #else
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
 #endif

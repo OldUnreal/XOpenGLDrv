@@ -42,7 +42,7 @@
 	#endif
 
 	#ifdef SDL2BUILD
-		#include <SDL.h>
+		#include <SDL2/SDL.h>
 	#elif QTBUILD
 
 	#endif
@@ -140,19 +140,6 @@ Globals.
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
     #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #endif
-
-enum TexType
-{
-	NORMALTEX,
-	DETAILTEX,
-	MACROTEX,
-	LIGHTMAP,
-	FOGMAP,
-	ENVIRONMENTMAP,
-	BUMPMAP,
-	SHADOWMAP,
-	HEIGHTMAP
-};
 
 //these values have to match the corresponding location in shader (such as "layout (location = 0) in vec3 v_coord;")
 enum AttribType
@@ -1225,13 +1212,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	static BOOL WillBindlessTextureChange(FTextureInfo& Info, FCachedTexture* Texture, DWORD PolyFlags);
 	BOOL WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture);
-	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, TexType TextureType ); //First parameter has to fit the uniform in the fragment shader
+	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, DWORD DrawFlags ); //First parameter has to fit the uniform in the fragment shader
 	void SetNoTexture( INT Multi );
 	DWORD SetFlags(DWORD PolyFlags);
 	void SetBlend(DWORD PolyFlags, bool InverseOrder);
 	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
 	DWORD SetDepth(DWORD PolyFlags);
-	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode);
+	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode, DWORD DrawFlags );
 
 	void BuildGammaRamp(FLOAT GammaCorrection, FGammaRamp& Ramp);
 	void BuildGammaRamp(FLOAT GammaCorrection, FByteGammaRamp& Ramp);

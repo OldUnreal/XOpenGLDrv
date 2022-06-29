@@ -77,7 +77,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
     DrawTileBufferData.PolyFlags = NextPolyFlags;
 
-    SetTexture(0, Info, PolyFlags, 0, Tile_Prog, NORMALTEX);
+    SetTexture(0, Info, PolyFlags, 0, Tile_Prog, DF_DiffuseTexture);
     //debugf(TEXT("%ls %ls"), GetTextureFormatString(Info.Format), Info.Texture->GetName());
 
     clockFast(Stats.TileBufferCycles);

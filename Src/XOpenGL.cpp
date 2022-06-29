@@ -211,7 +211,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if ENGINE_VERSION==227
 	UseBindlessLightmaps = 0; //On modern hardware this may be working despite the very huge amount, so let the user decide if to enable.
-#else if UNREAL_TOURNAMENT_OLDUNREAL
+#elif UNREAL_TOURNAMENT_OLDUNREAL
     UseBindlessLightmaps = 1;
 #endif
 
@@ -2022,7 +2022,7 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 void UXOpenGLRenderDevice::PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags)
 {
 	guard(UXOpenGLRenderDevice::PrecacheTexture);
-	SetTexture(0, Info, PolyFlags, 0.0, 0, NORMALTEX);
+	SetTexture(0, Info, PolyFlags, 0.0, 0, DF_DiffuseTexture);
 	unguard;
 }
 
