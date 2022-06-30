@@ -42,8 +42,9 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	*/
 	SetProgram(Tile_Prog);
 
-    if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags & PF_Translucent))
-        PolyFlags |= PF_Highlighted;
+	// stijn: no longer necessary...
+//    if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags & PF_Translucent))
+//        PolyFlags |= PF_Highlighted;
 
 #if ENGINE_VERSION==227
     if (PolyFlags & (PF_AlphaBlend | PF_Translucent | PF_Modulated | PF_Highlighted)) // Make sure occlusion is correctly set.
