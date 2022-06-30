@@ -289,7 +289,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #if ENGINE_VERSION==227
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode, DrawFlags);
 #else
-		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0, DrawFlags);
 #endif
 
 		// Spew warning if we uploaded this texture twice.
