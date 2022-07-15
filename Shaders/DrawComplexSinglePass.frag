@@ -546,7 +546,7 @@ void main (void)
 # endif
             // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
 # ifdef GL_ES
-            LightColor.bgr = LightColor.rgb*(2.0*255.0/127.0);
+            LightColor.bgr = LightColor.bgr*(2.0*255.0/127.0);
 # else
             LightColor.rgb = LightColor.rgb*(2.0*255.0/127.0);
 # endif
