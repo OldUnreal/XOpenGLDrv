@@ -149,7 +149,7 @@ void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint &Shade
     {
         GLchar* linker_log = new GLchar[blen + 1];
         glGetProgramInfoLog(ShaderProg, blen, &slen, linker_log);
-        debugf(NAME_DevGraphics, TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
+        debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
         delete[] linker_log;
     }
     else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);

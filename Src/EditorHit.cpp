@@ -98,8 +98,8 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 		// Disabled dithering.
 		glDisable(GL_DITHER);
 
-		// !!!!!!!!.
-		glDisable(GL_FRAMEBUFFER_SRGB);
+        if (UseSRGBTextures && OpenGLVersion == GL_Core)
+            glDisable(GL_FRAMEBUFFER_SRGB);
 
 		// Set special clear color.
 		FPlane ScreenClear = FPlane(0.f, 0.f, 0.f, 0.f);
@@ -196,8 +196,8 @@ void UXOpenGLRenderDevice::UnlockHit(UBOOL Blit)
 		HitMem.Empty();
 		HitMemOffs.Empty();
 
-		// !!!!!!!!.
-		glEnable(GL_FRAMEBUFFER_SRGB);
+        if (UseSRGBTextures && OpenGLVersion == GL_Core)
+            glEnable(GL_FRAMEBUFFER_SRGB);
 	}
 
 	unguard;

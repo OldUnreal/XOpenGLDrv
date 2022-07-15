@@ -112,9 +112,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	// Experimental stuff (still being worked on).
 	new(GetClass(), TEXT("UseSRGBTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseSRGBTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
-
+	
 #if ENGINE_VERSION==227
-	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
+	// new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseEnhancedLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseEnhancedLightmaps), TEXT("Options"), CPF_Config);
 	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
@@ -122,7 +122,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	// OpenGL 4
-	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
+	// new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
     new(GetClass(), TEXT("UseBindlessLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessLightmaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
@@ -435,8 +435,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
             SimulateMultiPass = false;
             GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
 
-            UseSRGBTextures = true;
-            GWarn->Logf(TEXT("UseSRGBTextures enabled for OpenGL ES"));
+           // UseSRGBTextures = true;
+           // GWarn->Logf(TEXT("UseSRGBTextures enabled for OpenGL ES"));
         }
 #else
 		UsingBindlessTextures = false;
@@ -543,6 +543,42 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 	unguard;
 }
 
+#ifdef SDL2BUILD
+UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
+{
+    guard(UXOpenGLRenderDevice::SetSDLAttributes);
+    INT SDLError = 0;
+
+	SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
+
+    if (UseAA)
+    {
+        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
+        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
+    }
+	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
+
+    SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
+
+	if (UseOpenGLDebug)
+		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+
+	if (OpenGLVersion == GL_ES)
+		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+	else
+		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
+
+    if (SDLError != 0)
+        debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in SetSDLAttributes (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
+
+    return !SDLError;
+
+    unguard;
+}
+#endif
+
+
 UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes)
 {
 	guard(UXOpenGLRenderDevice::CreateOpenGLContext);
@@ -600,33 +636,15 @@ InitContext:
         SDL_GL_DeleteContext(glContext);
 
     INT SDLError = 0;
-
 	// Tell SDL what kind of context we want
     SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
 	SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, MinorVersion);
-	SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
-
-    if (UseAA)
-    {
-        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
-        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples); // Both attributes are not being considered in context creation ?!?
-    }
-	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits); // appears not to be respected as well and returns always 24 on check.
-
-    if (UseSRGBTextures)
-        SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,1); //Not even needed it seems, but bleh...
-
-	if (UseOpenGLDebug)
-		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-
-	if (OpenGLVersion == GL_ES)
-		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	else
-		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
 
     if (SDLError != 0)
         debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in CreateOpenGLContext (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
+
+    if (glContext)
+        SDL_GL_DeleteContext(glContext);
 
 	// not checking for any existing SDL context, create a new one, since using
 	// SDL for splash already and it's getting confused.
@@ -1041,7 +1059,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 	*/
 
 #ifndef __EMSCRIPTEN__
-	if (OpenGLVersion == GL_Core || GIsEditor)
+	if (UseSRGBTextures && OpenGLVersion == GL_Core)
 		glEnable(GL_FRAMEBUFFER_SRGB);
     CHECK_GL_ERROR();
 #endif
@@ -1109,7 +1127,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 	}
 
-#ifdef WINBUILD
+#ifndef SDL2BUILD
 	// Change display settings.
 	if (Fullscreen)
 	{
@@ -1197,6 +1215,9 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		CreateOpenGLContext(Viewport, NewColorBytes);
 #else
 
+    if (!Window)
+        SetSDLAttributes(); // Those have to been set BEFORE window creation in SDL2Drv.
+
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
 	{
@@ -1257,12 +1278,18 @@ void UXOpenGLRenderDevice::SwapControl()
 	case VS_Off:
 		if (SDL_GL_SetSwapInterval(0) != 0)
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-		else debugf(NAME_Init, TEXT("XOpenGL: VSync Off"));
+		else
+        {
+            debugf(NAME_Init, TEXT("XOpenGL: VSync Off"));
+        }
 		break;
 	case VS_On:
 		if (SDL_GL_SetSwapInterval(1) != 0)
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
-		else  debugf(NAME_Init, TEXT("XOpenGL: VSync On"));
+		else
+        {
+            debugf(NAME_Init, TEXT("XOpenGL: VSync On"));
+        }
 		break;
 	case VS_Adaptive:
 		if (SDL_GL_SetSwapInterval(-1) != 0)
@@ -1271,12 +1298,18 @@ void UXOpenGLRenderDevice::SwapControl()
 			if (SDL_GL_SetSwapInterval(0) != 0)
                 debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
         }
-		else debugf(NAME_Init, TEXT("XOpenGL: VSync Adaptive"));
+		else
+        {
+            debugf(NAME_Init, TEXT("XOpenGL: VSync Adaptive"));
+        }
 		break;
 	default:
 		if (SDL_GL_SetSwapInterval(0) != 0)
 			debugf(NAME_Init, TEXT("XOpenGL: Setting default VSync off has failed."));
-		else debugf(NAME_Init, TEXT("XOpenGL: VSync Off (default)"));
+		else
+        {
+            debugf(NAME_Init, TEXT("XOpenGL: VSync Off (default)"));
+        }
 	}
 	unguard;
 #else
@@ -1315,12 +1348,18 @@ void UXOpenGLRenderDevice::SwapControl()
 			case VS_On:
 				if (wglSwapIntervalEXT(1) != 1)
 					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
-				else  debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
+				else
+                {
+                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
+                }
 				break;
 			case VS_Off:
 				if (wglSwapIntervalEXT(0) != 1)
 					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+				else
+                {
+                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+                }
 				break;
 
 			case VS_Adaptive:
@@ -1329,17 +1368,26 @@ void UXOpenGLRenderDevice::SwapControl()
 					debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
 					if (wglSwapIntervalEXT(0) != 1)
 						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-					else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+					else
+                    {
+                        debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+                    }
 					break;
 				}
 				if (wglSwapIntervalEXT(-1) != 1)
 					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed."));
-				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
+				else
+				{
+                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
+				}
 				break;
 			default:
 				if (wglSwapIntervalEXT(0) != 1)
 					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-				else debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
+				else
+                {
+                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
+                }
 			}
 		}
 	}
@@ -1891,7 +1939,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		verify(SwapBuffers(hDC));
 	}
 #endif
-	//appSleep(0);
+
 	--LockCount;
 
 	// Hits.

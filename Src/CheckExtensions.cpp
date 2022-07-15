@@ -322,8 +322,9 @@ void UXOpenGLRenderDevice::CheckExtensions()
 			NumAASamples = MaxAASamples;
         }
 
-		INT NumberOfAASamples = 0, AABuffers = 0;
+		INT NumberOfAASamples = 0;
 	#ifdef SDL2BUILD
+        INT AABuffers = 0;
         SDL_GL_GetAttribute( SDL_GL_MULTISAMPLEBUFFERS, &AABuffers );
         SDL_GL_GetAttribute( SDL_GL_MULTISAMPLESAMPLES, &NumberOfAASamples );
         debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_MULTISAMPLEBUFFERS: %i, requested NumAASamples: %i, provided NumAASamples/MaxSamples: (%i/%i)"), AABuffers, NumAASamples, NumberOfAASamples, MaxAASamples);

@@ -422,7 +422,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 				Msg = TEXT("GL_OUT_OF_MEMORY");
 				break;
 			};
-			debugf(NAME_DevGraphics, TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
+			GWarn->Logf(TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
 		}
 		return 1;
 	}
@@ -1131,6 +1131,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	UBOOL CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
 	UBOOL SetWindowPixelFormat();
+
+	#ifdef SDL2BUILD
+    UBOOL SetSDLAttributes();
+    #endif
+
 	UBOOL FindExt( const TCHAR* Name );
 	void FindProc( void*& ProcAddress, char* Name, char* SupportName, UBOOL& Supports, UBOOL AllowExt );
 	void FindProcs( UBOOL AllowExt );
@@ -1218,7 +1223,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void SetBlend(DWORD PolyFlags, bool InverseOrder);
 	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
 	DWORD SetDepth(DWORD PolyFlags);
-	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode, DWORD DrawFlags );
+	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, FTextureInfo& Info, DWORD DrawFlags );
 
 	void BuildGammaRamp(FLOAT GammaCorrection, FGammaRamp& Ramp);
 	void BuildGammaRamp(FLOAT GammaCorrection, FByteGammaRamp& Ramp);

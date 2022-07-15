@@ -8,6 +8,24 @@
 
 =============================================================================*/
 
+
+// Defines for legacy names. Use for porting to other UE1 games.
+#if 0
+	#define TEXF_RGBA7          TEXF_BGRA8_LM
+	#define TEXF_DXT1           TEXF_BC1
+	#define TEXF_DXT3           TEXF_BC2
+	#define TEXF_DXT5           TEXF_BC3
+    // #define TEXF_RGBA8          TEXF_BGRA8 //DO NOT USE (anymore)! All TEXF_RGBA8 should be replaced by now, since actually really TEXF_BGRA8
+	#define TEXF_RGTC_R         TEXF_BC4
+	#define TEXF_RGTC_R_SIGNED  TEXF_BC4_S
+	#define TEXF_RGTC_RG        TEXF_BC5
+	#define TEXF_RGTC_RG_SIGNED TEXF_BC5_S
+	#define TEXF_BPTC_RGBA      TEXF_BC7
+	#define TEXF_BPTC_RGB_SF    TEXF_BC6H_S
+	#define TEXF_BPTC_RGB_UF    TEXF_BC6H
+#endif
+
+
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -120,21 +138,27 @@ void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, BYTE UClampMode, BYTE VClampMode, DWORD DrawFlags)
+void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, FTextureInfo& Info, DWORD DrawFlags)
 {
 	guard(UOpenGLRenderDevice::SetSampler);
 	CHECK_GL_ERROR();
 
-	if (UClampMode)
+	if (Info.UClampMode)
 	{
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		CHECK_GL_ERROR();
 	}
-	if (VClampMode)
+	if (Info.VClampMode)
 	{
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		CHECK_GL_ERROR();
 	}
+	// Also set for light and fogmaps.
+    if ( Info.Format==TEXF_BGRA8_LM || Info.Format==TEXF_RGB10A2_LM )
+    {
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
+        glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
+    }
 	CHECK_GL_ERROR();
 
 	// Set texture sampler state.
@@ -287,9 +311,10 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 		CHECK_GL_ERROR();
 #if ENGINE_VERSION==227
-		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info.UClampMode, Info.VClampMode, DrawFlags);
+
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info, DrawFlags);
 #else
-		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0, DrawFlags);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
 #endif
 
 		// Spew warning if we uploaded this texture twice.
@@ -628,8 +653,16 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							for ( INT v=0; v<VLimit; v++ )
 							{
 								// The AND 0x7F7F7F7F is used to eliminate the top bit as this was used internally by the LightManager.
-								for ( INT u=0; u<ULimit; u++ )
-									*Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x7F7F7F7F)<<1; // We can skip this shift. Unless we want to unpack as sRGB.
+								if ( UnpackSRGB )
+                                {
+                                    for ( INT u=0; u<ULimit; u++ )
+                                        *Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x7F7F7F7F)<<1; // We want to unpack as sRGB.
+                                }
+                                else
+                                {
+                                    for ( INT u=0; u<ULimit; u++ )
+                                        *Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u+v*USize)<<2])&0x7F7F7F7F);
+                                }
 
 								if ( ULimit>0 )
 								{
@@ -662,6 +695,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 #if ENGINE_VERSION==227
                         // RGB9.
                         case TEXF_RGB10A2_LM:
+
                             guard(TEXF_RGB10A2_LM);
                             ImgSrc = Mip->DataPtr;
                             break;
@@ -680,7 +714,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 							ImgSrc = Mip->DataPtr;
 							break;
 
-						// S3TC -- Ubiquitous Extension.
+						// S3TC -- Ubiquitous Extension. Was TEXF_DXTx before
 						case TEXF_BC1:
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 						case TEXF_BC2:
@@ -955,7 +989,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
                 if (SimulateMultiPass)//( !(PolyFlags & PF_Mirrored)
                 {
                     //debugf(TEXT("PolyFlags %ls ActiveProgram %i"), *GetPolyFlagString(PolyFlags), ActiveProgram);
-					glBlendFunc(GL_SRC_COLOR, GL_SRC1_COLOR);
+					glBlendFunc(GL_SRC_ALPHA, GL_SRC1_COLOR);
                 }
                 else glBlendFunc( GL_ONE, GL_ONE_MINUS_SRC_COLOR );
                 /*
