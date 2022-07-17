@@ -98,7 +98,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
     if (!appLoadFileToString(Shaderdata, Filename))
 		appErrorf(TEXT("XOpenGL: Failed loading shader file %ls"), Filename);
 
-	if (UseOpenGLDebug && LogLevel >= 2)
+	if (UseOpenGLDebug && LogLevel >= 3)
 	{
 		debugf(TEXT("GLVersion %ls: \n %ls \n\n"), Filename, *GLVersionString);
 		debugf(TEXT("Definitions %ls: \n %ls \n\n"), Filename, *Definitions);

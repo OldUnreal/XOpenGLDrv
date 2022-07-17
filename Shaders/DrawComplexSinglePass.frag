@@ -448,7 +448,6 @@ void main (void)
 #if HARDWARELIGHTS || BUMPMAPS
     vec3 TangentViewDir  = normalize( vTangentViewPos - vTangentFragPos );
     int NumLights = int(LightData4[0].y);
-    float parallaxHeight = 1.0;
 
     #if !SHADERDRAWPARAMETERS
         vBumpMapSpecular = TexCoords[IDX_BUMPMAP_INFO].y;
@@ -456,13 +455,13 @@ void main (void)
 
 #if BASIC_PARALLAX || OCCLUSION_PARALLAX || RELIEF_PARALLAX
     // ParallaxMap
+    float parallaxHeight = 1.0;
     if ((vDrawFlags & DF_HeightMap) == DF_HeightMap)
     {
         // get new texture coordinates from Parallax Mapping
         texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);
-
         //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
-         //  discard;// texCoords = vTexCoords;
+        //  discard;// texCoords = vTexCoords;
     }
 #endif
 

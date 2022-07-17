@@ -143,6 +143,7 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 	guard(UOpenGLRenderDevice::SetSampler);
 	CHECK_GL_ERROR();
 
+#if ENGINE_VERSION==227
 	if (Info.UClampMode)
 	{
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -153,6 +154,8 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		CHECK_GL_ERROR();
 	}
+#endif // ENGINE_VERSION
+
 	// Also set for light and fogmaps.
     if ( Info.Format==TEXF_BGRA8_LM || Info.Format==TEXF_RGB10A2_LM )
     {
@@ -310,11 +313,11 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 			glGenSamplers(1, &Bind->Sampler[CacheSlot]);
 
 		CHECK_GL_ERROR();
-#if ENGINE_VERSION==227
 
+#if ENGINE_VERSION==227
 		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info, DrawFlags);
 #else
-		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0, 0);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, Info, 0);
 #endif
 
 		// Spew warning if we uploaded this texture twice.
