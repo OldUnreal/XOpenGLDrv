@@ -9,7 +9,7 @@
 =============================================================================*/
 
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
-#define DEBUGGL 1
+// #define DEBUGGL 1
 
 // Maybe for future release. Not in use yet.
 // #define QTBUILD 1
