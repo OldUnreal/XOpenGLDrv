@@ -1071,13 +1071,19 @@ void UXOpenGLRenderDevice::SetPermanentState()
         CHECK_GL_ERROR();
         glHint( GL_POLYGON_SMOOTH_HINT, GL_NICEST );
         CHECK_GL_ERROR();
+        /*
+        On some implementations, when you call glEnable(GL_POINT_SMOOTH) or glEnable(GL_LINE_SMOOTH) and you use shaders at the same time, your rendering speed goes down to 0.1 FPS.
+        This is because the driver does software rendering. This would happen on AMD/ATI GPUs/drivers.
+        */
     }
+    if ( GenerateMipMaps ) // Is there really a visible difference at all?
+    {
+        if (OpenGLVersion == GL_ES)
+            glHint(GL_GENERATE_MIPMAP_HINT,GL_NICEST); //this particular setting is GL ES only.
 
-	/*
-	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
-	On some implementations, when you call glEnable(GL_POINT_SMOOTH) or glEnable(GL_LINE_SMOOTH) and you use shaders at the same time, your rendering speed goes down to 0.1 FPS.
-	This is because the driver does software rendering. This would happen on AMD/ATI GPUs/drivers.
-	*/
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 16); // set maximum to...? Most common is 8 I think. However if really want to benefit from it maybe using some more here.
+    }
 
 #if ENGINE_VERSION==227
 	// Culling

@@ -211,11 +211,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
         SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &db);
         debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_DEPTH_SIZE DesiredDepthBits: %i, provided: %i"),DesiredDepthBits, db);
 
-        if (OpenGLVersion == GL_Core)
-        {
-            SDL_GL_GetAttribute(SDL_GL_DOUBLEBUFFER, &dbu);
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_DOUBLEBUFFER: %i"),dbu);
-        }
 
         if (UseSRGBTextures)
         {

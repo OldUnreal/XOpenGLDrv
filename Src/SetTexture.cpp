@@ -778,7 +778,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 						if (GenerateMipMaps)
 						{
 							glCompressedTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, CompImageSize, ImgSrc);
-							glHint(GL_GENERATE_MIPMAP_HINT,GL_NICEST);
 							glGenerateMipmap(GL_TEXTURE_2D);
                             MaxLevel = Info.NumMips;
                             CHECK_GL_ERROR();
@@ -802,8 +801,9 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	                        CHECK_GL_ERROR();
 	                        */
 							glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, SourceFormat, SourceType, ImgSrc);
-							glHint(GL_GENERATE_MIPMAP_HINT,GL_NICEST);
+							CHECK_GL_ERROR();
 							glGenerateMipmap(GL_TEXTURE_2D); // generate a complete set of mipmaps for a texture object
+							CHECK_GL_ERROR();
 							MaxLevel = Info.NumMips;
 							CHECK_GL_ERROR();
 							break;
