@@ -66,6 +66,12 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	//Draw polygons
 	SetProgram(ComplexSurfaceSinglePass_Prog);
 
+#if ENGINE_VERSION==227
+	// Update FrameCoords
+    if (BumpMaps)
+        UpdateCoords(Frame);
+#endif
+
 	const DWORD NextPolyFlags = SetFlags(Surface.PolyFlags);
 
 	FCachedTexture* Bind;

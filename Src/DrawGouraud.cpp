@@ -67,6 +67,16 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 {
 	SetProgram(GouraudPolyVert_Prog);
 
+#if ENGINE_VERSION==227
+    // Update FrameCoords for shaders.
+    // Depending on HUD calls for SetSceneNode SetSceneNode is unreliable, so have to ensure proper updating here.
+    // This is only essential (so far) for NormalMaps/Parallax/HWLighting, so this may be kept disabled for non 227 builds.
+    // However, even in debugmode I can't see any ḿeasurable performance difference at all (on my machine).
+    // In order to have any (future) calculations depending on FrameCoords working correctly you may want to enable this in general.
+    if (BumpMaps)
+        UpdateCoords(Frame);
+#endif
+
 	DWORD NextPolyFlags = SetFlags(PolyFlags);
 
 	FCachedTexture* Bind;
