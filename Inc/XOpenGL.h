@@ -60,7 +60,7 @@
 			#include "glad.h"
 		}
 	#endif
-
+    #include <unistd.h>
     #include <SDL.h>
 #endif
 
@@ -511,6 +511,10 @@ class UXOpenGLRenderDevice : public URenderDevice
     INT DetailMax;
     FLOAT GammaMultiplier;
     FLOAT GammaMultiplierUED;
+
+    // Pffffff. FrameRateLimiter UTGLR style.
+    FTime prevFrameTimestamp;
+    INT FrameRateLimit;
 
     // Config
 	BITFIELD NoFiltering;

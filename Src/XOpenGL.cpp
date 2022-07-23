@@ -90,6 +90,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("RefreshRate"), RF_Public)UIntProperty(CPP_PROPERTY(RefreshRate), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NumAASamples"), RF_Public)UIntProperty(CPP_PROPERTY(NumAASamples), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("DetailMax"), RF_Public)UIntProperty(CPP_PROPERTY(DetailMax), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("FrameRateLimit"), RF_Public)UIntProperty(CPP_PROPERTY(FrameRateLimit), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GammaOffsetScreenshots"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaOffsetScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("LODBias"), RF_Public)UFloatProperty(CPP_PROPERTY(LODBias), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxAnisotropy"), RF_Public)UFloatProperty(CPP_PROPERTY(MaxAnisotropy), TEXT("Options"), CPF_Config);
@@ -156,6 +157,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 	// Defaults.
 	RefreshRate = 0;
+	FrameRateLimit = 60;
 	NumAASamples = 4;
 	GammaOffsetScreenshots = 0.7f;
 	LODBias = 0.f;
@@ -1929,12 +1931,6 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	{
 		SetProgram(No_Prog);
 		SDL_GL_SwapWindow(Window);
-
-		/*
-		GLsync SwapFence = glFenceSync( GL_SYNC_GPU_COMMANDS_COMPLETE, 0 );
-		glClientWaitSync( SwapFence, GL_SYNC_FLUSH_COMMANDS_BIT, 20000000 );
-		glDeleteSync( SwapFence );
-		*/
 	}
 #elif QTBUILD
 
@@ -1945,6 +1941,32 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		verify(SwapBuffers(hDC));
 	}
 #endif
+
+    // Check for optional frame rate limit
+    // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
+    // I am not happy with this solution, but it will do the trick for now...
+	if (FrameRateLimit >= 20)
+    {
+		FTime curFrameTimestamp;
+
+		float timeDiff = 0.f;
+		float rcpFrameRateLimit = 0.f;
+
+		curFrameTimestamp = appSeconds();
+		timeDiff = curFrameTimestamp - prevFrameTimestamp;
+		prevFrameTimestamp = curFrameTimestamp;
+
+		rcpFrameRateLimit = 1.0f / FrameRateLimit;
+		if (timeDiff < rcpFrameRateLimit)
+        {
+			float sleepTime;
+
+			sleepTime = rcpFrameRateLimit - timeDiff;
+			appSleep(sleepTime);
+
+			prevFrameTimestamp = appSeconds();
+		}
+    }
 
 	--LockCount;
 
@@ -2094,7 +2116,6 @@ void UXOpenGLRenderDevice::Exit()
 		Flush(0);
 
 #ifdef SDL2BUILD
-
 	UnMapBuffers();
 	DeleteShaderBuffers();
 	if (SharedBindMap)
