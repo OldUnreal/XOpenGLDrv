@@ -513,8 +513,10 @@ class UXOpenGLRenderDevice : public URenderDevice
     FLOAT GammaMultiplierUED;
 
     // Pffffff. FrameRateLimiter UTGLR style.
+#if ENGINE_VERSION==227
     FTime prevFrameTimestamp;
     INT FrameRateLimit;
+#endif
 
     // Config
 	BITFIELD NoFiltering;

@@ -90,7 +90,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("RefreshRate"), RF_Public)UIntProperty(CPP_PROPERTY(RefreshRate), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NumAASamples"), RF_Public)UIntProperty(CPP_PROPERTY(NumAASamples), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("DetailMax"), RF_Public)UIntProperty(CPP_PROPERTY(DetailMax), TEXT("Options"), CPF_Config);
+#if ENGINE_VERSION==227
 	new(GetClass(), TEXT("FrameRateLimit"), RF_Public)UIntProperty(CPP_PROPERTY(FrameRateLimit), TEXT("Options"), CPF_Config);
+#endif
 	new(GetClass(), TEXT("GammaOffsetScreenshots"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaOffsetScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("LODBias"), RF_Public)UFloatProperty(CPP_PROPERTY(LODBias), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxAnisotropy"), RF_Public)UFloatProperty(CPP_PROPERTY(MaxAnisotropy), TEXT("Options"), CPF_Config);
@@ -157,7 +159,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 	// Defaults.
 	RefreshRate = 0;
+#if ENGINE_VERSION==227
 	FrameRateLimit = 60;
+#endif
 	NumAASamples = 4;
 	GammaOffsetScreenshots = 0.7f;
 	LODBias = 0.f;
@@ -1941,10 +1945,11 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		verify(SwapBuffers(hDC));
 	}
 #endif
-
+	
     // Check for optional frame rate limit
     // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
     // I am not happy with this solution, but it will do the trick for now...
+#if ENGINE_VERSION==227
 	if (FrameRateLimit >= 20)
     {
 		FTime curFrameTimestamp;
@@ -1967,6 +1972,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 			prevFrameTimestamp = appSeconds();
 		}
     }
+#endif
 
 	--LockCount;
 
