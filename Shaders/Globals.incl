@@ -304,6 +304,18 @@ layout(std140) uniform GlobalCoords
 	mat4 FrameUncoords;
 };
 
+#if BINDLESS_STORAGE_UBO
+layout(std140) uniform TextureHandles
+{
+	layout(bindless_sampler) sampler2D Textures[NUMTEXTURES];
+};
+#elif BINDLESS_STORAGE_SSBO
+layout(std430, binding = 1) buffer TextureHandles
+{
+	layout(bindless_sampler) sampler2D Textures[];
+};
+#endif
+
 //DistanceFog
 struct FogParameters
 {

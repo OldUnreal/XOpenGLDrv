@@ -5,13 +5,6 @@
 		* Created by Smirftsch
 =============================================================================*/
 
-#if BINDLESSTEXTURES
-layout(std140) uniform TextureHandles
-{
-	sampler2D Textures[NUMTEXTURES];
-};
-#endif
-
 uniform sampler2D Texture0;	// Base Texture
 uniform sampler2D Texture1;	// DetailTexture
 uniform sampler2D Texture2;	// BumpMap

@@ -889,20 +889,17 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         }
         else
         {
-            //debugf(TEXT("Making %ls %08x with TexNum %i resident 0x%016llx multi %i"),Info.Texture->GetFullName(),Bind,Bind->TexNum[CacheSlot], Bind->TexHandle[CacheSlot], Multi);
-#if 0 // def __LINUX_ARM__
-            glMakeTextureHandleResidentNV(Bind->TexHandle[CacheSlot]);
-#else
             glMakeTextureHandleResidentARB(Bind->TexHandle[CacheSlot]);
-#endif
             CHECK_GL_ERROR();
 
-            if (GlobalUniformTextureHandles.Sync[0])
-                WaitBuffer(GlobalUniformTextureHandles, 0);
+            WaitBuffer(GlobalTextureHandlesRange, 0);
 
-            GlobalUniformTextureHandles.UniformBuffer[TexNum*2] = Bind->TexHandle[CacheSlot];
+			if (BindlessHandleStorage == STORE_UBO)
+				GlobalTextureHandlesRange.Int64Buffer[TexNum * 2] = Bind->TexHandle[CacheSlot];
+			else if (BindlessHandleStorage == STORE_SSBO)
+				GlobalTextureHandlesRange.Int64Buffer[TexNum] = Bind->TexHandle[CacheSlot];
 
-            LockBuffer(GlobalUniformTextureHandles, 0);
+            LockBuffer(GlobalTextureHandlesRange, 0);
             TexNum++;
         }
         unguard;

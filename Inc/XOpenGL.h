@@ -92,7 +92,7 @@
 #endif
 
 /*-----------------------------------------------------------------------------
-Globals.
+	Globals.
 -----------------------------------------------------------------------------*/
 #define MAX_FRAME_RECURSION 4
 
@@ -100,6 +100,8 @@ Globals.
 #define MAX_DRAWCOMPLEX_BATCH 1024
 // maximum number of polys in one drawgouraud multi-draw
 #define MAX_DRAWGOURAUD_BATCH 16384
+// size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
+#define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
 #define DRAWSIMPLE_SIZE 524288
 #define DRAWTILE_SIZE 1048576
@@ -369,7 +371,6 @@ enum DrawFlags
 	XOpenGLDrv.
 -----------------------------------------------------------------------------*/
 
-
 #if UNREAL_TOURNAMENT_OLDUNREAL
 class UXOpenGLRenderDevice : public URenderDeviceOldUnreal469
 #else
@@ -454,28 +455,27 @@ class UXOpenGLRenderDevice : public URenderDevice
 	*/
 
 	// Permanent variables.
-	#ifdef _WIN32
+#ifdef _WIN32
 	HGLRC hRC;
 	HWND hWnd;
 	HDC hDC;
     PIXELFORMATDESCRIPTOR pfd;
     static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
-	#else
+#else
 	SDL_Window* Window;
-	#endif
+#endif
 
 	UBOOL WasFullscreen;
 	TOpenGLMap<QWORD,FCachedTexture> LocalBindMap, *BindMap;
 	TArray<FPlane> Modes;
 	ULevel* Level;
 
-	#if ENGINE_VERSION==227 || (ENGINE_VERSION>436&&ENGINE_VERSION<1100)
+#if ENGINE_VERSION==227 || (ENGINE_VERSION>436&&ENGINE_VERSION<1100)
 	TArray<FLightInfo*> LightCache;
-	#endif
+#endif
 	TArray<AActor*> StaticLightList;
 	TArray<AActor*> LightList;
-
 
 	// Context specifics.
 	INT DesiredColorBits;
@@ -509,6 +509,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     INT MaxClippingPlanes;
     INT NumberOfExtensions;
     INT DetailMax;
+	INT MaxUniformBlockSize;
     FLOAT GammaMultiplier;
     FLOAT GammaMultiplierUED;
 
@@ -557,7 +558,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD EnvironmentMaps;
 
     // Internal stuff
-	bool UsingBindlessTextures;
 	bool UsingPersistentBuffers;
 	bool UsingPersistentBuffersGouraud;
 	bool UsingPersistentBuffersComplex;
@@ -568,8 +568,52 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool SwapControlExt;
 	bool SwapControlTearExt;
     bool Compression_s3tcExt;
+	bool SupportsSSBO;
+	bool SupportsGLSLInt64;
 
-	INT MaxBindlessTextures;
+	// Bindless textures support
+	bool UsingBindlessTextures;
+	INT	 MaxBindlessTextures;
+
+	enum EBindlessHandleStorage
+	{
+		//
+		// Store handles in a uniform buffer object.
+		//
+		// * Pro: Supported by all GPUs with GL_ARB_bindless_texture capabilities
+		//
+		// * Con: UBOs are small. Even on modern GPUs, we often have a max UBO size
+		// of only 64KiB. That only gives us enough space to store 4096 bindless
+		// texture handles
+		//
+		STORE_UBO,
+
+		//
+		// Store handles in a shader storage buffer object.
+		//
+		// Requires: GL_ARB_shader_storage_buffer_object
+		//
+		// * Pro: Much bigger than UBOs. The spec guarantees that SSBOs can be
+		// at least 128MiB. That gives us enough room for over 8 million bindless
+		// texture handles
+		//
+		// * Con: requires SSBO support
+		// * Con: SSBO access is usually slower than UBO access
+		//
+		STORE_SSBO,
+
+		//
+		// Passes bindless handles as integer parameters to the shaders
+		//
+		// Requires: GL_ARB_gpu_shader_int64
+		//
+		// * Pro: Unlimited bindless handles
+		// * Pro: Faster than UBOs or SSBOs
+		//
+		// * Con: Not supported by Intel iGPUs or on macOS
+		//
+		STORE_INT
+	} BindlessHandleStorage;
 
 	BYTE OpenGLVersion;
 	BYTE ParallaxVersion;
@@ -580,9 +624,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BYTE* ScaleByte;
 	BYTE SupportsClipDistance;
 
-	#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227
 	FLightInfo *FirstLight,*LastLight;
-	#endif
+#endif
 
 	FLOAT GammaOffsetScreenshots;
 	FLOAT LODBias;
@@ -692,7 +736,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLsync Sync[NUMBUFFERS];
 		FLOAT* Buffer;
 		FLOAT* VertBuffer;
-		GLuint64* UniformBuffer;
+		GLuint64* Int64Buffer;
 		BufferRange()
 		: Sync()
 		{}
@@ -975,9 +1019,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static const GLuint GlobalMatricesBindingIndex = 0;
 
 	// Global bindless textures.
-    GLuint GlobalUniformTextureHandlesIndex;
-    GLuint GlobalTextureHandlesUBO;
-    BufferRange GlobalUniformTextureHandles;
+    GLuint GlobalTextureHandlesBlockIndex;
+    GLuint GlobalTextureHandlesBufferObject;
+    BufferRange GlobalTextureHandlesRange;
 	static const GLuint GlobalTextureHandlesBindingIndex = 1;
 
 	// Global DistanceFog.

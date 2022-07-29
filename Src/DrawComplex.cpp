@@ -206,6 +206,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		DrawComplexDrawParams.TexNum[1].w = TexInfo[7].TexNum;
 	}
 #endif
+
     // Timer
 	DrawComplexDrawParams.DrawData[DISTANCE_FOG_COLOR] = DistanceFogColor;
 	DrawComplexDrawParams.DrawData[DISTANCE_FOG_INFO] = DistanceFogValues;

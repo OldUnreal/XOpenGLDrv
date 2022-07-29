@@ -188,7 +188,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
-	MaxBindlessTextures = 4096;
+	MaxBindlessTextures = 0;
 	UseShaderDrawParameters = 1;
 #else
 	UseBindlessTextures = 0;
@@ -432,7 +432,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	{
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
         // Doing after extensions have been checked.
-		UsingBindlessTextures = UseBindlessTextures ? true : false;
 		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
 		UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
 
@@ -446,7 +445,54 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
            // UseSRGBTextures = true;
            // GWarn->Logf(TEXT("UseSRGBTextures enabled for OpenGL ES"));
+
+			SupportsGLSLInt64 = SupportsSSBO = false;
         }
+
+		// Bindless Textures
+		UsingBindlessTextures = UseBindlessTextures ? true : false;
+		if (UsingBindlessTextures)
+		{
+			INT MaxStorageSize = 0;
+
+#if 0 // stijn: not implemented yet
+			if (SupportsGLSLInt64)
+			{
+				BindlessHandleStorage = STORE_INT;
+			}
+			else
+#endif
+			if (SupportsSSBO)
+			{
+				BindlessHandleStorage = STORE_SSBO;
+				MaxStorageSize = BINDLESS_SSBO_SIZE;
+			}
+			else
+			{
+				BindlessHandleStorage = STORE_UBO;
+				MaxStorageSize = MaxUniformBlockSize;
+			}
+
+			debugf(TEXT("XOpenGL: BindlessHandleStorage: %ls"),
+				(BindlessHandleStorage == STORE_INT) ? TEXT("GLSL Int64 Parameters")
+				: (BindlessHandleStorage == STORE_SSBO) ? TEXT("Shader Storage Buffer Object")
+				: TEXT("Uniform Buffer Object")
+			);
+
+			if (MaxStorageSize > 0)
+			{
+				if (MaxBindlessTextures == 0)
+				{
+					MaxBindlessTextures = MaxStorageSize / 16;
+					debugf(TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
+				}
+				else if (MaxStorageSize < MaxBindlessTextures * 16)
+				{
+					debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxStorageSize / 16);
+					MaxBindlessTextures = MaxStorageSize / 16;
+				}
+			}
+	}
 #else
 		UsingBindlessTextures = false;
 		UsingPersistentBuffers = false;

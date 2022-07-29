@@ -60,6 +60,9 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
     // ADD DEFINITIONS
 	Definitions += *FString::Printf(TEXT("#define EDITOR %d\n"), GIsEditor ? 1 : 0);
     Definitions += *FString::Printf(TEXT("#define BINDLESSTEXTURES %d\n"), UsingBindlessTextures ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define BINDLESS_STORAGE_UBO %d\n"), (UsingBindlessTextures && BindlessHandleStorage == STORE_UBO) ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define BINDLESS_STORAGE_SSBO %d\n"), (UsingBindlessTextures && BindlessHandleStorage == STORE_SSBO) ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define BINDLESS_STORAGE_INT %d\n"), (UsingBindlessTextures && BindlessHandleStorage == STORE_INT) ? 1 : 0);
     Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), MaxBindlessTextures);
 	Definitions += *FString::Printf(TEXT("#define HARDWARELIGHTS %d\n"), UseHWLighting ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define BUMPMAPS %d\n"), BumpMaps ? 1 : 0);
@@ -287,10 +290,10 @@ void UXOpenGLRenderDevice::InitShaders()
     //Global texture handles for bindless.
     if (UsingBindlessTextures)
     {
-        //GetUniformBlockIndex(DrawSimpleProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawSimpleProg")); //not needed for DrawSimple
-        GetUniformBlockIndex(DrawTileProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawTileProg"));
-        GetUniformBlockIndex(DrawComplexProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawComplexProg"));
-        GetUniformBlockIndex(DrawGouraudProg, GlobalUniformTextureHandlesIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawGouraudProg"));
+        //GetUniformBlockIndex(DrawSimpleProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawSimpleProg")); //not needed for DrawSimple
+        GetUniformBlockIndex(DrawTileProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawTileProg"));
+        GetUniformBlockIndex(DrawComplexProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawComplexProg"));
+        GetUniformBlockIndex(DrawGouraudProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawGouraudProg"));
         CHECK_GL_ERROR();
     }
 
@@ -367,13 +370,23 @@ void UXOpenGLRenderDevice::InitShaders()
 	CHECK_GL_ERROR();
 
 	// Global bindless textures.
-	if (UsingBindlessTextures)
+	if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
     {
-        glGenBuffers(1, &GlobalTextureHandlesUBO);
-        glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);
-        glBufferData(GL_UNIFORM_BUFFER,sizeof(GLuint64) * MaxBindlessTextures * 2, NULL, GL_DYNAMIC_DRAW);
-        glBindBuffer(GL_UNIFORM_BUFFER, 0);
-        glBindBufferRange(GL_UNIFORM_BUFFER, GlobalTextureHandlesBindingIndex, GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * MaxBindlessTextures * 2);
+		GLenum Target = (BindlessHandleStorage == STORE_UBO) ? GL_UNIFORM_BUFFER : GL_SHADER_STORAGE_BUFFER;
+        glGenBuffers(1, &GlobalTextureHandlesBufferObject);
+        glBindBuffer(Target, GlobalTextureHandlesBufferObject);
+		if (Target == GL_UNIFORM_BUFFER)
+		{
+			glBufferData(Target, sizeof(GLuint64) * MaxBindlessTextures * 2, NULL, GL_DYNAMIC_DRAW);
+			glBindBuffer(Target, 0);
+			glBindBufferRange(Target, GlobalTextureHandlesBindingIndex, GlobalTextureHandlesBufferObject, 0, sizeof(GLuint64) * MaxBindlessTextures * 2);
+		}
+		else
+		{
+			glBindBufferBase(Target, GlobalTextureHandlesBindingIndex, GlobalTextureHandlesBufferObject);
+			glBindBuffer(Target, 0);
+		}
+        
         CHECK_GL_ERROR();
     }
 
@@ -446,8 +459,8 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 
 	if (GlobalMatricesUBO)
 		glDeleteBuffers(1, &GlobalMatricesUBO);
-	if (GlobalTextureHandlesUBO)
-		glDeleteBuffers(1, &GlobalTextureHandlesUBO);
+	if (GlobalTextureHandlesBufferObject)
+		glDeleteBuffers(1, &GlobalTextureHandlesBufferObject);
 	if (GlobalStaticLightInfoUBO)
 		glDeleteBuffers(1, &GlobalStaticLightInfoUBO);
     if (GlobalCoordsUBO)

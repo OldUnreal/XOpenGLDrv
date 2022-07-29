@@ -14,13 +14,6 @@ in vec2 gTexCoords;
 flat in vec4 gDrawColor;
 flat in uint gTexNum;
 
-#if BINDLESSTEXTURES
-layout(std140) uniform TextureHandles
-{
-	sampler2D Textures[NUMTEXTURES];
-};
-#endif
-
 uniform sampler2D Texture0;
 
 #ifdef GL_ES

@@ -19,7 +19,7 @@ void UXOpenGLRenderDevice::LockBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::LockBuffer);
 
-	if (!UsingPersistentBuffers || &Buffer == &GlobalUniformTextureHandles)
+	if (!UsingPersistentBuffers && (&Buffer != &GlobalTextureHandlesRange || BindlessHandleStorage != STORE_UBO))
 		return;
 
 	if (Buffer.Sync[Index])
@@ -34,7 +34,7 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::WaitBuffer);
 
-	if (!UsingPersistentBuffers || &Buffer == &GlobalUniformTextureHandles)
+	if (!UsingPersistentBuffers && (&Buffer != &GlobalTextureHandlesRange && BindlessHandleStorage != STORE_UBO))
 		return;
 
     CHECK_GL_ERROR();
@@ -88,29 +88,34 @@ void UXOpenGLRenderDevice::MapBuffers()
 
         glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
         glBufferStorage(GL_ARRAY_BUFFER, DrawGouraudBufferSize, 0, PersistentBufferFlags);
-		DrawGouraudBufferRange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudVertBuffer, 0, DrawGouraudBufferSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+		DrawGouraudBufferRange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudVertBuffer, 0, DrawGouraudBufferSize, PersistentBufferFlags);
 		CHECK_GL_ERROR();
 
-		GLsizeiptr DrawGouraudSSBOSize = NUMBUFFERS * MAX_DRAWGOURAUD_BATCH * sizeof(DrawGouraudShaderDrawParams);
+		if (UsingShaderDrawParameters)
+		{
+			GLsizeiptr DrawGouraudSSBOSize = NUMBUFFERS * MAX_DRAWGOURAUD_BATCH * sizeof(DrawGouraudShaderDrawParams);
 
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
-		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBOSize, NULL, PersistentBufferFlags);
-		DrawGouraudSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudSSBO, 0, DrawGouraudSSBOSize, PersistentBufferFlags);
-		CHECK_GL_ERROR();
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
+			glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBOSize, NULL, PersistentBufferFlags);
+			DrawGouraudSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawGouraudSSBO, 0, DrawGouraudSSBOSize, PersistentBufferFlags);
+			CHECK_GL_ERROR();
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		}
     }
 	else
 	{
 		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
-
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
 		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
-		DrawGouraudSSBORange.Buffer = (FLOAT*)new DrawGouraudShaderDrawParams[MAX_DRAWGOURAUD_BATCH];
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawGouraudShaderDrawParams) * MAX_DRAWGOURAUD_BATCH, DrawGouraudSSBORange.Buffer, GL_STREAM_DRAW);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		if (UsingShaderDrawParameters)
+		{
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
+			DrawGouraudSSBORange.Buffer = (FLOAT*)new DrawGouraudShaderDrawParams[MAX_DRAWGOURAUD_BATCH];
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawGouraudShaderDrawParams) * MAX_DRAWGOURAUD_BATCH, DrawGouraudSSBORange.Buffer, GL_STREAM_DRAW);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		}
 	}
 
     if (UsingPersistentBuffersComplex)
@@ -122,17 +127,20 @@ void UXOpenGLRenderDevice::MapBuffers()
 
         glBindBuffer(GL_ARRAY_BUFFER, DrawComplexVertBuffer);
         glBufferStorage(GL_ARRAY_BUFFER, DrawComplexBufferSize, 0, PersistentBufferFlags);
-		DrawComplexSinglePassRange.Buffer = (float*)glMapNamedBufferRange(DrawComplexVertBuffer, 0, DrawComplexBufferSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+		DrawComplexSinglePassRange.Buffer = (float*)glMapNamedBufferRange(DrawComplexVertBuffer, 0, DrawComplexBufferSize, PersistentBufferFlags);
 		CHECK_GL_ERROR();
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		GLsizeiptr DrawComplexSSBOSize = NUMBUFFERS * MAX_DRAWCOMPLEX_BATCH * sizeof(DrawComplexShaderDrawParams);
+		if (UsingShaderDrawParameters)
+		{
+			GLsizeiptr DrawComplexSSBOSize = NUMBUFFERS * MAX_DRAWCOMPLEX_BATCH * sizeof(DrawComplexShaderDrawParams);
 
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
-		glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOSize, NULL, PersistentBufferFlags);
-		DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, DrawComplexSSBOSize, PersistentBufferFlags);
-		CHECK_GL_ERROR();
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
+			glBufferStorage(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBOSize, NULL, PersistentBufferFlags);
+			DrawComplexSSBORange.Buffer = (float*)glMapNamedBufferRange(DrawComplexSSBO, 0, DrawComplexSSBOSize, PersistentBufferFlags);
+			CHECK_GL_ERROR();
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		}
     }
 	else
 	{
@@ -141,10 +149,13 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBufferData(GL_ARRAY_BUFFER, sizeof(float) * DRAWCOMPLEX_SIZE, DrawComplexSinglePassRange.Buffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
-		DrawComplexSSBORange.Buffer = (FLOAT*)(new DrawComplexShaderDrawParams[MAX_DRAWCOMPLEX_BATCH]);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawComplexShaderDrawParams) * MAX_DRAWCOMPLEX_BATCH, DrawComplexSSBORange.Buffer, GL_STREAM_DRAW);
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		if (UsingShaderDrawParameters)
+		{
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawComplexSSBO);
+			DrawComplexSSBORange.Buffer = (FLOAT*)(new DrawComplexShaderDrawParams[MAX_DRAWCOMPLEX_BATCH]);
+			glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DrawComplexShaderDrawParams) * MAX_DRAWCOMPLEX_BATCH, DrawComplexSSBORange.Buffer, GL_STREAM_DRAW);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		}
 	}
 
     if (UsingPersistentBuffersTile)
@@ -156,7 +167,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 
         glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
         glBufferStorage(GL_ARRAY_BUFFER, DrawTileBufferSize, 0, PersistentBufferFlags);
-		DrawTileRange.Buffer = (float*)glMapNamedBufferRange(DrawTileVertBuffer, 0, DrawTileBufferSize, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+		DrawTileRange.Buffer = (float*)glMapNamedBufferRange(DrawTileVertBuffer, 0, DrawTileBufferSize, PersistentBufferFlags);
         CHECK_GL_ERROR();
     }
 	else
@@ -167,24 +178,28 @@ void UXOpenGLRenderDevice::MapBuffers()
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
-    //Bindless textures
-    if (UsingBindlessTextures)
+    // Bindless textures
+    if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
     {
-        debugf(NAME_DevGraphics, TEXT("Mapping persistent BindlessTexturesBuffer"));
+		GLenum Target = (BindlessHandleStorage == STORE_UBO) ? GL_UNIFORM_BUFFER : GL_SHADER_STORAGE_BUFFER;
+		if (BindlessHandleStorage == STORE_SSBO)
+			PersistentBufferFlags = PersistentBufferFlags & ~GL_MAP_COHERENT_BIT;
 
-        glBindBuffer(GL_UNIFORM_BUFFER, GlobalTextureHandlesUBO);
-        glBufferStorage(GL_UNIFORM_BUFFER, sizeof(GLuint64) * MaxBindlessTextures * 2, 0, PersistentBufferFlags);
+		debugf(NAME_DevGraphics, TEXT("Mapping BindlessTexturesBuffer"));
+
+		glBindBuffer(Target, GlobalTextureHandlesBufferObject);
+		glBufferStorage(Target, sizeof(GLuint64)* MaxBindlessTextures * 2, 0, PersistentBufferFlags);
 #ifndef __LINUX_ARM__
-		GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapNamedBufferRange(GlobalTextureHandlesUBO, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+		GlobalTextureHandlesRange.Int64Buffer = (GLuint64*)glMapNamedBufferRange(GlobalTextureHandlesBufferObject, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);
 #else
-        GlobalUniformTextureHandles.UniformBuffer = (GLuint64*)glMapBufferRange(GL_UNIFORM_BUFFER, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);// | GL_MAP_UNSYNCHRONIZED_BIT);
+		GlobalTextureHandlesRange.Int64Buffer = (GLuint64*)glMapBufferRange(Target, 0, sizeof(GLuint64) * MaxBindlessTextures * 2, PersistentBufferFlags);
 #endif
-		if (!GlobalUniformTextureHandles.UniformBuffer)
+		if (!GlobalTextureHandlesRange.Int64Buffer)
 		{
-			GWarn->Logf(TEXT("Mapping of GlobalUniformTextureHandles failed! Disabling UsingBindlessTextures. Try reducing MaxBindlessTextures!"));
+			GWarn->Logf(TEXT("Mapping of GlobalTextureHandlesRange failed! Disabling UsingBindlessTextures. Try reducing MaxBindlessTextures!"));
 			UsingBindlessTextures = false;
 		}
-        CHECK_GL_ERROR();
+		CHECK_GL_ERROR();
     }
 
     bMappedBuffers = true;
@@ -264,16 +279,17 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 	if (UsingBindlessTextures)
 	{
 #ifndef __LINUX_ARM__
-		glGetNamedBufferParameteriv(GlobalTextureHandlesUBO, GL_BUFFER_MAPPED, &IsMapped);
+		glGetNamedBufferParameteriv(GlobalTextureHandlesBufferObject, GL_BUFFER_MAPPED, &IsMapped);
 		if (IsMapped == GL_TRUE)
 		{
-			glUnmapNamedBuffer(GlobalTextureHandlesUBO);
-			GlobalUniformTextureHandles.UniformBuffer = nullptr;
+			glUnmapNamedBuffer(GlobalTextureHandlesBufferObject);
+			GlobalTextureHandlesRange.Int64Buffer = nullptr;
 		}
 		CHECK_GL_ERROR();
 #else
-		glUnmapBuffer(GL_UNIFORM_BUFFER);
-		GlobalUniformTextureHandles.UniformBuffer = 0;
+		GLenum Target = (BindlessHandleStorage == STORE_UBO) ? GL_UNIFORM_BUFFER : GL_SHADER_STORAGE_BUFFER;
+		glUnmapBuffer(Target);
+		GlobalTextureHandlesRange.Int64Buffer = nullptr;
 #endif
 	}
 

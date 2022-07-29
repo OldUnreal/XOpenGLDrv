@@ -114,30 +114,40 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
         if (UseBindlessTextures)
         {
-            if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")) && GLExtensionSupported(TEXT("GL_ARB_shading_language_420pack")) && GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
+            if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, and GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
+                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
             }
             else
             {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_gpu_shader_int64, GL_ARB_shading_language_420pack, or GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
                 UseBindlessTextures = false;
                 UseBindlessLightmaps = false;
             }
         }
 
+        if (GLExtensionSupported(TEXT("GL_ARB_shader_storage_buffer_object")))
+        {
+            SupportsSSBO = true;
+        }
+
         if (UseShaderDrawParameters)
         {
-            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")))
+            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")) && SupportsSSBO)
             {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters found. UseShaderDrawParameters enabled."));
+                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters and GL_ARB_shader_storage_buffer_object found. UseShaderDrawParameters enabled."));
             }
             else
             {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
+                GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters or GL_ARB_shader_storage_buffer_object not found. UseShaderDrawParameters disabled."));
                 UseShaderDrawParameters = false;
             }
         }
+
+		if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")))
+		{
+            SupportsGLSLInt64 = true;
+		}
 
         //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
         if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
@@ -149,19 +159,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
             GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
             SupportsClipDistance = false; // have to disable this functionality.
         }
-
-		if (UseShaderDrawParameters)
-		{
-            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")))
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters found. UseShaderDrawParameters enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters not found. UseShaderDrawParameters disabled."));
-                UseShaderDrawParameters = false;
-            }
-		}
 
         if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
         {
@@ -349,23 +346,10 @@ void UXOpenGLRenderDevice::CheckExtensions()
     glGetIntegerv(GL_MAX_CLIP_DISTANCES, &MaxClippingPlanes);
     debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_MAX_CLIP_DISTANCES found: %i"), MaxClippingPlanes);
 
-    INT MaxUniformBlockSize = 0;
+    MaxUniformBlockSize = 0;
     glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &MaxUniformBlockSize); //Check me!!! For whatever reason this appears to return on (some?) AMD drivers a value of 572657868
     debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxUniformBlockSize: %i"), MaxUniformBlockSize);
 
-    if (UseBindlessTextures)
-    {
-        if (MaxBindlessTextures == 0)
-        {
-            MaxBindlessTextures = MaxUniformBlockSize / 16;
-            debugf(TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
-        }
-        else if (MaxUniformBlockSize < MaxBindlessTextures * 16)
-        {
-            debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxUniformBlockSize / 16);
-            MaxBindlessTextures = MaxUniformBlockSize / 16;
-        }
-    }
 	CHECK_GL_ERROR();
 
 	unguard;

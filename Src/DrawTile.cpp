@@ -58,13 +58,16 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
     FCachedTexture* Bind;
     DWORD NextPolyFlags = SetFlags(PolyFlags);
+    GLuint DrawTileStrideSize = (OpenGLVersion == GL_ES) ? DrawTileESStrideSize : DrawTileCoreStrideSize;
 
 	// Check if uniforms will change
 	if (DrawTileBufferData.PolyFlags != NextPolyFlags ||
         // Check if blending mode will change
         WillItBlend(DrawTileBufferData.BlendPolyFlags, PolyFlags) || // orig polyflags here!
         // Check if texture will change
-        WillTextureChange(0, Info, PolyFlags, Bind))
+        WillTextureChange(0, Info, PolyFlags, Bind) || 
+        // Check if we have space to batch more data
+        DrawTileBufferData.IndexOffset * sizeof(GLfloat) >= DRAWTILE_SIZE * sizeof(GLfloat) - DrawTileStrideSize)
 	{
         if (DrawTileBufferData.VertSize > 0)
         {
@@ -236,7 +239,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+18] = Color.W;
 
         // TexNum for Bindless
-		DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+19] = TexInfo[0].TexNum;
+        DrawTileRange.Buffer[DrawTileBufferData.BeginOffset + DrawTileBufferData.IndexOffset+19] = TexInfo[0].TexNum;
 
 #if ENGINE_VERSION==227 && 0 // TODO - Need to push 2x3 matrix transformation to UV mapping.
         if (Info.Modifier)
@@ -249,16 +252,11 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         }
 #endif
 
-        DrawTileBufferData.VertSize    += 9;
+        DrawTileBufferData.VertSize += 9;
         DrawTileBufferData.IndexOffset += 60;
 	}
     unclockFast(Stats.TileBufferCycles);
-	if ( DrawTileBufferData.IndexOffset >= DRAWTILE_SIZE - 60)
-    {
-        DrawTileVerts(DrawTileBufferData);
-        WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
-        debugf(NAME_DevGraphics, TEXT("DrawTile overflow!"));
-    }
+
     if (NoBuffering) // No buffering at this time for Editor.
     {
         DrawTileVerts(DrawTileBufferData);

@@ -23,13 +23,6 @@ const uint  IDX_DRAWCOLOR          = 13u;
 const uint  IDX_DISTANCE_FOG_COLOR = 14u;
 const uint  IDX_DISTANCE_FOG_INFO  = 15u;
 
-#if BINDLESSTEXTURES
-layout(std140) uniform TextureHandles
-{
-	layout(bindless_sampler) sampler2D Textures[NUMTEXTURES];
-};
-#endif
-
 uniform sampler2D Texture0;	//Base Texture
 uniform sampler2D Texture1;	//Lightmap
 uniform sampler2D Texture2;	//Fogmap
