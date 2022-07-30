@@ -1,20 +1,20 @@
 ﻿/*=============================================================================
-XOpenGL.cpp: Unreal XOpenGL implementation for OpenGL 3.3+ and GL ES 3.0+
+	XOpenGL.cpp: Unreal XOpenGL implementation for OpenGL 3.3+ and GL ES 3.0+
 
-Copyright 2014-2021 Oldunreal
+	Copyright 2014-2021 Oldunreal
 
-Revision history:
-* Created by Smirftsch
-* lots of experience and ideas from UTGLR OpenGL by Chris Dohnal
-* improved texture handling code by Sebastian Kaufel
-* information, ideas, additions by Sebastian Kaufel
-* UED selection code by Sebastian Kaufel
-* TOpenGLMap tempate based on TMap template using a far superior hash function by Sebastian Kaufel
-* Added persistent buffers. However, these seem to be only fast at a given draw buffer size (currently only DrawGouraud).
-* Bumpmap and Heightmap support
-* Passing DrawFlags and TextureFormat to shader
-Todo:
-* fixes, cleanups, (AZDO) optimizations, etc, etc, etc.
+	Revision history:
+	* Created by Smirftsch
+	* lots of experience and ideas from UTGLR OpenGL by Chris Dohnal
+	* improved texture handling code by Sebastian Kaufel
+	* information, ideas, additions by Sebastian Kaufel
+	* UED selection code by Sebastian Kaufel
+	* TOpenGLMap tempate based on TMap template using a far superior hash function by Sebastian Kaufel
+	* Added persistent buffers. However, these seem to be only fast at a given draw buffer size (currently only DrawGouraud).
+	* Bumpmap and Heightmap support
+	* Passing DrawFlags and TextureFormat to shader
+	Todo:
+	* fixes, cleanups, (AZDO) optimizations, etc, etc, etc.
 =============================================================================*/
 
 // Include GLM
@@ -25,7 +25,6 @@ Todo:
 
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
-#include "UnShader.h"
 
 #ifdef _WIN32
 #include <comutil.h>
@@ -252,7 +251,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	Viewport = InViewport;
 	NeedsInit = true;
 	bMappedBuffers = false;
-	bInitializedShaders = false;
 	TexNum = 1;
 	iPixelFormat = 0;
 
@@ -288,7 +286,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	ActiveProgram = -1;
 	AMDMemoryInfo = false;
 	NVIDIAMemoryInfo = false;
-	BufferCount = 0;
 	TexNum = 1;
 	SwapControlExt = false;
 	SwapControlTearExt = false;
@@ -454,6 +451,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 		if (UsingBindlessTextures)
 		{
 			INT MaxStorageSize = 0;
+			INT HandleSize = 0;
 
 #if 0 // stijn: not implemented yet
 			if (SupportsGLSLInt64)
@@ -466,11 +464,13 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 			{
 				BindlessHandleStorage = STORE_SSBO;
 				MaxStorageSize = BINDLESS_SSBO_SIZE;
+				HandleSize = 8; // tightly packed
 			}
 			else
 			{
 				BindlessHandleStorage = STORE_UBO;
 				MaxStorageSize = MaxUniformBlockSize;
+				HandleSize = 16;
 			}
 
 			debugf(TEXT("XOpenGL: BindlessHandleStorage: %ls"),
@@ -483,13 +483,13 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 			{
 				if (MaxBindlessTextures == 0)
 				{
-					MaxBindlessTextures = MaxStorageSize / 16;
+					MaxBindlessTextures = MaxStorageSize / HandleSize;
 					debugf(TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
 				}
-				else if (MaxStorageSize < MaxBindlessTextures * 16)
+				else if (MaxStorageSize < MaxBindlessTextures * HandleSize)
 				{
-					debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxStorageSize / 16);
-					MaxBindlessTextures = MaxStorageSize / 16;
+					debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxStorageSize / HandleSize);
+					MaxBindlessTextures = MaxStorageSize / HandleSize;
 				}
 			}
 	}
@@ -2092,6 +2092,93 @@ void UXOpenGLRenderDevice::SetGamma(FLOAT GammaCorrection)
 
 	GammaCorrection += 0.1f; // change range from 0.0-0.9 to 0.1 to 1.0
 	Gamma = GammaCorrection;
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
+{
+	guard(UXOpenGLRenderDevice::SetProgram);
+	CHECK_GL_ERROR();
+
+	if (ActiveProgram != NextProgram)
+	{
+		// Flush the old program
+		switch (ActiveProgram)
+		{
+			case Simple_Prog:
+			{
+				DrawSimpleEnd(NextProgram);
+				break;
+			}
+			case Tile_Prog:
+			{
+				DrawTileEnd(NextProgram);
+				break;
+			}
+			case GouraudPolyVert_Prog:
+			{
+				DrawGouraudEnd(NextProgram);
+				break;
+			}
+			case ComplexSurfaceSinglePass_Prog:
+			{
+				DrawComplexEnd(NextProgram);
+				break;
+			}
+			case No_Prog:
+			default:
+			{
+				break;
+			}
+		}
+
+		// Switch and initialize the new program
+		PrevProgram = ActiveProgram;
+		ActiveProgram = NextProgram;
+
+		switch (NextProgram)
+		{
+			case Simple_Prog:
+			{
+				DrawSimpleStart();
+				break;
+			}
+			case Tile_Prog:
+			{
+				DrawTileStart();
+				break;
+			}
+			case GouraudPolyVert_Prog:
+			{
+				DrawGouraudStart();
+				break;
+			}
+			case ComplexSurfaceSinglePass_Prog:
+			{
+				DrawComplexStart();
+				break;
+			}
+			case No_Prog:
+			default:
+			{
+				break;
+			}
+		}
+	}
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::ResetFog()
+{
+	guard(UOpenGLRenderDevice::ResetFog);
+
+	//Reset Fog
+	DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
+	DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, -1.f);
+
+	bFogEnabled = false;
 
 	unguard;
 }

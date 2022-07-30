@@ -4,7 +4,6 @@
 
 	Revision history:
 		* Created by Smirftsch
-
 =============================================================================*/
 
 #include "XOpenGLDrv.h"

@@ -5,7 +5,6 @@
 
 	Revision history:
 		* Created by Smirftsch
-
 =============================================================================*/
 
 
@@ -918,7 +917,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	unguard;
 }
 
-DWORD UXOpenGLRenderDevice::SetFlags(DWORD PolyFlags)
+DWORD UXOpenGLRenderDevice::SetPolyFlags(DWORD PolyFlags)
 {
     guard(UOpenGLRenderDevice::SetFlags);
 

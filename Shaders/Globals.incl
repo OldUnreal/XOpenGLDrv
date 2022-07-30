@@ -292,12 +292,6 @@ layout(std140) uniform StaticLightInfo
 	vec4 LightData5[MAX_LIGHTS]; // NormalLightRadius, bZoneNormalLight, unused, unused
 };
 
-layout(std140) uniform DistanceFogParams
-{
-	vec4  DistanceFogColor;		// Fog color
-	vec4  DistanceFogValues;
-};
-
 layout(std140) uniform GlobalCoords
 {
 	mat4 FrameCoords;

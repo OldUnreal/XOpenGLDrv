@@ -77,7 +77,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
         UpdateCoords(Frame);
 #endif
 
-	DWORD NextPolyFlags = SetFlags(PolyFlags);
+	DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
 
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
@@ -551,6 +551,78 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 	unclockFast(Stats.GouraudPolyCycles);
 }
 
+BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
+{
+	guard(UXOpenGLRenderDevice::PushClipPlane);
+	if (NumClipPlanes == MaxClippingPlanes)
+		return 2;
+
+	glEnable(GL_CLIP_DISTANCE0 + NumClipPlanes);
+	glm::vec4 ClipParams = glm::vec4(NumClipPlanes, 1.f, 0.f, 0.f);
+	glm::vec4 ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, GlobalClipPlaneUBO);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(ClipParams));
+	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(ClipPlane));
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	CHECK_GL_ERROR();
+	++NumClipPlanes;
+
+	return 1;
+	unguard;
+}
+BYTE UXOpenGLRenderDevice::PopClipPlane()
+{
+	guard(UXOpenGLRenderDevice::PopClipPlane);
+	if (NumClipPlanes == 0)
+		return 2;
+
+	--NumClipPlanes;
+	glDisable(GL_CLIP_DISTANCE0 + NumClipPlanes);
+
+	glm::vec4 ClipParams = glm::vec4(NumClipPlanes, 0.f, 0.f, 0.f);
+	glm::vec4 ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, GlobalClipPlaneUBO);
+	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(ClipParams));
+	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(ClipPlane));
+	glBindBuffer(GL_UNIFORM_BUFFER, 0);
+
+	CHECK_GL_ERROR();
+
+	return 1;
+	unguard;
+}
+
+void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
+{
+	guard(UOpenGLRenderDevice::PreDrawGouraud);
+
+	if (FogSurf.IsValid())
+	{
+		DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
+		DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)(FogSurf.FogMode));
+
+		bFogEnabled = true;
+	}
+	else if (bFogEnabled)
+		ResetFog();
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
+{
+	guard(UOpenGLRenderDevice::PostDrawGouraud);
+
+#if ENGINE_VERSION==227
+	ResetFog();
+#endif // ENGINE_VERSION
+
+	unguard;
+}
+
 //
 // Program Switching
 //
@@ -587,7 +659,7 @@ void UXOpenGLRenderDevice::DrawGouraudStart()
 	for (INT i = 0; i < 5; ++i)
 		glEnableVertexAttribArray(i);
 
-	DrawGouraudDrawParams.PolyFlags() = 0;// SetFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
+	DrawGouraudDrawParams.PolyFlags() = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
 	PrevDrawGouraudBeginOffset		  = -1;
 
 	CHECK_GL_ERROR();

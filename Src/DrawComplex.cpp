@@ -9,7 +9,6 @@
 
 	Revision history:
 		* Created by Smirftsch
-
 =============================================================================*/
 
 // Include GLM
@@ -72,7 +71,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
         UpdateCoords(Frame);
 #endif
 
-	const DWORD NextPolyFlags = SetFlags(Surface.PolyFlags);
+	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
 
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
@@ -89,7 +88,6 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		// Check if we have room left in the multi-draw array
 		DrawComplexMultiDrawCount+1 >= MAX_DRAWCOMPLEX_BATCH)
 	{
-		//debugf(TEXT("Polyswitch %08x => %08x"), DrawComplexBufferData.PolyFlags, NextPolyFlags);
 		if (DrawComplexBufferData.IndexOffset > 0)
 		{
 			unclockFast(Stats.ComplexCycles);
@@ -399,7 +397,7 @@ void UXOpenGLRenderDevice::DrawComplexStart()
 	for (INT i = 0; i < 2; ++i)
 		glEnableVertexAttribArray(i);
 
-	DrawComplexDrawParams.PolyFlags() = 0;// SetFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
+	DrawComplexDrawParams.PolyFlags() = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
 	PrevDrawComplexBeginOffset = -1;
 
 	CHECK_GL_ERROR();

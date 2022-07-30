@@ -1,10 +1,9 @@
 /*=============================================================================
-CheckExtensions.cpp: Check if extensions are available.
-Copyright 2014-2017 Oldunreal
+	CheckExtensions.cpp: Check if extensions are available.
+	Copyright 2014-2017 Oldunreal
 
-Revision history:
-* Created by Smirftsch
-
+	Revision history:
+		* Created by Smirftsch
 =============================================================================*/
 
 // Include GLM
@@ -19,216 +18,216 @@ Revision history:
 
 UBOOL UXOpenGLRenderDevice::GLExtensionSupported(FString ExtensionName)
 {
-    #if SDL2BUILD
-        return SDL_GL_ExtensionSupported(appToAnsi(*ExtensionName));
-    #else
-        return AllExtensions.InStr(*FString::Printf(TEXT("%ls "), *ExtensionName)) != -1;
-    #endif
+#if SDL2BUILD
+    return SDL_GL_ExtensionSupported(appToAnsi(*ExtensionName));
+#else
+    return AllExtensions.InStr(*FString::Printf(TEXT("%ls "), *ExtensionName)) != -1;
+#endif
 }
 
 void UXOpenGLRenderDevice::CheckExtensions()
 {
 	guard(UXOpenGLRenderDevice::CheckExtensions);
 
-	#ifdef __LINUX_ARM__
-        if (GenerateMipMaps)
+#ifdef __LINUX_ARM__
+    if (GenerateMipMaps)
+    {
+        if (GLExtensionSupported(TEXT("GL_EXT_texture_storage"))  && GenerateMipMaps)
         {
-            if (GLExtensionSupported(TEXT("GL_EXT_texture_storage"))  && GenerateMipMaps)
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_EXT_texture_storage found. GenerateMipMaps enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_EXT_texture_storage not found. GenerateMipMaps disabled."));
-                GenerateMipMaps = false;
-            }
-        }
-
-        if (UseBindlessTextures)
-        {
-            if (GLExtensionSupported(TEXT("GL_IMG_bindless_texture")))
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_IMG_bindless_texture found. UseBindlessTextures enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. UseBindlessTextures disabled"));
-                UseBindlessTextures = false;
-                UseBindlessLightmaps = false;
-            }
-        }
-		//usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
-        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance found."));
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_EXT_texture_storage found. GenerateMipMaps enabled."));
         }
         else
         {
-            GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
-            SupportsClipDistance = false; // have to disable this functionality.
+            GWarn->Logf(TEXT("XOpenGL: GL_EXT_texture_storage not found. GenerateMipMaps disabled."));
+            GenerateMipMaps = false;
         }
+    }
 
-        NVIDIAMemoryInfo = false; // found no such info available...yet?
-        AMDMemoryInfo = false;
-	#else
-        if (UsePersistentBuffers)
+    if (UseBindlessTextures)
+    {
+        if (GLExtensionSupported(TEXT("GL_IMG_bindless_texture")))
         {
-            if (GLExtensionSupported(TEXT("GL_ARB_buffer_storage")))
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_buffer_storage found. UsePersistentBuffers enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. UsePersistentBuffers and UseBindlessTextures disabled."));
-                UsePersistentBuffers = false;
-                UseBindlessTextures = false;
-                UseBindlessLightmaps = false;
-            }
-        }
-
-        if (UseBufferInvalidation)
-        {
-            if (GLExtensionSupported(TEXT("GL_ARB_invalidate_subdata")))
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_invalidate_subdata found. UseBufferInvalidation enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_invalidate_subdata not found. UseBufferInvalidation disabled."));
-                UseBufferInvalidation = false;
-            }
-        }
-
-        if (GenerateMipMaps)
-        {
-            if (GLExtensionSupported(TEXT("GL_ARB_texture_storage")))
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_texture_storage found. GenerateMipMaps enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_texture_storage not found. GenerateMipMaps disabled."));
-                GenerateMipMaps = false;
-            }
-        }
-
-        if (UseBindlessTextures)
-        {
-            if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
-                UseBindlessTextures = false;
-                UseBindlessLightmaps = false;
-            }
-        }
-
-        if (GLExtensionSupported(TEXT("GL_ARB_shader_storage_buffer_object")))
-        {
-            SupportsSSBO = true;
-        }
-
-        if (UseShaderDrawParameters)
-        {
-            if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")) && SupportsSSBO)
-            {
-                debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters and GL_ARB_shader_storage_buffer_object found. UseShaderDrawParameters enabled."));
-            }
-            else
-            {
-                GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters or GL_ARB_shader_storage_buffer_object not found. UseShaderDrawParameters disabled."));
-                UseShaderDrawParameters = false;
-            }
-        }
-
-		if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")))
-		{
-            SupportsGLSLInt64 = true;
-		}
-
-        //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
-        if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance found."));
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_IMG_bindless_texture found. UseBindlessTextures enabled."));
         }
         else
         {
-            GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
-            SupportsClipDistance = false; // have to disable this functionality.
+            GWarn->Logf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. UseBindlessTextures disabled"));
+            UseBindlessTextures = false;
+            UseBindlessLightmaps = false;
         }
+    }
+	//usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
+    if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
+    {
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance found."));
+    }
+    else
+    {
+        GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
+        SupportsClipDistance = false; // have to disable this functionality.
+    }
 
-        if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_NVX_gpu_memory_info found."));
-            NVIDIAMemoryInfo = true;
-        }
-        else NVIDIAMemoryInfo = false;
-
-        if (GLExtensionSupported(TEXT("GL_ATI_meminfo")))
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ATI_meminfo found."));
-            AMDMemoryInfo = true;
-        }
-        else AMDMemoryInfo = false;
-
-#ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
-        if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control found."));
-            SwapControlExt = true;
-        }
-        else
-        {
-            GWarn->Logf(TEXT("XOpenGL: WGL_EXT_swap_control not found. Can't set VSync options."));
-            SwapControlExt = false;
-        }
-
-        if (GLExtensionSupported(TEXT("WGL_EXT_swap_control_tear")))
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control_tear found."));
-            SwapControlTearExt = true;
-        }
-        else
-        {
-            GWarn->Logf(TEXT("WGL_EXT_swap_control_tear is not supported by device."));
-            SwapControlTearExt = false;
-        }
+    NVIDIAMemoryInfo = false; // found no such info available...yet?
+    AMDMemoryInfo = false;
 #else
-        // Just some additional info to check on...
-        INT r=0, g=0, b=0, a=0, db=0, srgb=0, dbu=0;
-        SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &r);
-        SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &g);
-        SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &b);
-        SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &a);
-        debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL RED_SIZE:%i GREEN_SIZE:%i BLUE_SIZE:%i ALPHA_SIZE:%i"),r,g,b,a);
-
-        SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &db);
-        debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_DEPTH_SIZE DesiredDepthBits: %i, provided: %i"),DesiredDepthBits, db);
-
-
-        if (UseSRGBTextures)
+    if (UsePersistentBuffers)
+    {
+        if (GLExtensionSupported(TEXT("GL_ARB_buffer_storage")))
         {
-            SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, &srgb);
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_FRAMEBUFFER_SRGB_CAPABLE: %i"),srgb);
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_buffer_storage found. UsePersistentBuffers enabled."));
         }
-        CHECK_GL_ERROR();
+        else
+        {
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. UsePersistentBuffers and UseBindlessTextures disabled."));
+            UsePersistentBuffers = false;
+            UseBindlessTextures = false;
+            UseBindlessLightmaps = false;
+        }
+    }
+
+    if (UseBufferInvalidation)
+    {
+        if (GLExtensionSupported(TEXT("GL_ARB_invalidate_subdata")))
+        {
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_invalidate_subdata found. UseBufferInvalidation enabled."));
+        }
+        else
+        {
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_invalidate_subdata not found. UseBufferInvalidation disabled."));
+            UseBufferInvalidation = false;
+        }
+    }
+
+    if (GenerateMipMaps)
+    {
+        if (GLExtensionSupported(TEXT("GL_ARB_texture_storage")))
+        {
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_texture_storage found. GenerateMipMaps enabled."));
+        }
+        else
+        {
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_texture_storage not found. GenerateMipMaps disabled."));
+            GenerateMipMaps = false;
+        }
+    }
+
+    if (UseBindlessTextures)
+    {
+        if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
+        {
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
+        }
+        else
+        {
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
+            UseBindlessTextures = false;
+            UseBindlessLightmaps = false;
+        }
+    }
+
+    if (GLExtensionSupported(TEXT("GL_ARB_shader_storage_buffer_object")))
+    {
+        SupportsSSBO = true;
+    }
+
+    if (UseShaderDrawParameters)
+    {
+        if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")) && SupportsSSBO)
+        {
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters and GL_ARB_shader_storage_buffer_object found. UseShaderDrawParameters enabled."));
+        }
+        else
+        {
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters or GL_ARB_shader_storage_buffer_object not found. UseShaderDrawParameters disabled."));
+            UseShaderDrawParameters = false;
+        }
+    }
+
+	if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")))
+	{
+        SupportsGLSLInt64 = true;
+	}
+
+    //usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
+    if (GLExtensionSupported(TEXT("GL_EXT_clip_cull_distance")) || GLExtensionSupported(TEXT("GL_ARB_cull_distance")))
+    {
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance found."));
+    }
+    else
+    {
+        GWarn->Logf(TEXT("XOpenGL: GL_ARB_cull_distance / GL_EXT_clip_cull_distance not found."));
+        SupportsClipDistance = false; // have to disable this functionality.
+    }
+
+    if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
+    {
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_NVX_gpu_memory_info found."));
+        NVIDIAMemoryInfo = true;
+    }
+    else NVIDIAMemoryInfo = false;
+
+    if (GLExtensionSupported(TEXT("GL_ATI_meminfo")))
+    {
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ATI_meminfo found."));
+        AMDMemoryInfo = true;
+    }
+    else AMDMemoryInfo = false;
+
+# ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
+    if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))
+    {
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control found."));
+        SwapControlExt = true;
+    }
+    else
+    {
+        GWarn->Logf(TEXT("XOpenGL: WGL_EXT_swap_control not found. Can't set VSync options."));
+        SwapControlExt = false;
+    }
+
+    if (GLExtensionSupported(TEXT("WGL_EXT_swap_control_tear")))
+    {
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control_tear found."));
+        SwapControlTearExt = true;
+    }
+    else
+    {
+        GWarn->Logf(TEXT("WGL_EXT_swap_control_tear is not supported by device."));
+        SwapControlTearExt = false;
+    }
+# else
+    // Just some additional info to check on...
+    INT r=0, g=0, b=0, a=0, db=0, srgb=0, dbu=0;
+    SDL_GL_GetAttribute(SDL_GL_RED_SIZE, &r);
+    SDL_GL_GetAttribute(SDL_GL_GREEN_SIZE, &g);
+    SDL_GL_GetAttribute(SDL_GL_BLUE_SIZE, &b);
+    SDL_GL_GetAttribute(SDL_GL_ALPHA_SIZE, &a);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL RED_SIZE:%i GREEN_SIZE:%i BLUE_SIZE:%i ALPHA_SIZE:%i"),r,g,b,a);
+
+    SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &db);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_DEPTH_SIZE DesiredDepthBits: %i, provided: %i"),DesiredDepthBits, db);
+
+
+    if (UseSRGBTextures)
+    {
+        SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, &srgb);
+        debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_FRAMEBUFFER_SRGB_CAPABLE: %i"),srgb);
+    }
+    CHECK_GL_ERROR();
+# endif
+
+    INT MaxTextureImageUnits = 0;
+    glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
+
+    INT MaxVertexTextureImageUnits = 0;
+    glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &MaxVertexTextureImageUnits);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxVertexTextureImageUnits: %i"), MaxVertexTextureImageUnits);
+
+    INT MaxImageUnits = 0;
+    glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
 #endif
-
-        INT MaxTextureImageUnits = 0;
-        glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &MaxTextureImageUnits);
-        debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxTextureImageUnits: %i"), MaxTextureImageUnits);
-
-        INT MaxVertexTextureImageUnits = 0;
-        glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &MaxVertexTextureImageUnits);
-        debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxVertexTextureImageUnits: %i"), MaxVertexTextureImageUnits);
-
-        INT MaxImageUnits = 0;
-        glGetIntegerv(GL_MAX_IMAGE_UNITS, &MaxImageUnits);
-        debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxImageUnits: %i"), MaxImageUnits);
-	#endif
 
     if (GLExtensionSupported(TEXT("GL_KHR_debug")) && UseOpenGLDebug)
     {
@@ -318,16 +317,16 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
 
 		INT NumberOfAASamples = 0;
-	#ifdef SDL2BUILD
+#ifdef SDL2BUILD
         INT AABuffers = 0;
         SDL_GL_GetAttribute( SDL_GL_MULTISAMPLEBUFFERS, &AABuffers );
         SDL_GL_GetAttribute( SDL_GL_MULTISAMPLESAMPLES, &NumberOfAASamples );
         debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_MULTISAMPLEBUFFERS: %i, requested NumAASamples: %i, provided NumAASamples/MaxSamples: (%i/%i)"), AABuffers, NumAASamples, NumberOfAASamples, MaxAASamples);
-    #else
+#else
         glGetIntegerv(GL_MAX_SAMPLES, &MaxAASamples);
 		glGetIntegerv(GL_SAMPLES, &NumberOfAASamples);
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: NumAASamples: (%i/%i)"), NumberOfAASamples, MaxAASamples);
-    #endif
+#endif
 	}
 
 	if (GenerateMipMaps && !UsePrecache)

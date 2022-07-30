@@ -21,6 +21,9 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
+/*-----------------------------------------------------------------------------
+    Functions
+-----------------------------------------------------------------------------*/
 void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags)
 {
 	guard(UXOpenGLRenderDevice::DrawTile);
@@ -57,7 +60,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	PolyFlags &= ~(PF_RenderHint | PF_Unlit); // Using PF_RenderHint internally for CW/CCW switch.
 
     FCachedTexture* Bind;
-    DWORD NextPolyFlags = SetFlags(PolyFlags);
+    DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
     GLuint DrawTileStrideSize = (OpenGLVersion == GL_ES) ? DrawTileESStrideSize : DrawTileCoreStrideSize;
 
 	// Check if uniforms will change
@@ -71,7 +74,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	{
         if (DrawTileBufferData.VertSize > 0)
         {
-            DrawTileVerts(DrawTileBufferData);
+            DrawTileVerts();
             WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
         }
 
@@ -259,19 +262,19 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
     if (NoBuffering) // No buffering at this time for Editor.
     {
-        DrawTileVerts(DrawTileBufferData);
+        DrawTileVerts();
         WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
     }
 
 	unguard;
 }
 
-void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
+void UXOpenGLRenderDevice::DrawTileVerts()
 {
     CHECK_GL_ERROR();
     clockFast(Stats.TileDrawCycles);
     INT DrawMode = GL_TRIANGLES;
-	GLintptr BeginOffset = BufferData.BeginOffset * sizeof(float);
+	GLintptr BeginOffset = DrawTileBufferData.BeginOffset * sizeof(float);
 
     checkSlow(ActiveProgram == Tile_Prog);
 
@@ -282,7 +285,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
         {
             if (UseBufferInvalidation)
                 glInvalidateBufferData(DrawTileVertBuffer);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
+            glBufferSubData(GL_ARRAY_BUFFER, 0, DrawTileBufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
         }
 
         if (PrevDrawTileBeginOffset != BeginOffset)
@@ -303,9 +306,9 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
                 glInvalidateBufferData(DrawTileVertBuffer);
 #if __LINUX_ARM__ || __MACOSX__
 	        // stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
-	        glBufferData(GL_ARRAY_BUFFER, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_DYNAMIC_DRAW);
+	        glBufferData(GL_ARRAY_BUFFER, DrawTileBufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer, GL_DYNAMIC_DRAW);
 #else
-			glBufferSubData(GL_ARRAY_BUFFER, 0, BufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, DrawTileBufferData.IndexOffset * sizeof(float), DrawTileRange.Buffer);
 #endif
             CHECK_GL_ERROR();
         }
@@ -336,7 +339,7 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
     }
 
     // PolyFlags
-    glUniform1ui(DrawTilePolyFlags, BufferData.PolyFlags);
+    glUniform1ui(DrawTilePolyFlags, DrawTileBufferData.PolyFlags);
     CHECK_GL_ERROR();
 
     // Gamma
@@ -344,22 +347,22 @@ void UXOpenGLRenderDevice::DrawTileVerts(DrawTileBuffer &BufferData)
     CHECK_GL_ERROR();
 
     // Draw
-	glDrawArrays(DrawMode, 0, (BufferData.VertSize / FloatsPerVertex));
+	glDrawArrays(DrawMode, 0, (DrawTileBufferData.VertSize / FloatsPerVertex));
     CHECK_GL_ERROR();
 
 	if(UsingPersistentBuffersTile)
 	{
-		LockBuffer(DrawTileRange, BufferData.Index);
-        BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
-        BufferData.BeginOffset = BufferData.Index * DRAWTILE_SIZE;
+		LockBuffer(DrawTileRange, DrawTileBufferData.Index);
+        DrawTileBufferData.Index = (DrawTileBufferData.Index + 1) % NUMBUFFERS;
+        DrawTileBufferData.BeginOffset = DrawTileBufferData.Index * DRAWTILE_SIZE;
 	}
-	else BufferData.BeginOffset = 0;
+	else DrawTileBufferData.BeginOffset = 0;
 
-	BufferData.VertSize = 0;
-	BufferData.TexSize = 0;
-	BufferData.ColorSize = 0;
-	BufferData.IndexOffset = 0;
-	BufferData.FloatSize1 = 0;
+    DrawTileBufferData.VertSize = 0;
+    DrawTileBufferData.TexSize = 0;
+    DrawTileBufferData.ColorSize = 0;
+    DrawTileBufferData.IndexOffset = 0;
+    DrawTileBufferData.FloatSize1 = 0;
 
 	unclockFast(Stats.TileDrawCycles);
     CHECK_GL_ERROR();
@@ -372,7 +375,7 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
 {
     if (DrawTileBufferData.VertSize > 0)
     {
-        DrawTileVerts(DrawTileBufferData);
+        DrawTileVerts();
         WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
     }
 

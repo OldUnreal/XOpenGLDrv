@@ -6,7 +6,6 @@
 
 	Revision history:
 		* Created by Smirftsch
-
 =============================================================================*/
 
 // Include GLM
@@ -19,17 +18,17 @@
 #include "XOpenGL.h"
 
 /*-----------------------------------------------------------------------------
-Line flags:
+	Line flags:
 
-LINE_None
-* Solid line.
+	LINE_None
+	* Solid line.
 
-LINE_Transparent
-* Transparent/dotted line.
+	LINE_Transparent
+	* Transparent/dotted line.
 
-LINE_DepthCued
-* Honors Z-Ordering.
-* Seems not to be implemented in SoftDrv?
+	LINE_DepthCued
+	* Honors Z-Ordering.
+	* Seems not to be implemented in SoftDrv?
 -----------------------------------------------------------------------------*/
 
 inline void UXOpenGLRenderDevice::DrawSimpleBufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData)

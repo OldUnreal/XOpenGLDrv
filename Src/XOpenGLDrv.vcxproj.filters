@@ -37,12 +37,6 @@
     <ClCompile Include="SetTexture.cpp">
       <Filter>Src</Filter>
     </ClCompile>
-    <ClCompile Include="DrawDistanceFog.cpp">
-      <Filter>Src</Filter>
-    </ClCompile>
-    <ClCompile Include="SetProgram.cpp">
-      <Filter>Src</Filter>
-    </ClCompile>
     <ClCompile Include="EditorHit.cpp">
       <Filter>Src</Filter>
     </ClCompile>
@@ -55,7 +49,7 @@
     <ClCompile Include="glad.cpp">
       <Filter>Src</Filter>
     </ClCompile>
-    <ClCompile Include="ClipPlanes.cpp">
+    <ClCompile Include="UnShader.cpp">
       <Filter>Src</Filter>
     </ClCompile>
   </ItemGroup>
@@ -66,17 +60,14 @@
     <ClInclude Include="..\Inc\XOpenGLDrv.h">
       <Filter>Inc</Filter>
     </ClInclude>
-    <ClInclude Include="..\Inc\UnShader.h">
-      <Filter>Inc</Filter>
-    </ClInclude>
     <ClInclude Include="resource.h" />
-    <ClInclude Include="..\Inc\XOpenGLTemplate.h">
-      <Filter>Inc</Filter>
-    </ClInclude>
     <ClInclude Include="..\Inc\XOpenGLFuncs.h">
       <Filter>Inc</Filter>
     </ClInclude>
     <ClInclude Include="..\Inc\glad.h">
+      <Filter>Inc</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Inc\XOpenGLTemplate.h">
       <Filter>Inc</Filter>
     </ClInclude>
   </ItemGroup>
@@ -120,13 +111,10 @@
     <None Include="..\..\System\xopengl\DrawGouraud.geo">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="..\..\System\xopengl\SimpleDepth.frag">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\..\System\xopengl\SimpleDepth.vert">
-      <Filter>Shaders</Filter>
-    </None>
     <None Include="..\..\System\XOpenGLDrv.int" />
+    <None Include="..\..\System\xopengl\Extensions.incl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XOpenGLDrv.rc" />

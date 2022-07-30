@@ -40,46 +40,46 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <EnableASAN>false</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug ASAN|Win32'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <EnableASAN>true</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug ASAN|x64'" Label="Configuration">
     <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
     <EnableASAN>true</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release WinXP|Win32'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v140_xp</PlatformToolset>
+    <PlatformToolset>v141_xp</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>DynamicLibrary</ConfigurationType>
     <UseOfMfc>false</UseOfMfc>
     <CharacterSet>Unicode</CharacterSet>
-    <PlatformToolset>v142</PlatformToolset>
+    <PlatformToolset>v143</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -444,10 +444,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CheckExtensions.cpp" />
-    <ClCompile Include="ClipPlanes.cpp" />
     <ClCompile Include="DebugLog.cpp" />
     <ClCompile Include="DrawComplex.cpp" />
-    <ClCompile Include="DrawDistanceFog.cpp" />
     <ClCompile Include="DrawGouraud.cpp" />
     <ClCompile Include="DrawSimple.cpp" />
     <ClCompile Include="DrawTile.cpp" />
@@ -455,13 +453,12 @@
     <ClCompile Include="glad.cpp" />
     <ClCompile Include="PersistentBuffers.cpp" />
     <ClCompile Include="SetTexture.cpp" />
-    <ClCompile Include="SetProgram.cpp" />
+    <ClCompile Include="UnShader.cpp" />
     <ClCompile Include="XOpenGL.cpp" />
     <ClCompile Include="XOpenGLDrv.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Inc\glad.h" />
-    <ClInclude Include="..\Inc\UnShader.h" />
     <ClInclude Include="..\Inc\XOpenGL.h" />
     <ClInclude Include="..\Inc\XOpenGLDrv.h" />
     <ClInclude Include="..\Inc\XOpenGLFuncs.h" />
@@ -482,9 +479,8 @@
     <None Include="..\..\System\xopengl\DrawTile.frag" />
     <None Include="..\..\System\xopengl\DrawTile.geo" />
     <None Include="..\..\System\xopengl\DrawTile.vert" />
+    <None Include="..\..\System\xopengl\Extensions.incl" />
     <None Include="..\..\System\xopengl\Globals.incl" />
-    <None Include="..\..\System\xopengl\SimpleDepth.frag" />
-    <None Include="..\..\System\xopengl\SimpleDepth.vert" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XOpenGLDrv.rc" />

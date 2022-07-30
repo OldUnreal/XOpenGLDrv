@@ -471,9 +471,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	TArray<FPlane> Modes;
 	ULevel* Level;
 
-#if ENGINE_VERSION==227 || (ENGINE_VERSION>436&&ENGINE_VERSION<1100)
-	TArray<FLightInfo*> LightCache;
-#endif
 	TArray<AActor*> StaticLightList;
 	TArray<AActor*> LightList;
 
@@ -533,7 +530,6 @@ class UXOpenGLRenderDevice : public URenderDevice
     BITFIELD NoAATiles;
     BITFIELD GenerateMipMaps;
     BITFIELD SimulateMultiPass;
-    //BITFIELD SyncToDraw; // stijn: removed! this kills buffering
     BITFIELD UseOpenGLDebug;
     BITFIELD NoBuffering;
     BITFIELD NoDrawComplexSurface;
@@ -620,18 +616,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BYTE UseVSync;
 	bool NeedsInit;
 	bool bMappedBuffers;
-	bool bInitializedShaders;
-	BYTE* ScaleByte;
 	BYTE SupportsClipDistance;
-
-#if ENGINE_VERSION==227
-	FLightInfo *FirstLight,*LastLight;
-#endif
 
 	FLOAT GammaOffsetScreenshots;
 	FLOAT LODBias;
-
-	TMap<QWORD,INT> MeshMap;
 
 	// Hit testing.
 	TArray<BYTE> HitStack;
@@ -648,7 +636,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	DWORD CurrentPolyFlags;
 	DWORD CurrentAdditionalPolyFlags;
 	DWORD CurrentLineFlags;
-	TArray<INT> GLHitData;
 	struct FTexInfo
 	{
 		QWORD CurrentCacheID;
@@ -716,8 +703,32 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
 	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
 
+	struct DrawTileBuffer
+	{
+		glm::vec4 TexCoords[3];
+		GLuint VertSize;
+		GLuint TexSize;
+		GLuint ColorSize;
+		GLuint FloatSize1;
+		GLuint Index;
+		GLuint IndexOffset;
+		GLuint BeginOffset;
+		DWORD PolyFlags;
+		DWORD BlendPolyFlags;
+		DrawTileBuffer()
+			: TexCoords(),
+			VertSize(0),
+			TexSize(0),
+			ColorSize(0),
+			FloatSize1(0),
+			Index(0),
+			IndexOffset(0),
+			BeginOffset(0),
+			PolyFlags(0),
+			BlendPolyFlags(0)
+		{}
+	}DrawTileBufferData;
 
-	//DrawSimple
 	struct DrawLinesBuffer
 	{
 		GLuint VertSize;
@@ -725,7 +736,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		DWORD LineFlags;
 		DrawLinesBuffer()
 			: VertSize(0),
-			DrawColor(0.f,0.f,0.f,0.f),
+			DrawColor(0.f, 0.f, 0.f, 0.f),
 			LineFlags(0)
 		{}
 	}DrawLinesBufferData;
@@ -734,9 +745,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	struct BufferRange
 	{
 		GLsync Sync[NUMBUFFERS];
-		FLOAT* Buffer;
-		FLOAT* VertBuffer;
-		GLuint64* Int64Buffer;
+		FLOAT* Buffer{};
+		FLOAT* VertBuffer{};
+		GLuint64* Int64Buffer{};
 		BufferRange()
 		: Sync()
 		{}
@@ -779,9 +790,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// DrawGouraud
 	GLuint DrawGouraudVertObject, DrawGouraudGeoObject, DrawGouraudFragObject;
-	GLuint DrawGouraudMeshBufferVertObject, DrawGouraudMeshBufferFragObject;
 	GLuint DrawGouraudProg;
-	GLuint DrawGouraudMeshBufferProg;
 
 #if ENGINE_VERSION!=227
 
@@ -813,33 +822,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	};
 
 #endif
-
-	//DrawTile
-	struct DrawTileBuffer
-	{
-		glm::vec4 TexCoords[3];
-		GLuint VertSize;
-		GLuint TexSize;
-		GLuint ColorSize;
-		GLuint FloatSize1;
-        GLuint Index;
-		GLuint IndexOffset;
-		GLuint BeginOffset;
-		DWORD PolyFlags;
-		DWORD BlendPolyFlags;
-		DrawTileBuffer()
-			: TexCoords(),
-			VertSize(0),
-			TexSize(0),
-			ColorSize(0),
-			FloatSize1(0),
-            Index(0),
-			IndexOffset(0),
-			BeginOffset(0),
-			PolyFlags(0),
-			BlendPolyFlags(0)
-		{}
-	}DrawTileBufferData;
 
 	struct DrawGouraudShaderDrawParams
 	{
@@ -980,23 +962,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawTileTexCoords;
 	GLuint DrawTileTextureHandle;
 
-	//DrawGouard
-	INT BufferCount;
-
-	// Matrices calculation
-	glm::vec3 cameraPosition;
-	glm::vec3 cameraDirection;
-	glm::vec3 cameraTarget;
-	glm::vec3 cameraUp;
-
 	//Matrices
 	glm::mat4 projMat;
 	glm::mat4 viewMat;
 	glm::mat4 modelMat;
-	glm::mat3 m_3x3_inv_transp;
 	glm::mat4 modelviewMat;
-	glm::mat4 viewMatinv;
-	glm::mat4 gouraudmodelMat;
 	glm::mat4 modelviewprojMat;
 	glm::mat4 lightSpaceMat;
 
@@ -1024,11 +994,6 @@ class UXOpenGLRenderDevice : public URenderDevice
     BufferRange GlobalTextureHandlesRange;
 	static const GLuint GlobalTextureHandlesBindingIndex = 1;
 
-	// Global DistanceFog.
-	GLuint GlobalUniformDistanceFogIndex;
-	GLuint GlobalDistanceFogUBO;
-	static const GLuint GlobalDistanceFogBindingIndex = 2;
-
 	// Hardware Lights
 	GLuint GlobalUniformStaticLightInfoIndex;
 	GLuint GlobalStaticLightInfoUBO;
@@ -1053,9 +1018,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	glm::vec4 DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
 	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	bool bFogEnabled = false;
-	bool bFogUniformsStale = false;
 
-	FCachedTexture* MapTextureData[8];
     GLuint TexNum;
 
 	// Editor
@@ -1097,7 +1060,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawSimpleVertBuffer;
 	GLuint DrawTileVertBuffer;
 	GLuint DrawComplexVertBuffer;
-	GLuint DrawComplexVertBuffers[10];
 	GLuint DrawGouraudVertBuffer;
 
 	//VAO's
@@ -1106,28 +1068,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	GLuint DrawGouraudPolyVertsVao;
 	GLuint DrawComplexVertsSinglePassVao;
 	GLuint SimpleDepthVao;
-
-	struct GouraudBufferData
-	{
-		AActor* Owner;
-		GLuint totalsize;
-		GLuint vertssize;
-		GLuint TexSize;
-		GLuint colorsize;
-
-		GLuint vertbuffer;
-		GLuint texbuffer;
-		GLuint normalbuffer;
-		GLuint colorbuffer;
-		GLuint lightmapbuffer;
-
-		UBOOL bBuffered;
-	};
-	TArray<GouraudBufferData> GouraudBuffer;
-
-	// Texture UV
-	GLuint DrawGouraudTexUV;
-	GLuint DrawGouraudDetailTexUV;
 
 	// Cached Texture Infos
 	FTEXTURE_PTR DrawGouraudDetailTextureInfo;
@@ -1149,10 +1089,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BYTE green[256];
 		BYTE blue[256];
 	};
-	UBOOL HaveOriginalRamp;
 	FGammaRamp OriginalRamp; // to restore original value at exit or crash.
 
-	GLfloat NumClipPlanes;
+	GLuint NumClipPlanes;
 	BYTE LastZMode;
 
 	// Static variables.
@@ -1175,154 +1114,172 @@ class UXOpenGLRenderDevice : public URenderDevice
 
     FString AllExtensions;
 
-	// UObject interface.
+	//
+	// UObject interface
+	//
 	void StaticConstructor();
 	void PostEditChange();
-
-	UBOOL CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
-	UBOOL SetWindowPixelFormat();
-
-	#ifdef SDL2BUILD
-    UBOOL SetSDLAttributes();
-    #endif
-
-	UBOOL FindExt( const TCHAR* Name );
-	void FindProc( void*& ProcAddress, char* Name, char* SupportName, UBOOL& Supports, UBOOL AllowExt );
-	void FindProcs( UBOOL AllowExt );
-
-#ifdef _WIN32
-	void PrintFormat( HDC hDC, INT nPixelFormat );
-#endif
-
-    UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
-	UBOOL InitGLEW(HINSTANCE hInstance);
-
-	static QSORT_RETURN CDECL CompareRes(const FPlane* A, const FPlane* B) {
-		return (QSORT_RETURN) (((A->X - B->X) != 0.0f) ? (A->X - B->X) : (A->Y - B->Y));
-	}
-
-	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar);
-	void Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize);
-	void UpdateCoords(FSceneNode* Frame);
-	void SetSceneNode(FSceneNode* Frame);
-	void SetOrthoProjection(FSceneNode* Frame);
-	void SetProjection(FSceneNode* Frame, UBOOL bNearZ);
-	void Unlock(UBOOL Blit);
-	void Flush(UBOOL AllowPrecache);
-	void SetPermanentState();
-
-	void LockBuffer(BufferRange& Buffer, GLuint Index);
-	void WaitBuffer(BufferRange& Buffer, GLuint Index);
-	void MapBuffers();
-	void UnMapBuffers();
-	UBOOL GLExtensionSupported(FString Extension_Name);
-	void CheckExtensions();
-
-	DrawComplexShaderDrawParams* DrawComplexGetDrawParamsRef();
-	void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
-
-	DrawGouraudShaderDrawParams* DrawGouraudGetDrawParamsRef();
-	static void DrawGouraudBufferVert(DrawGouraudBufferedVert* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
-	void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
-	void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span=NULL);
-	void DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
-	void DrawGouraudReleaseState(FTextureInfo& Info);
-
-	void DrawTileBufferTile(FLOAT* DrawTilesTemp, FLOAT* TileData);
-	void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
-
-	void DrawSimpleBufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
-	void Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
-	void Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
-	void Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
-
-	void DrawPass(FSceneNode* Frame, INT Pass);
-	void ClearZ(FSceneNode* Frame);
-	void GetStats(TCHAR* Result);
-	void ReadPixels(FColor* Pixels);
-	void EndFlash();
-	void SwapControl();
-	void PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
-
-	BYTE PushClipPlane(const FPlane& Plane);
-	BYTE PopClipPlane();
-
-#if UNREAL_TOURNAMENT_OLDUNREAL
-	void DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
-	UBOOL SupportsTextureFormat(ETextureFormat Format);
-#endif
-
-	// Editor
-	void PushHit(const BYTE* Data, INT Count);
-	void PopHit(INT Count, UBOOL bForce);
-	void LockHit(BYTE* InHitData, INT* InHitSize);
-	void UnlockHit(UBOOL Blit);
-	void SetSceneNodeHit(FSceneNode* Frame);
-	bool HitTesting() { return HitData != NULL; }
-
-	void SetProgram( INT CurrentProgram );
-	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
-	void UnsetRes();
-	void MakeCurrent();
-
-	static BOOL WillBindlessTextureChange(FTextureInfo& Info, FCachedTexture* Texture, DWORD PolyFlags);
-	BOOL WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture);
-	void SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, DWORD DrawFlags ); //First parameter has to fit the uniform in the fragment shader
-	void SetNoTexture( INT Multi );
-	DWORD SetFlags(DWORD PolyFlags);
-	void SetBlend(DWORD PolyFlags, bool InverseOrder);
-	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	DWORD SetDepth(DWORD PolyFlags);
-	void SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, FTextureInfo& Info, DWORD DrawFlags );
-
-	void BuildGammaRamp(FLOAT GammaCorrection, FGammaRamp& Ramp);
-	void BuildGammaRamp(FLOAT GammaCorrection, FByteGammaRamp& Ramp);
-	void SetGamma(FLOAT GammaCorrection);
-	BYTE SetZTestMode(BYTE Mode);
-
-	// DistanceFog
-	void PreDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf);
-	void PostDrawGouraud(FSceneNode* Frame, FFogSurf &FogSurf);
-	void ResetFog();
-	void SetDistanceFogUniformData();
-
-#if ENGINE_VERSION==227
-	// Lighting
-	void RenderLighting(FSceneNode* Frame, UTexture* SurfaceTexture, UTexture* DetailTexture, DWORD PolyFlags, UBOOL bDisableLights);
-	INT	LightNum;
-#endif
-
-	// Shader stuff
-	void InitShaders();
-	void DeleteShaderBuffers();
-	void LoadShader(const TCHAR* Filename, GLuint &ShaderObject);
-	void LinkShader(const TCHAR* ShaderProgName, GLuint &ShaderProg);
-	void GetUniformBlockIndex(GLuint &Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName);
-	void GetUniformLocation(GLuint &Uniform, GLuint &Program, const char* Name, FString ProgramName);
-	void DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLuint size, INT Mode, DWORD LineFLags, FPlane DrawColor, bool BufferedDraw);
-	void DrawTileVerts(DrawTileBuffer &BufferData);
-	void DrawComplexVertsSinglePass(DrawComplexBuffer &BufferData);
-	void DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer &BufferData);
-
-	void Exit();
 	void ShutdownAfterError();
 
-	// OpenGLStats
-	void DrawStats( FSceneNode* Frame );
+	//
+	// Common URenderDevice interface
+	//
+	UBOOL Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
+	UBOOL SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen);
+	void  Exit();
+	void  Flush(UBOOL AllowPrecache);
+	UBOOL Exec(const TCHAR* Cmd, FOutputDevice& Ar);
+	void  Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize);
+	void  Unlock(UBOOL Blit);
+	void  DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet);
+	void  DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
+	void  DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
+	void  Draw3DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
+	void  Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2);
+	void  Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
+	void  ClearZ(FSceneNode* Frame);
+	void  PushHit(const BYTE* Data, INT Count);
+	void  PopHit(INT Count, UBOOL bForce);
+	void  GetStats(TCHAR* Result);
+	void  ReadPixels(FColor* Pixels);
+	void  EndFlash();
+	void  DrawStats(FSceneNode* Frame);
+	void  SetSceneNode(FSceneNode* Frame);
+	void  PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags);
 
-private:
-	// Program switching
-	void DrawSimpleEnd(INT NextProgram);
-	void DrawSimpleStart();
+	//
+	// Unreal 227 URenderDevice interface
+	//
+	void  PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf);
+	void  PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf);
+	void  DrawPass(FSceneNode* Frame, INT Pass);
+	void  DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span = NULL);
+	BYTE  PushClipPlane(const FPlane& Plane);
+	BYTE  PopClipPlane();
+	BYTE  SetZTestMode(BYTE Mode);
+
+	//
+	// URenderDeviceOldUnreal469 interface
+	//
+	void  DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
+	UBOOL SupportsTextureFormat(ETextureFormat Format);
+
+	//
+	// Extension Checking
+	//
+	UBOOL FindExt(const TCHAR* Name);
+	void  FindProc(void*& ProcAddress, char* Name, char* SupportName, UBOOL& Supports, UBOOL AllowExt);
+	void  FindProcs(UBOOL AllowExt);
+	UBOOL GLExtensionSupported(FString Extension_Name);
+	void  CheckExtensions();
+
+	//
+	// Window/Context Creation
+	//
+	UBOOL CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
+	UBOOL SetWindowPixelFormat();
+	void  UnsetRes();
+	void  SwapControl();
+
+#ifdef SDL2BUILD
+    UBOOL SetSDLAttributes();
+#elif _WIN32
+	void  PrintFormat(HDC hDC, INT nPixelFormat);
+#endif
+
+	static QSORT_RETURN CDECL CompareRes(const FPlane* A, const FPlane* B) {
+		return (QSORT_RETURN)(((A->X - B->X) != 0.0f) ? (A->X - B->X) : (A->Y - B->Y));
+	}
+
+	//
+	// OpenGL Context State Management
+	//
+	void  LockBuffer(BufferRange& Buffer, GLuint Index);
+	void  WaitBuffer(BufferRange& Buffer, GLuint Index);
+	void  MapBuffers();
+	void  UnMapBuffers();
+	void  MakeCurrent();
+	void  UpdateCoords(FSceneNode* Frame);
+	void  SetOrthoProjection(FSceneNode* Frame);
+	void  SetProjection(FSceneNode* Frame, UBOOL bNearZ);
+	void  SetPermanentState();
+	void  SetProgram(INT CurrentProgram);
+	void  ResetFog();
+
+	//
+	// Textures/Sampler Management
+	//
+	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
+	BOOL  WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture);
+	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, DWORD DrawFlags); //First parameter has to fit the uniform in the fragment shader
+	void  SetNoTexture(INT Multi);
+	DWORD SetPolyFlags(DWORD PolyFlags);
+	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
+	DWORD SetDepth(DWORD PolyFlags);
+	void  SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, FTextureInfo& Info, DWORD DrawFlags);
+
+	//
+	// Gamma Control
+	//
+	void  BuildGammaRamp(FLOAT GammaCorrection, FGammaRamp& Ramp);
+	void  BuildGammaRamp(FLOAT GammaCorrection, FByteGammaRamp& Ramp);
+	void  SetGamma(FLOAT GammaCorrection);
+
+	//
+	// Shader Management
+	//
+	void  InitShaders();
+	void  DeleteShaderBuffers();
+	void  LoadShader(const TCHAR* Filename, GLuint& ShaderObject);
+	void  LinkShader(const TCHAR* ShaderProgName, GLuint& ShaderProg);
+	void  GetUniformBlockIndex(GLuint& Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName);
+	void  GetUniformLocation(GLuint& Uniform, GLuint& Program, const char* Name, FString ProgramName);
+
+	//
+	// Editor Hit Testing
+	//
+	void  LockHit(BYTE* InHitData, INT* InHitSize);
+	void  UnlockHit(UBOOL Blit);
+	void  SetSceneNodeHit(FSceneNode* Frame);
+	bool  HitTesting() { return HitData != NULL; }
+
+	//
+	// DrawComplexSurface Support
+	//
+	DrawComplexShaderDrawParams* DrawComplexGetDrawParamsRef();
+	void DrawComplexVertsSinglePass(DrawComplexBuffer& BufferData);
 	void DrawComplexEnd(INT NextProgram);
 	void DrawComplexStart();
-	void DrawGouraudEnd(INT NextProgram);
-	void DrawGouraudStart();
-	void DrawTileEnd(INT NextProgram);
-	void DrawTileStart();
 
+	//
+	// DrawGouraud Support
+	//
+	DrawGouraudShaderDrawParams* DrawGouraudGetDrawParamsRef();
+	static void DrawGouraudBufferVert(DrawGouraudBufferedVert* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
+	void  DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
+	void  DrawGouraudReleaseState(FTextureInfo& Info);
+	void  DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData);
+	void  DrawGouraudEnd(INT NextProgram);
+	void  DrawGouraudStart();
+
+	//
+	// DrawTile Support
+	//
+	void  DrawTileVerts();
+	void  DrawTileEnd(INT NextProgram);
+	void  DrawTileStart();
+
+	//
+	// DrawSimple Support
+	//
+	void  DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLuint size, INT Mode, DWORD LineFLags, FPlane DrawColor, bool BufferedDraw);
+	void  DrawSimpleBufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
+	void  DrawSimpleEnd(INT NextProgram);
+	void  DrawSimpleStart();
+
+	//
 	// Error logging
-	public:
+	//
 #ifdef WIN32
 	static void CALLBACK DebugCallback(unsigned int source, unsigned int type, unsigned int id, unsigned int severity, int length, const char* message, const void* userParam);
 #else

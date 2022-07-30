@@ -1,39 +1,47 @@
 /*=============================================================================
-	UnShader.h: Unreal XOpenGL shader support header.
+	UnShader.cpp: Unreal XOpenGL shader support code.
 
 	Copyright 2014-2017 Oldunreal
 
 	Revision history:
 	* Created by Smirftsch
-
 =============================================================================*/
 
+// Include GLM
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtc/matrix_inverse.hpp>
+
+#include "XOpenGLDrv.h"
+#include "XOpenGL.h"
+
 // Helpers
-void UXOpenGLRenderDevice::GetUniformBlockIndex(GLuint &Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName)
+void UXOpenGLRenderDevice::GetUniformBlockIndex(GLuint& Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName)
 {
 	BlockIndex = glGetUniformBlockIndex(Program, Name);
 	if (BlockIndex == GL_INVALID_INDEX)
-    {
+	{
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
-            debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
-    }
+			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+	}
 	glUniformBlockBinding(Program, BlockIndex, BindingIndex);
 }
 
-void UXOpenGLRenderDevice::GetUniformLocation(GLuint &Uniform, GLuint &Program, const char* Name, FString ProgramName)
+void UXOpenGLRenderDevice::GetUniformLocation(GLuint& Uniform, GLuint& Program, const char* Name, FString ProgramName)
 {
 	Uniform = glGetUniformLocation(Program, Name);
 	if (Uniform == GL_INVALID_INDEX)
-    {
+	{
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
 		if (UseOpenGLDebug && LogLevel >= 2)
-            debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
-    }
+			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), *ProgramName);
+	}
 }
 
 // Shader handling
-void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObject)
+void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint& ShaderObject)
 {
 	guard(UXOpenGLRenderDevice::LoadShader);
 	GLint blen = 0;
@@ -57,48 +65,48 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 			GLVersionString = TEXT("#version 330 core\n");
 	}
 
-    // ADD DEFINITIONS
+	// ADD DEFINITIONS
 	Definitions += *FString::Printf(TEXT("#define EDITOR %d\n"), GIsEditor ? 1 : 0);
-    Definitions += *FString::Printf(TEXT("#define BINDLESSTEXTURES %d\n"), UsingBindlessTextures ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define BINDLESSTEXTURES %d\n"), UsingBindlessTextures ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define BINDLESS_STORAGE_UBO %d\n"), (UsingBindlessTextures && BindlessHandleStorage == STORE_UBO) ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define BINDLESS_STORAGE_SSBO %d\n"), (UsingBindlessTextures && BindlessHandleStorage == STORE_SSBO) ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define BINDLESS_STORAGE_INT %d\n"), (UsingBindlessTextures && BindlessHandleStorage == STORE_INT) ? 1 : 0);
-    Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), MaxBindlessTextures);
+	Definitions += *FString::Printf(TEXT("#define NUMTEXTURES %i \n"), MaxBindlessTextures);
 	Definitions += *FString::Printf(TEXT("#define HARDWARELIGHTS %d\n"), UseHWLighting ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define BUMPMAPS %d\n"), BumpMaps ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define DETAILTEXTURES %d\n"), DetailTextures ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define MACROTEXTURES %d\n"), MacroTextures ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define ENGINE_VERSION %d\n"), ENGINE_VERSION);
-    Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
+	Definitions += *FString::Printf(TEXT("#define MAX_LIGHTS %i \n"), MAX_LIGHTS);
 	Definitions += *FString::Printf(TEXT("#define MAX_CLIPPINGPLANES %i \n"), MaxClippingPlanes);
 	Definitions += *FString::Printf(TEXT("#define SHADERDRAWPARAMETERS %i \n"), UsingShaderDrawParameters);
 	Definitions += *FString::Printf(TEXT("#define SIMULATEMULTIPASS %i \n"), SimulateMultiPass);
-	Definitions += *FString::Printf(TEXT("#define BASIC_PARALLAX %d\n"), ParallaxVersion==Parallax_Basic ? 1 : 0);
-	Definitions += *FString::Printf(TEXT("#define OCCLUSION_PARALLAX %d\n"), ParallaxVersion==Parallax_Occlusion ? 1 : 0);
-	Definitions += *FString::Printf(TEXT("#define RELIEF_PARALLAX %i\n"), ParallaxVersion==Parallax_Relief ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define BASIC_PARALLAX %d\n"), ParallaxVersion == Parallax_Basic ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define OCCLUSION_PARALLAX %d\n"), ParallaxVersion == Parallax_Occlusion ? 1 : 0);
+	Definitions += *FString::Printf(TEXT("#define RELIEF_PARALLAX %i\n"), ParallaxVersion == Parallax_Relief ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define SUPPORTSCLIPDISTANCE %d\n"), SupportsClipDistance ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define SRGB %d\n"), UseSRGBTextures ? 1 : 0);
 
 
-    // LOAD EXTENSIONS
-    if (!appLoadFileToString(Extensions, TEXT("xopengl/Extensions.incl"))) // Load extensions config.
+	// LOAD EXTENSIONS
+	if (!appLoadFileToString(Extensions, TEXT("xopengl/Extensions.incl"))) // Load extensions config.
 		appErrorf(TEXT("XOpenGL: Failed loading global Extensions file xopengl/Extensions.incl"));
 
-    // The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
-    Definitions += *FString::Printf(TEXT("#line 1 \n"));
+	// The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
+	Definitions += *FString::Printf(TEXT("#line 1 \n"));
 
-    // LOAD GLOBALS
+	// LOAD GLOBALS
 	if (!appLoadFileToString(Globals, TEXT("xopengl/Globals.incl"))) // Load global config.
 		appErrorf(TEXT("XOpenGL: Failed loading global shader file xopengl/Globals.incl"));
 
-    // append static config vars
-    Statics += *FString::Printf(TEXT("const int DetailMax=%i; \n"), DetailMax);
-    Statics += *FString::Printf(TEXT("const float GammaMultiplier=%f; \n"), GammaMultiplier);
-    Statics += *FString::Printf(TEXT("const float GammaMultiplierUED=%f; \n"), GammaMultiplierUED);
-    Statics += *FString::Printf(TEXT("#line 1 \n"));
+	// append static config vars
+	Statics += *FString::Printf(TEXT("const int DetailMax=%i; \n"), DetailMax);
+	Statics += *FString::Printf(TEXT("const float GammaMultiplier=%f; \n"), GammaMultiplier);
+	Statics += *FString::Printf(TEXT("const float GammaMultiplierUED=%f; \n"), GammaMultiplierUED);
+	Statics += *FString::Printf(TEXT("#line 1 \n"));
 
-    // LOAD SHADER
-    if (!appLoadFileToString(Shaderdata, Filename))
+	// LOAD SHADER
+	if (!appLoadFileToString(Shaderdata, Filename))
 		appErrorf(TEXT("XOpenGL: Failed loading shader file %ls"), Filename);
 
 	if (UseOpenGLDebug && LogLevel >= 3)
@@ -118,7 +126,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	glCompileShader(ShaderObject);
 
 	glGetShaderiv(ShaderObject, GL_COMPILE_STATUS, &IsCompiled);
-    if (!IsCompiled)
+	if (!IsCompiled)
 		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls"), Filename);
 
 	glGetShaderiv(ShaderObject, GL_INFO_LOG_LENGTH, &blen);
@@ -135,30 +143,30 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint &ShaderObjec
 	unguard;
 }
 
-void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint &ShaderProg)
+void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint& ShaderProg)
 {
-    guard(UXOpenGLRenderDevice::LinkShader);
-    GLint IsLinked = 0;
-    GLint blen = 0;
-    GLsizei slen = 0;
-    glLinkProgram(ShaderProg);
+	guard(UXOpenGLRenderDevice::LinkShader);
+	GLint IsLinked = 0;
+	GLint blen = 0;
+	GLsizei slen = 0;
+	glLinkProgram(ShaderProg);
 	glGetProgramiv(ShaderProg, GL_LINK_STATUS, &IsLinked);
 
-    if (!IsLinked)
-        GWarn->Logf(TEXT("XOpenGL: Failed linking %ls"),ShaderProgName);
+	if (!IsLinked)
+		GWarn->Logf(TEXT("XOpenGL: Failed linking %ls"), ShaderProgName);
 
-    glGetProgramiv(ShaderProg, GL_INFO_LOG_LENGTH, &blen);
-    if (blen > 1)
-    {
-        GLchar* linker_log = new GLchar[blen + 1];
-        glGetProgramInfoLog(ShaderProg, blen, &slen, linker_log);
-        debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
-        delete[] linker_log;
-    }
-    else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);
+	glGetProgramiv(ShaderProg, GL_INFO_LOG_LENGTH, &blen);
+	if (blen > 1)
+	{
+		GLchar* linker_log = new GLchar[blen + 1];
+		glGetProgramInfoLog(ShaderProg, blen, &slen, linker_log);
+		debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderProgName, appFromAnsi(linker_log));
+		delete[] linker_log;
+	}
+	else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderProgName);
 
-    CHECK_GL_ERROR();
-    unguard;
+	CHECK_GL_ERROR();
+	unguard;
 }
 
 void UXOpenGLRenderDevice::InitShaders()
@@ -221,7 +229,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	// ShadowMap
 	LoadShader(TEXT("xopengl/SimpleDepth.vert"), SimpleDepthVertObject);
 	LoadShader(TEXT("xopengl/SimpleDepth.frag"), SimpleDepthFragObject);
-    */
+	*/
 
 	DrawSimpleProg = glCreateProgram();
 	DrawTileProg = glCreateProgram();
@@ -258,10 +266,10 @@ void UXOpenGLRenderDevice::InitShaders()
 	*/
 
 	// Link shaders.
-	LinkShader(TEXT("DrawSimpleProg"),DrawSimpleProg);
-	LinkShader(TEXT("DrawTileProg"),DrawTileProg);
-	LinkShader(TEXT("DrawComplexProg"),DrawComplexProg);
-	LinkShader(TEXT("DrawGouraudProg"),DrawGouraudProg);
+	LinkShader(TEXT("DrawSimpleProg"), DrawSimpleProg);
+	LinkShader(TEXT("DrawTileProg"), DrawTileProg);
+	LinkShader(TEXT("DrawComplexProg"), DrawComplexProg);
+	LinkShader(TEXT("DrawGouraudProg"), DrawGouraudProg);
 	//LinkShader(TEXT("SimpleDepthProg"), SimpleDepthProg);
 
 	//Global Matrix setup
@@ -272,30 +280,21 @@ void UXOpenGLRenderDevice::InitShaders()
 	//GetUniformBlockIndex(SimpleDepthProg, GlobalUniformBlockIndex, GlobalMatricesBindingIndex, "GlobalMatrices", TEXT("SimpleDepthProg"));
 	CHECK_GL_ERROR();
 
-	//Global DistanceFog
-	GetUniformBlockIndex(DrawSimpleProg, GlobalUniformDistanceFogIndex, GlobalDistanceFogBindingIndex, "DistanceFogParams", TEXT("DrawSimpleProg"));
-	GetUniformBlockIndex(DrawTileProg, GlobalUniformDistanceFogIndex, GlobalDistanceFogBindingIndex, "DistanceFogParams", TEXT("DrawTileProg"));
-	GetUniformBlockIndex(DrawComplexProg, GlobalUniformDistanceFogIndex, GlobalDistanceFogBindingIndex, "DistanceFogParams", TEXT("DrawComplexProg"));
-	GetUniformBlockIndex(DrawGouraudProg, GlobalUniformDistanceFogIndex, GlobalDistanceFogBindingIndex, "DistanceFogParams", TEXT("DrawGouraudProg"));
-	CHECK_GL_ERROR();
-
-    //Global ClipPlanes
+	//Global ClipPlanes
 	GetUniformBlockIndex(DrawSimpleProg, GlobalUniformClipPlaneIndex, GlobalClipPlaneBindingIndex, "ClipPlaneParams", TEXT("DrawSimpleProg"));
 	GetUniformBlockIndex(DrawTileProg, GlobalUniformClipPlaneIndex, GlobalClipPlaneBindingIndex, "ClipPlaneParams", TEXT("DrawTileProg"));
 	GetUniformBlockIndex(DrawComplexProg, GlobalUniformClipPlaneIndex, GlobalClipPlaneBindingIndex, "ClipPlaneParams", TEXT("DrawComplexProg"));
 	GetUniformBlockIndex(DrawGouraudProg, GlobalUniformClipPlaneIndex, GlobalClipPlaneBindingIndex, "ClipPlaneParams", TEXT("DrawGouraudProg"));
 	CHECK_GL_ERROR();
 
-
-    //Global texture handles for bindless.
-    if (UsingBindlessTextures)
-    {
-        //GetUniformBlockIndex(DrawSimpleProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawSimpleProg")); //not needed for DrawSimple
-        GetUniformBlockIndex(DrawTileProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawTileProg"));
-        GetUniformBlockIndex(DrawComplexProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawComplexProg"));
-        GetUniformBlockIndex(DrawGouraudProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawGouraudProg"));
-        CHECK_GL_ERROR();
-    }
+	//Global texture handles for bindless.
+	if (UsingBindlessTextures && BindlessHandleStorage == STORE_UBO)
+	{
+		GetUniformBlockIndex(DrawTileProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawTileProg"));
+		GetUniformBlockIndex(DrawComplexProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawComplexProg"));
+		GetUniformBlockIndex(DrawGouraudProg, GlobalTextureHandlesBlockIndex, GlobalTextureHandlesBindingIndex, "TextureHandles", TEXT("DrawGouraudProg"));
+		CHECK_GL_ERROR();
+	}
 
 	// Light information.
 	GetUniformBlockIndex(DrawSimpleProg, GlobalUniformStaticLightInfoIndex, GlobalStaticLightInfoIndex, "StaticLightInfo", TEXT("DrawSimpleProg"));
@@ -304,7 +303,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformBlockIndex(DrawGouraudProg, GlobalUniformStaticLightInfoIndex, GlobalStaticLightInfoIndex, "StaticLightInfo", TEXT("DrawGouraudProg"));
 	CHECK_GL_ERROR();
 
-		//Global Matrix setup
+	//Global Matrix setup
 	GetUniformBlockIndex(DrawSimpleProg, GlobalUniformCoordsBlockIndex, GlobalCoordsBindingIndex, "GlobalCoords", TEXT("DrawSimpleProg"));
 	GetUniformBlockIndex(DrawTileProg, GlobalUniformCoordsBlockIndex, GlobalCoordsBindingIndex, "GlobalCoords", TEXT("DrawTileProg"));
 	GetUniformBlockIndex(DrawComplexProg, GlobalUniformCoordsBlockIndex, GlobalCoordsBindingIndex, "GlobalCoords", TEXT("DrawComplexProg"));
@@ -338,7 +337,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformLocation(DrawComplexSinglePassDrawFlags, DrawComplexProg, "DrawFlags", DrawComplexSinglePass);
 	// Multitextures in DrawComplexProg
 	for (INT i = 0; i < 8; i++)
-        GetUniformLocation(DrawComplexSinglePassTexture[i], DrawComplexProg, (char*) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawComplexSinglePass);
+		GetUniformLocation(DrawComplexSinglePassTexture[i], DrawComplexProg, (char*)(TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawComplexSinglePass);
 	CHECK_GL_ERROR();
 
 	//DrawGouraud vars.
@@ -348,7 +347,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformLocation(DrawGouraudTexNum, DrawGouraudProg, "TexNum", DrawGouraud);
 	// Multitextures DrawGouraudProg
 	for (INT i = 0; i < 8; i++)
-        GetUniformLocation(DrawGouraudTexture[i], DrawGouraudProg, (char *) (TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawGouraud);
+		GetUniformLocation(DrawGouraudTexture[i], DrawGouraudProg, (char*)(TCHAR_TO_ANSI(*FString::Printf(TEXT("Texture%i"), i))), DrawGouraud);
 	// ShadowMap
 
 	CHECK_GL_ERROR();
@@ -356,7 +355,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	// Global matrices.
 	glGenBuffers(1, &GlobalMatricesUBO);
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalMatricesUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (5*sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, (5 * sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalMatricesBindingIndex, GlobalMatricesUBO, 0, sizeof(glm::mat4) * 5);
 	CHECK_GL_ERROR();
@@ -364,17 +363,17 @@ void UXOpenGLRenderDevice::InitShaders()
 	// Global Coords.
 	glGenBuffers(1, &GlobalCoordsUBO);
 	glBindBuffer(GL_UNIFORM_BUFFER, GlobalCoordsUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (2*sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, (2 * sizeof(glm::mat4)), NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalCoordsBindingIndex, GlobalCoordsUBO, 0, sizeof(glm::mat4) * 2);
 	CHECK_GL_ERROR();
 
 	// Global bindless textures.
 	if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
-    {
+	{
 		GLenum Target = (BindlessHandleStorage == STORE_UBO) ? GL_UNIFORM_BUFFER : GL_SHADER_STORAGE_BUFFER;
-        glGenBuffers(1, &GlobalTextureHandlesBufferObject);
-        glBindBuffer(Target, GlobalTextureHandlesBufferObject);
+		glGenBuffers(1, &GlobalTextureHandlesBufferObject);
+		glBindBuffer(Target, GlobalTextureHandlesBufferObject);
 		if (Target == GL_UNIFORM_BUFFER)
 		{
 			glBufferData(Target, sizeof(GLuint64) * MaxBindlessTextures * 2, NULL, GL_DYNAMIC_DRAW);
@@ -386,9 +385,9 @@ void UXOpenGLRenderDevice::InitShaders()
 			glBindBufferBase(Target, GlobalTextureHandlesBindingIndex, GlobalTextureHandlesBufferObject);
 			glBindBuffer(Target, 0);
 		}
-        
-        CHECK_GL_ERROR();
-    }
+
+		CHECK_GL_ERROR();
+	}
 
 	// Static lights information.
 	glGenBuffers(1, &GlobalStaticLightInfoUBO);
@@ -396,14 +395,6 @@ void UXOpenGLRenderDevice::InitShaders()
 	glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::vec4) * MAX_LIGHTS * 6, NULL, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalStaticLightInfoIndex, GlobalStaticLightInfoUBO, 0, sizeof(glm::vec4) * MAX_LIGHTS * 6);
-	CHECK_GL_ERROR();
-
-	// Global DistanceFog.
-	glGenBuffers(1, &GlobalDistanceFogUBO);
-	glBindBuffer(GL_UNIFORM_BUFFER, GlobalDistanceFogUBO);
-	glBufferData(GL_UNIFORM_BUFFER, (2 * sizeof(glm::vec4)), NULL, GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
-	glBindBufferRange(GL_UNIFORM_BUFFER, GlobalDistanceFogBindingIndex, GlobalDistanceFogUBO, 0, sizeof(glm::vec4) * 2);
 	CHECK_GL_ERROR();
 
 	// Global ClipPlane.
@@ -463,7 +454,7 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 		glDeleteBuffers(1, &GlobalTextureHandlesBufferObject);
 	if (GlobalStaticLightInfoUBO)
 		glDeleteBuffers(1, &GlobalStaticLightInfoUBO);
-    if (GlobalCoordsUBO)
+	if (GlobalCoordsUBO)
 		glDeleteBuffers(1, &GlobalCoordsUBO);
 	if (DrawSimpleVertBuffer)
 		glDeleteBuffers(1, &DrawSimpleVertBuffer);
@@ -478,9 +469,9 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 	if (DrawGouraudSSBO)
 		glDeleteBuffers(1, &DrawGouraudSSBO);
 	/*
-        if (SimpleDepthBuffer)
-            glDeleteBuffers(1, &SimpleDepthBuffer);
-    */
+		if (SimpleDepthBuffer)
+			glDeleteBuffers(1, &SimpleDepthBuffer);
+	*/
 
 	if (DrawSimpleGeometryVertsVao)
 		glDeleteVertexArrays(1, &DrawSimpleGeometryVertsVao);
@@ -492,9 +483,9 @@ void UXOpenGLRenderDevice::DeleteShaderBuffers()
 	if (DrawComplexVertsSinglePassVao)
 		glDeleteVertexArrays(1, &DrawComplexVertsSinglePassVao);
 
-    /*
+	/*
 	if (SimpleDepthVao)
 		glDeleteVertexArrays(1, &SimpleDepthVao);
-    */
+	*/
 	unguard;
 }
