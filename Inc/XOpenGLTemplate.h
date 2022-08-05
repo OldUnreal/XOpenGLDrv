@@ -50,7 +50,7 @@ protected:
 #if ENGINE_VERSION==227
 		INT* NewHash = NewTagged(TEXT("HashMapHash"))INT[HashCount];
 #else
-		INT* NewHash = new(TEXT("HashMapHash"))INT[HashCount];
+		INT* NewHash = new INT[HashCount];
 #endif
 		{for( INT i=0; i<HashCount; i++ )
 		{
