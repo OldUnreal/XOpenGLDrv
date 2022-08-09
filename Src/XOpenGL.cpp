@@ -2187,6 +2187,12 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 {
 	guard(UXOpenGLRenderDevice::ClearZ);
 	CHECK_GL_ERROR();
+
+	// stijn: force a flush before we clear the depth buffer
+	auto CurrentProgram = ActiveProgram;
+	SetProgram(No_Prog);
+	SetProgram(ActiveProgram);
+
 	SetSceneNode(Frame);
 	SetBlend(PF_Occlude, false);
 	glClear(GL_DEPTH_BUFFER_BIT);
