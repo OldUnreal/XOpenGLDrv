@@ -1864,12 +1864,20 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	guard(UXOpenGLRenderDevice::SetProjection);
 
 	// Precompute stuff.
+#if UNREAL_TOURNAMENT_OLDUNREAL
+	FLOAT zNear = 0.5f;
+#else
     FLOAT zNear = 1.0f;
+#endif
     StoredbNearZ = 0;
 
 	if (bNearZ)
     {
-        zNear = 0.7f;
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		zNear = 0.5f;
+#else
+		zNear = 0.7f;
+#endif
         StoredbNearZ = 1;
     }
 

@@ -36,7 +36,7 @@ enum DrawGouraudTexCoordsIndices
 {
 	DIFFUSE_INFO,			// UMult, VMult, Diffuse, Alpha
 	DETAIL_MACRO_INFO,		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
-	MISC_INFO,				// BumpMap Specular, Gamma, texture format, unused
+	MISC_INFO,				// BumpMap Specular, Gamma, texture format, Unused
 	EDITOR_DRAWCOLOR,
 	DISTANCE_FOG_COLOR,
 	DISTANCE_FOG_INFO
@@ -78,6 +78,8 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 #endif
 
 	DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
+	UBOOL NoNearZ = (GUglyHackFlags & HACKFLAGS_NoNearZ) == HACKFLAGS_NoNearZ;
+	DrawFlags NoNearZFlag = NoNearZ ? DF_NoNearZ : DF_None;
 
 	FCachedTexture* Bind;
 	// Check if the uniforms will change
@@ -88,6 +90,8 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		WillItBlend(DrawGouraudDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the texture will change
 		WillTextureChange(0, Info, NextPolyFlags, Bind) ||
+		// Check if NoNearZ will change
+		((DrawGouraudDrawParams.DrawFlags()^NoNearZFlag) & DF_NoNearZ) ||
 		// Check if we have room left in the multi-draw array
 		DrawGouraudMultiDrawCount+1 >= MAX_DRAWGOURAUD_BATCH)
 	{
@@ -100,19 +104,9 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		}
 
 		SetBlend(NextPolyFlags, false);
-	}
 
-	// Check if the projection will change
-	if ((GUglyHackFlags & HACKFLAGS_NoNearZ) && (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || !StoredbNearZ))
-	{
-		if (DrawGouraudBufferData.IndexOffset > 0)
-		{
-			unclockFast(Stats.GouraudPolyCycles);
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			clockFast(Stats.GouraudPolyCycles);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-		}
-		SetProjection(Frame, 1);
+		if (NoNearZ && (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || !StoredbNearZ))
+			SetProjection(Frame, 1);
 	}
 
 	DrawGouraudDrawParams.PolyFlags() = NextPolyFlags;
@@ -139,7 +133,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	DrawGouraudDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, Info.Texture->Alpha);
 	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
 
-	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture;
+	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture | NoNearZFlag;
 
 	if (Info.Texture->DetailTexture && DetailTextures)
 	{

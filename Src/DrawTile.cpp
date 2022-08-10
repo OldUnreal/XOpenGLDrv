@@ -63,6 +63,10 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
     DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
     GLuint DrawTileStrideSize = (OpenGLVersion == GL_ES) ? DrawTileESStrideSize : DrawTileCoreStrideSize;
 
+#if UNREAL_TOURNAMENT_OLDUNREAL
+    UBOOL ShouldDepthTest = ((GUglyHackFlags & HACKFLAGS_PostRender) == 0) || Abs(1.f - Z) > SMALL_NUMBER;
+#endif
+
 	// Check if uniforms will change
 	if (DrawTileBufferData.PolyFlags != NextPolyFlags ||
         // Check if blending mode will change
@@ -70,7 +74,12 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
         // Check if texture will change
         WillTextureChange(0, Info, PolyFlags, Bind) || 
         // Check if we have space to batch more data
-        DrawTileBufferData.IndexOffset * sizeof(GLfloat) >= DRAWTILE_SIZE * sizeof(GLfloat) - DrawTileStrideSize)
+        DrawTileBufferData.IndexOffset * sizeof(GLfloat) >= DRAWTILE_SIZE * sizeof(GLfloat) - DrawTileStrideSize
+#if UNREAL_TOURNAMENT_OLDUNREAL
+        // Check if the depth testing mode will change
+        || ShouldDepthTest != PrevDrawTileDepthTested
+#endif
+        )
 	{
         if (DrawTileBufferData.VertSize > 0)
         {
@@ -80,6 +89,15 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
         DrawTileBufferData.BlendPolyFlags = PolyFlags;
         SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
+
+#if UNREAL_TOURNAMENT_OLDUNREAL
+        if (ShouldDepthTest)
+            glEnable(GL_DEPTH_TEST);
+        else
+            glDisable(GL_DEPTH_TEST);
+
+		PrevDrawTileDepthTested = ShouldDepthTest;
+#endif
 	}
 
     DrawTileBufferData.PolyFlags = NextPolyFlags;
@@ -394,6 +412,10 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
 
     if (UsingBindlessTextures)
         glDisableVertexAttribArray(BINDLESS_TEXTURE_ATTRIB);
+
+#if UNREAL_TOURNAMENT_OLDUNREAL
+    glEnable(GL_DEPTH_TEST);
+#endif
 }
 
 void UXOpenGLRenderDevice::DrawTileStart()
@@ -403,6 +425,11 @@ void UXOpenGLRenderDevice::DrawTileStart()
 #if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
     if (UseAA && NoAATiles && PrevProgram != Simple_Prog)
         glDisable(GL_MULTISAMPLE);
+#endif
+
+#if UNREAL_TOURNAMENT_OLDUNREAL
+    if (GUglyHackFlags & HACKFLAGS_PostRender) // ugly hack to make the HUD always render on top of weapons
+        glDisable(GL_DEPTH_TEST);
 #endif
 
     glUseProgram(DrawTileProg);

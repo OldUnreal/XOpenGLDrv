@@ -357,6 +357,7 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
 
 enum DrawFlags
 {
+	DF_None				= 0x00000000,
 	DF_DiffuseTexture	= 0x00000001,
 	DF_LightMap         = 0x00000002,
 	DF_FogMap          	= 0x00000004,
@@ -365,6 +366,7 @@ enum DrawFlags
 	DF_BumpMap			= 0x00000020,
 	DF_EnvironmentMap   = 0x00000040,
 	DF_HeightMap	 	= 0x00000080,
+	DF_NoNearZ			= 0x00000100,
 };
 
 /*-----------------------------------------------------------------------------
@@ -829,24 +831,24 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::uvec4 TexNum;
 		glm::uvec4 _DrawFlags;
 
-		DWORD& DrawFlags()
+		UINT& DrawFlags()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.x);
+			return _DrawFlags.x;
 		}
 
-		DWORD& HitTesting()
+		UINT& HitTesting()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.y);
+			return _DrawFlags.y;
 		}
 
-		DWORD& PolyFlags()
+		UINT& PolyFlags()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.z);
+			return _DrawFlags.z;
 		}
 
-		DWORD& RendMap()
+		UINT& RendMap()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.w);
+			return _DrawFlags.w;
 		}
 
 	} DrawGouraudDrawParams;
@@ -902,29 +904,29 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::uvec4 TexNum[4];
 		glm::uvec4 _DrawFlags;
 
-		DWORD& DrawFlags()
+		UINT& DrawFlags()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.x);
+			return _DrawFlags.x;
 		}
 
-		DWORD& TextureFormat()
+		UINT& TextureFormat()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.y);
+			return _DrawFlags.y;
 		}
 
-		DWORD& PolyFlags()
+		UINT& PolyFlags()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.z);
+			return _DrawFlags.z;
 		}
 
-		DWORD& RendMap()
+		UINT& RendMap()
 		{
-			return reinterpret_cast<DWORD&>(_DrawFlags.w);
+			return _DrawFlags.w;
 		}
 
-		DWORD& HitTesting()
+		UINT& HitTesting()
 		{
-			return reinterpret_cast<DWORD&>(TexNum[3].x);
+			return TexNum[3].x;
 		}
 	} DrawComplexDrawParams;
 
@@ -961,6 +963,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//DrawTile
 	GLuint DrawTileTexCoords;
 	GLuint DrawTileTextureHandle;
+	UBOOL PrevDrawTileDepthTested;
 
 	//Matrices
 	glm::mat4 projMat;
