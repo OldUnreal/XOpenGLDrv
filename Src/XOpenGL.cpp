@@ -220,6 +220,10 @@ void UXOpenGLRenderDevice::StaticConstructor()
     UseBindlessLightmaps = 1;
 #endif
 
+#if UNREAL_TOURNAMENT_OLDUNREAL
+	DetailMax = 2;
+#endif
+
 	UseOpenGLDebug = 0;
 	DebugLevel = 2;
 	NoBuffering = 0;
