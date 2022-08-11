@@ -2269,7 +2269,7 @@ void UXOpenGLRenderDevice::Exit()
 	guard(UXOpenGLRenderDevice::Exit);
 	debugf(NAME_Exit, TEXT("XOpenGL: Exit"));
 
-	if (!GIsEditor)
+	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);
 
 #ifdef SDL2BUILD
