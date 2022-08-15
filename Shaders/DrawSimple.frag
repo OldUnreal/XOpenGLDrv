@@ -10,13 +10,6 @@ uniform uint LineFlags;
 uniform bool bHitTesting;
 uniform float Gamma;
 
-in float texCoord;
-
-// LineFlags
-const uint LINE_None			= 0x00u;
-const uint LINE_Transparent		= 0x01u;
-const uint LINE_DepthCued	 	= 0x02u;
-
 #ifdef GL_ES
 layout ( location = 0 ) out vec4 FragColor;
 # if SIMULATEMULTIPASS
@@ -31,10 +24,12 @@ layout ( location = 0, index = 0) out vec4 FragColor;
 
 void main(void)
 {
-    vec4 TotalColor = DrawColor;
+    vec4 TotalColor = vec4(DrawColor.rgb, 1.0);
 
 	if ( (LineFlags&LINE_Transparent)==LINE_Transparent )
 	{
+        if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)
+            discard;
 	}
 #if EDITOR
         if (!bHitTesting)
@@ -53,7 +48,7 @@ void main(void)
         TotalColor.b=pow(TotalColor.b,1.0/InGamma);
 #endif
 
-# if SIMULATEMULTIPASS
+#if SIMULATEMULTIPASS
     FragColor1	= vec4(1.0,1.0,1.0,1.0)-TotalColor;
 #endif
 	FragColor = TotalColor;
