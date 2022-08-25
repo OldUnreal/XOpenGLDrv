@@ -926,8 +926,9 @@ DWORD UXOpenGLRenderDevice::SetPolyFlags(DWORD PolyFlags)
 
 	if (!(PolyFlags & (PF_Translucent | PF_Modulated | PF_AlphaBlend | PF_Highlighted)))
 		PolyFlags |= PF_Occlude;
-	else if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
-		PolyFlags &= ~PF_Masked;
+	// stijn: The skybox in zp01-umssakuracrashsite has PF_Translucent|PF_Masked. If we strip off PF_Masked here, the skybox renders incorrectly
+	//else if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
+	//	PolyFlags &= ~PF_Masked;
 
     return PolyFlags;
 
