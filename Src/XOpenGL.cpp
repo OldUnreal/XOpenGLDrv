@@ -673,16 +673,22 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
             MajorVersion = 4;
             MinorVersion = 3;
         }
+#if MACOSX
+		MajorVersion = 4;
+		MinorVersion = 1;
+#else
+		
         if (UseBindlessTextures || UsePersistentBuffers)
         {
             MajorVersion = 4;
             MinorVersion = 5;
         }
         if (UseShaderDrawParameters)
-        {
-            MajorVersion = 4;
-            MinorVersion = 6;
-        }
+		{
+			MajorVersion = 4;
+			MinorVersion = 6;
+		}
+#endif
     }
 
 	iPixelFormat = 0;
