@@ -24,7 +24,7 @@ layout ( location = 0, index = 0) out vec4 FragColor;
 
 void main(void)
 {
-    vec4 TotalColor = vec4(DrawColor.rgb, 1.0);
+    vec4 TotalColor = DrawColor;
 
 	if ( (LineFlags&LINE_Transparent)==LINE_Transparent )
 	{

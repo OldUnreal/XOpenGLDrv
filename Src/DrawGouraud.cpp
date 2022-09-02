@@ -449,7 +449,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
             glInvalidateBufferData(DrawGouraudVertBuffer);
             CHECK_GL_ERROR();
         }
-#ifdef __LINUX_ARM__
+#if defined(__LINUX_ARM__) || MACOSX
         glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer, GL_DYNAMIC_DRAW);
 #else
 		glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer);
@@ -463,7 +463,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 				CHECK_GL_ERROR();
 			}
 
-#if defined(__LINUX_ARM__)
+#if defined(__LINUX_ARM__) || MACOSX
 			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawGouraudMultiDrawCount * sizeof(DrawGouraudShaderDrawParams), DrawGouraudSSBORange.Buffer, GL_DYNAMIC_DRAW);
 #else
 			glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawGouraudMultiDrawCount * sizeof(DrawGouraudShaderDrawParams), DrawGouraudSSBORange.Buffer);
