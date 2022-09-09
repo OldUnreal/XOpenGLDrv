@@ -28,6 +28,8 @@
 
 #ifdef _WIN32
 #include <comutil.h>
+#else
+#include <sys/time.h>
 #endif
 
 #ifdef __LINUX__
@@ -653,9 +655,14 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: Creating new OpenGL context."));
 
 	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
+#if __APPLE__
+	DesiredStencilBits = 0;
+	DesiredDepthBits = 32;
+#else
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
-
+#endif
+	
 	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
 
 	INT MajorVersion = 3;
@@ -1465,7 +1472,6 @@ void UXOpenGLRenderDevice::SwapControl()
 #endif // SDL2BUILD
 }
 
-
 void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 {
 	guard(UXOpenGLRenderDevice::Flush);
@@ -1543,15 +1549,15 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	CurrentPolyFlags = 0;
 	CurrentAdditionalPolyFlags = 0;
 
+	// stijn: crashes the intel drivers if we do it here
+	// glClear(GL_COLOR_BUFFER_BIT);
+	// glFlush();
+
     SetProgram(No_Prog);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
     glUseProgram(0);
-
-	// stijn: crashes the intel drivers if we do it here
-	///glClear(GL_COLOR_BUFFER_BIT);
-	///glFlush();
 
 	SwapControl();
 
@@ -1669,7 +1675,6 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4), glm::value_ptr(FrameUncoords));
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	CHECK_GL_ERROR();
-
 	unguard;
 }
 
@@ -1678,6 +1683,8 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	guard(UXOpenGLRenderDevice::SetSceneNode);
 
 	Level = Frame->Level;
+	// stijn: this is also very very slow. FPS goes down by 50% by pushing these uniforms every frame
+#if !__APPLE__
 	if ( !UseHWLighting && Level && (!NumStaticLights || GIsEditor))
 	{
 		if (GIsEditor)
@@ -1803,7 +1810,8 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		CHECK_GL_ERROR();
 	}
 	CHECK_GL_ERROR();
-
+#endif
+	
 	//Flush Buffers.
 	SetProgram(No_Prog);
 
@@ -1824,7 +1832,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	// Disable clipping
 	while (NumClipPlanes > 0)
 		PopClipPlane();
-
+	
 	unguard;
 }
 
@@ -1865,14 +1873,13 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
-
 	unguard;
 }
 
 void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 {
 	guard(UXOpenGLRenderDevice::SetProjection);
-
+	
 	// Precompute stuff.
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	FLOAT zNear = 0.5f;
@@ -1920,14 +1927,32 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
-
 	unguard;
 }
+
+#define FPS_DEBUG 0
+#if FPS_DEBUG
+unsigned long long XFrameCounter = 0;
+DOUBLE LastFrameLog = 0.0;
+#endif
 
 void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
 	guard(UXOpenGLRenderDevice::Lock);
 
+#if FPS_DEBUG
+	struct timeval TimeOfDay;
+	gettimeofday(&TimeOfDay, NULL);
+	DOUBLE NewTime = TimeOfDay.tv_sec + TimeOfDay.tv_usec / 1000000.0;
+	if (NewTime - LastFrameLog > 1.0)
+	{
+		debugf(TEXT("%d FPS"), XFrameCounter);
+		XFrameCounter = 0;
+		LastFrameLog = NewTime;
+	}
+	XFrameCounter++;
+#endif
+	
 	check(LockCount == 0);
 	++LockCount;
 	CLEAR_GL_ERROR();
@@ -1938,28 +1963,12 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
 	CHECK_GL_ERROR();
-
-	if (glClearDepthf)
-		glClearDepthf(1.f);
-#ifndef __EMSCRIPTEN__
-    #ifndef __LINUX_ARM__
-	else
-		glClearDepth(1.0);
-    #endif
-#endif
-
-	if (glDepthRangef)
-		glDepthRangef(0.f, 1.f);
-#ifndef __EMSCRIPTEN__
-    #ifndef __LINUX_ARM__
-	else
-		glDepthRange(0.0, 1.0);
-    #endif
-#endif
+	glClearDepth(1.0);
+	glDepthRange(0.0, 1.0);
 
 	CHECK_GL_ERROR();
 	glPolygonOffset(-1.f, -1.f);
-	SetBlend(PF_Occlude, false);
+    SetBlend(PF_Occlude, false);
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags&LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
 	CHECK_GL_ERROR();
 
@@ -1977,12 +1986,11 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	// Lock hits.
 	HitData = InHitData;
 	HitSize = InHitSize;
-
+	
 	// Reset stats.
 	appMemzero(&Stats, sizeof(Stats));
 
 	LockHit(InHitData, InHitSize);
-
 	CHECK_GL_ERROR();
 	unguard;
 }
@@ -2013,7 +2021,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
     // Check for optional frame rate limit
     // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
     // I am not happy with this solution, but it will do the trick for now...
-#if ENGINE_VERSION==227
+#if ENGINE_VERSION==227 && 0
 	if (FrameRateLimit >= 20)
     {
 		FTime curFrameTimestamp;
@@ -2211,9 +2219,13 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	SetProgram(No_Prog);
 	SetProgram(ActiveProgram);
 
+	// stijn: you have a serious problem in Engine/Render if you need this SetSceneNode call here!
+#if !__APPLE__
 	SetSceneNode(Frame);
+#endif
 	SetBlend(PF_Occlude, false);
 	glClear(GL_DEPTH_BUFFER_BIT);
+	
 	CHECK_GL_ERROR();
 	unguard;
 }

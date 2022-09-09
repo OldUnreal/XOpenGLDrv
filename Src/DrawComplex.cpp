@@ -65,7 +65,8 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	//Draw polygons
 	SetProgram(ComplexSurfaceSinglePass_Prog);
 
-#if ENGINE_VERSION==227
+	// stijn: this absolutely kills performance on mac. You're updating global state here for every gouraud mesh/complex surface!
+#if ENGINE_VERSION==227 && !__APPLE__
 	// Update FrameCoords
     if (BumpMaps)
         UpdateCoords(Frame);
@@ -299,9 +300,10 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 		if (UseBufferInvalidation)
 			glInvalidateBufferData(DrawComplexVertBuffer);
 
-#if defined(__LINUX_ARM__) || MACOSX
+#if defined(__LINUX_ARM__) || __APPLE__
 		// stijn: we get a 10x perf increase on the pi if we just replace the entire buffer...
 		glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer, GL_DYNAMIC_DRAW);
+
 #else
 		glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(FLOAT), DrawComplexSinglePassRange.Buffer);
 #endif
@@ -310,7 +312,7 @@ void UXOpenGLRenderDevice::DrawComplexVertsSinglePass(DrawComplexBuffer& BufferD
 		{
 			if (UseBufferInvalidation)
 				glInvalidateBufferData(DrawComplexSSBO);
-#if defined(__LINUX_ARM__) || MACOSX
+#if defined(__LINUX_ARM__) || __APPLE__
 			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderDrawParams), DrawComplexSSBORange.Buffer, GL_DYNAMIC_DRAW);
 #else
 			glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawComplexMultiDrawCount * sizeof(DrawComplexShaderDrawParams), DrawComplexSSBORange.Buffer);

@@ -67,7 +67,8 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 {
 	SetProgram(GouraudPolyVert_Prog);
 
-#if ENGINE_VERSION==227
+	// stijn: this absolutely kills performance on mac. You're updating global state here for every gouraud mesh/complex surface!
+#if ENGINE_VERSION==227 && !__APPLE__
     // Update FrameCoords for shaders.
     // Depending on HUD calls for SetSceneNode SetSceneNode is unreliable, so have to ensure proper updating here.
     // This is only essential (so far) for NormalMaps/Parallax/HWLighting, so this may be kept disabled for non 227 builds.
