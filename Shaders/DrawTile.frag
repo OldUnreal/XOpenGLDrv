@@ -31,15 +31,7 @@ layout ( location = 0, index = 0) out vec4 FragColor;
 void main(void)
 {
 	vec4 TotalColor;
-	vec4 Color;
-
-    #if BINDLESSTEXTURES
-    if (gTexNum > 0u)
-        Color = texture(Textures[gTexNum], gTexCoords);
-    else Color = texture(Texture0, gTexCoords);
-    #else
-    Color = texture(Texture0, gTexCoords);
-    #endif
+	vec4 Color = GetTexel(gTexNum, Texture0, gTexCoords);
 
 	// Handle PF_Masked.
 	if ( (PolyFlags&PF_Masked) == PF_Masked )
