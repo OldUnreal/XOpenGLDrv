@@ -28,8 +28,9 @@ void main(void)
 
 	if ( (LineFlags&LINE_Transparent)==LINE_Transparent )
 	{
-        if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)
-            discard;
+	// stijn: this is an attempt at stippled line drawing in GL4
+//        if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)
+//            discard;
 	}
 #if EDITOR
         if (!bHitTesting)
