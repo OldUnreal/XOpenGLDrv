@@ -34,7 +34,7 @@ void UXOpenGLRenderDevice::WaitBuffer(BufferRange& Buffer, GLuint Index)
 {
     guard(UXOpenGLRenderDevice::WaitBuffer);
 
-	if (!UsingPersistentBuffers && (&Buffer != &GlobalTextureHandlesRange && BindlessHandleStorage != STORE_UBO))
+	if (!UsingPersistentBuffers && (&Buffer != &GlobalTextureHandlesRange || BindlessHandleStorage != STORE_UBO))
 		return;
 
     CHECK_GL_ERROR();
@@ -276,7 +276,7 @@ void UXOpenGLRenderDevice::UnMapBuffers()
 		delete[] DrawTileRange.Buffer;
 	}
 
-	if (UsingBindlessTextures)
+	if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
 	{
 #ifndef __LINUX_ARM__
 		glGetNamedBufferParameteriv(GlobalTextureHandlesBufferObject, GL_BUFFER_MAPPED, &IsMapped);

@@ -465,7 +465,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 				BindlessHandleStorage = STORE_INT;
 			}
 			else
-#endif
+
 			if (SupportsSSBO)
 			{
 				BindlessHandleStorage = STORE_SSBO;
@@ -473,6 +473,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 				HandleSize = 8; // tightly packed
 			}
 			else
+#endif
 			{
 				BindlessHandleStorage = STORE_UBO;
 				MaxStorageSize = MaxUniformBlockSize;
@@ -1507,16 +1508,11 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 			if (UsingBindlessTextures)
 			{
-#if 0 // def __LINUX_ARM__
-				if (It.Value().TexHandle[i] && glIsTextureHandleResidentNV(It.Value().TexHandle[i]))
-					glMakeTextureHandleNonResidentNV(It.Value().TexHandle[i]);
-#else
-				if (It.Value().TexHandle[i] && glIsTextureHandleResidentARB(It.Value().TexHandle[i]))
-					glMakeTextureHandleNonResidentARB(It.Value().TexHandle[i]);
-#endif
+				if (It.Value().BindlessTexHandle[i] && glIsTextureHandleResidentARB(It.Value().BindlessTexHandle[i]))
+					glMakeTextureHandleNonResidentARB(It.Value().BindlessTexHandle[i]);
 			}
 
-			It.Value().TexHandle[i] = 0;
+			It.Value().BindlessTexHandle[i] = 0;
 			It.Value().TexNum[i] = 1;
 			if (It.Value().Ids[i])
 			{
@@ -2273,7 +2269,7 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 void UXOpenGLRenderDevice::PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags)
 {
 	guard(UXOpenGLRenderDevice::PrecacheTexture);
-	SetTexture(0, Info, PolyFlags, 0.0, 0, DF_DiffuseTexture);
+	SetTexture(0, Info, PolyFlags, 0.0, DF_DiffuseTexture);
 	unguard;
 }
 

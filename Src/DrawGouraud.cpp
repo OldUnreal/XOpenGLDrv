@@ -130,7 +130,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 			DrawGouraudDrawParams.RendMap() = Frame->Viewport->Actor->RendMap;
 	}
 
-	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, GouraudPolyVert_Prog, DF_DiffuseTexture);
+	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, DF_DiffuseTexture);
 	DrawGouraudDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, Info.Texture->Alpha);
 	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
 
@@ -145,7 +145,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 #endif
 		DrawGouraudDrawParams.DrawFlags() |= DF_DetailTexture;
 
-		SetTexture(1, FTEXTURE_GET(DrawGouraudDetailTextureInfo), Info.Texture->DetailTexture->PolyFlags, 0.0, GouraudPolyVert_Prog, DF_DetailTexture);
+		SetTexture(1, FTEXTURE_GET(DrawGouraudDetailTextureInfo), Info.Texture->DetailTexture->PolyFlags, 0.0, DF_DetailTexture);
 		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
 		DrawGouraudDrawParams.TexNum[1] = TexInfo[1].TexNum;
 	}
@@ -185,7 +185,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 #endif
 		DrawGouraudDrawParams.DrawFlags() |= DF_MacroTexture;
 
-		SetTexture(3, FTEXTURE_GET(DrawGouraudMacroTextureInfo), Info.Texture->MacroTexture->PolyFlags, 0.0, GouraudPolyVert_Prog, DF_MacroTexture);
+		SetTexture(3, FTEXTURE_GET(DrawGouraudMacroTextureInfo), Info.Texture->MacroTexture->PolyFlags, 0.0, DF_MacroTexture);
 		DrawGouraudDrawParams.TexNum[3] = TexInfo[3].TexNum;
 
 		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO].z = TexInfo[3].UMult;

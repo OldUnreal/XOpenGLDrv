@@ -9,7 +9,7 @@
 =============================================================================*/
 
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
-// #define DEBUGGL 1
+#define DEBUGGL 1
 
 // Maybe for future release. Not in use yet.
 // #define QTBUILD 1
@@ -436,9 +436,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint Ids[2]; // 0:Unmasked, 1:Masked.
 		INT BaseMip;
 		INT MaxLevel;
-		GLuint Sampler[2];
-		GLuint64 TexHandle[2];
-		GLuint TexNum[2];
+		GLuint Sampler[2];			   // Sampler object
+		GLuint64 BindlessTexHandle[2]; // Bindless handles
+		GLuint TexNum[2];			   // TMU num
 		INT RealtimeChangeCount{};
 	};
 
@@ -646,7 +646,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FLOAT VMult;
 		FLOAT UPan;
 		FLOAT VPan;
-		INT TexNum;
+		INT TexNum;					// TMU number or index in the bindless texture array
 		INT RealTimeChangeCount{};
 	FTexInfo()
 		:CurrentCacheID(0),
@@ -1213,13 +1213,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Textures/Sampler Management
 	//
 	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	BOOL  WillTextureChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FCachedTexture*& CachedTexture);
-	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, INT ShaderProg, DWORD DrawFlags); //First parameter has to fit the uniform in the fragment shader
+	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale);
+	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags); //First parameter has to fit the uniform in the fragment shader
 	void  SetNoTexture(INT Multi);
 	DWORD SetPolyFlags(DWORD PolyFlags);
 	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
 	DWORD SetDepth(DWORD PolyFlags);
-	void  SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, FTextureInfo& Info, DWORD DrawFlags);
+	void  SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, DWORD DrawFlags);
+	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture);
+	void  GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags);
+	void  BindTextureAndSampler(INT Multi, FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags);
 
 	//
 	// Gamma Control
