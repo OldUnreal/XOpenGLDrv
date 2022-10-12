@@ -74,17 +74,16 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
 
-	FCachedTexture* Bind;
 	// Check if the uniforms will change
 	if (!UsingShaderDrawParameters || HitTesting() ||
 		// Check if the blending mode will change
-		WillItBlend(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
+		WillBlendStateChange(DrawComplexDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the surface textures will change
-		WillTextureChange(0, *Surface.Texture, NextPolyFlags, Bind) ||
-		(Surface.LightMap && WillTextureChange(1, *Surface.LightMap, NextPolyFlags, Bind)) ||
-		(Surface.FogMap && WillTextureChange(2, *Surface.FogMap, NextPolyFlags, Bind)) ||
+		WillTextureStateChange(0, *Surface.Texture, NextPolyFlags) ||
+		(Surface.LightMap && WillTextureStateChange(1, *Surface.LightMap, NextPolyFlags)) ||
+		(Surface.FogMap && WillTextureStateChange(2, *Surface.FogMap, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
-		(Surface.EnvironmentMap && EnvironmentMaps && WillTextureChange(6, *Surface.EnvironmentMap, NextPolyFlags, Bind)) ||
+		(Surface.EnvironmentMap && EnvironmentMaps && WillTextureStateChange(6, *Surface.EnvironmentMap, NextPolyFlags)) ||
 #endif
 		// Check if we have room left in the multi-draw array
 		DrawComplexMultiDrawCount+1 >= MAX_DRAWCOMPLEX_BATCH)

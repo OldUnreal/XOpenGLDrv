@@ -9,7 +9,7 @@
 =============================================================================*/
 
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
-#define DEBUGGL 1
+// #define DEBUGGL 1
 
 // Maybe for future release. Not in use yet.
 // #define QTBUILD 1
@@ -1212,16 +1212,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Textures/Sampler Management
 	//
-	static BOOL WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale);
-	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags); //First parameter has to fit the uniform in the fragment shader
+	static BOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
+	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
+	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
+	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags);
 	void  SetNoTexture(INT Multi);
 	DWORD SetPolyFlags(DWORD PolyFlags);
 	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
 	DWORD SetDepth(DWORD PolyFlags);
-	void  SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, DWORD DrawFlags);
+	void  SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags);
 	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture);
-	void  GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags);
+	void  GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, DWORD DrawFlags);
 	void  BindTextureAndSampler(INT Multi, FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags);
 
 	//

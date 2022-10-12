@@ -59,7 +59,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
 	PolyFlags &= ~(PF_RenderHint | PF_Unlit); // Using PF_RenderHint internally for CW/CCW switch.
 
-    FCachedTexture* Bind;
     DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
     GLuint DrawTileStrideSize = (OpenGLVersion == GL_ES) ? DrawTileESStrideSize : DrawTileCoreStrideSize;
 
@@ -70,9 +69,9 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	// Check if uniforms will change
 	if (DrawTileBufferData.PolyFlags != NextPolyFlags ||
         // Check if blending mode will change
-        WillItBlend(DrawTileBufferData.BlendPolyFlags, PolyFlags) || // orig polyflags here!
+        WillBlendStateChange(DrawTileBufferData.BlendPolyFlags, PolyFlags) || // orig polyflags here!
         // Check if texture will change
-        WillTextureChange(0, Info, PolyFlags, Bind) || 
+        WillTextureStateChange(0, Info, PolyFlags) ||
         // Check if we have space to batch more data
         DrawTileBufferData.IndexOffset * sizeof(GLfloat) >= DRAWTILE_SIZE * sizeof(GLfloat) - DrawTileStrideSize
 #if UNREAL_TOURNAMENT_OLDUNREAL

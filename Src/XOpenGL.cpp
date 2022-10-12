@@ -465,7 +465,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 				BindlessHandleStorage = STORE_INT;
 			}
 			else
-
+#endif
 			if (SupportsSSBO)
 			{
 				BindlessHandleStorage = STORE_SSBO;
@@ -473,7 +473,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 				HandleSize = 8; // tightly packed
 			}
 			else
-#endif
 			{
 				BindlessHandleStorage = STORE_UBO;
 				MaxStorageSize = MaxUniformBlockSize;

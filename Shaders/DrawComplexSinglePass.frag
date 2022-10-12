@@ -724,7 +724,9 @@ void main (void)
 #else
 void main(void)
 {
-    FragColor = GetTexel(vBaseMapTexNum, Texture0, vTexCoords);
+    //FragColor = GetTexel(TexNum[0], Texture0, vTexCoords);    
+    FragColor = texture(sampler2D(Textures[TexNum[0]]), vTexCoords);
+
 }
 #endif
 

@@ -310,31 +310,35 @@ layout(std140) uniform TextureHandles
 {
 	layout(bindless_sampler) sampler2D Textures[NUMTEXTURES];
 };
-sampler2D GetBindlessSampler(uint TexNum)
+
+vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
 {
-	return Textures[TexNum];
+	if (BindlessTexNum > 0u)
+		return texture(Textures[BindlessTexNum], TexCoords);
+	return texture(BoundSampler, TexCoords);
 }
+
 #elif BINDLESS_STORAGE_SSBO
+
 layout(std430, binding = 1) buffer TextureHandles
 {
 	uvec2 Textures[];
 };
-sampler2D GetBindlessSampler(uint TexNum)
+vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
 {
-	return sampler2D(Textures[TexNum]);
+	if (BindlessTexNum > 0u)
+		return texture(sampler2D(Textures[BindlessTexNum]), TexCoords);
+	return texture(BoundSampler, TexCoords);
 }
-#endif
+
+#else
 
 vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
 {
-#if BINDLESSTEXTURES
-	if (BindlessTexNum > 0u)
-		return texture(GetBindlessSampler(BindlessTexNum), TexCoords);
 	return texture(BoundSampler, TexCoords);
-#else
-	return texture(BoundSampler, TexCoords);
-#endif
 }
+
+#endif
 
 //DistanceFog
 struct FogParameters

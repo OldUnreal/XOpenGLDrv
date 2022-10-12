@@ -82,15 +82,14 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	UBOOL NoNearZ = (GUglyHackFlags & HACKFLAGS_NoNearZ) == HACKFLAGS_NoNearZ;
 	DrawFlags NoNearZFlag = NoNearZ ? DF_NoNearZ : DF_None;
 
-	FCachedTexture* Bind;
 	// Check if the uniforms will change
 	if (!UsingShaderDrawParameters ||
 		// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
 		((DrawGouraudDrawParams.PolyFlags()^PolyFlags) & PF_ForceViewZone) ||
 		// Check if the blending mode will change
-		WillItBlend(DrawGouraudDrawParams.PolyFlags(), NextPolyFlags) ||
+		WillBlendStateChange(DrawGouraudDrawParams.PolyFlags(), NextPolyFlags) ||
 		// Check if the texture will change
-		WillTextureChange(0, Info, NextPolyFlags, Bind) ||
+		WillTextureStateChange(0, Info, NextPolyFlags) ||
 		// Check if NoNearZ will change
 		((DrawGouraudDrawParams.DrawFlags()^NoNearZFlag) & DF_NoNearZ) ||
 		// Check if we have room left in the multi-draw array

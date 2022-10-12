@@ -42,7 +42,8 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	DWORD PolyFlags, 
 	BOOL& IsResidentBindlessTexture, 
 	BOOL& IsBoundToTMU, 
-	BOOL& IsTextureDataStale
+	BOOL& IsTextureDataStale,
+	BOOL ShouldResetStaleState
 )
 {
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
@@ -66,16 +67,46 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 			return Result;
 		}
 
+		if (Result)
+		{
 #if ENGINE_VERSION==227
-		IsTextureDataStale = Info.RenderTag != Result->RealtimeChangeCount;
-		Result->RealtimeChangeCount = Info.RenderTag;
+			IsTextureDataStale = Info.RenderTag != Result->RealtimeChangeCount;
 #elif UNREAL_TOURNAMENT_OLDUNREAL
-		IsTextureDataStale = Info.Texture->RealtimeChangeCount != Result->RealtimeChangeCount;
-		Result->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
+			IsTextureDataStale = Info.Texture->RealtimeChangeCount != Result->RealtimeChangeCount;
+#else
+			IsTextureDataStale = TRUE;
 #endif
+
+			if (ShouldResetStaleState)
+			{
+#if ENGINE_VERSION==227
+				Result->RealtimeChangeCount = Info.RenderTag;
+#elif UNREAL_TOURNAMENT_OLDUNREAL
+				Result->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
+#endif				
+			}
+		}
+		else
+		{
+			IsTextureDataStale = TRUE;
+		}
 	}
 
 	return Result;
+}
+
+BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
+{
+	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
+
+	if (!GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE) ||
+		(!IsResidentBindlessTexture && !IsBoundToTMU) ||
+		IsTextureDataStale)
+	{
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -119,7 +150,7 @@ void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, DWORD DrawFlags)
+void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags)
 {
 	guard(UOpenGLRenderDevice::SetSampler);
 	CHECK_GL_ERROR();
@@ -135,15 +166,15 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		CHECK_GL_ERROR();
 	}
+#endif // ENGINE_VERSION
 
 	// Also set for light and fogmaps.
-    if ( Info.Format==TEXF_BGRA8_LM || Info.Format==TEXF_RGB10A2_LM )
+    if ( IsLightOrFogMap )
     {
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
     }
 	CHECK_GL_ERROR();
-#endif // ENGINE_VERSION
 
 	// Set texture sampler state.
 	if ((PolyFlags & PF_NoSmooth) && (DrawFlags & DF_DiffuseTexture))
@@ -161,11 +192,11 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL Ski
 		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_LINEAR : (UseTrilinear ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_NEAREST));
 		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-		if (MaxAnisotropy)
+		if (MaxAnisotropy != 0.f)
 			glSamplerParameterf(Sampler, GL_TEXTURE_MAX_ANISOTROPY, MaxAnisotropy);
 
-		if (LODBias)
-			glSamplerParameteri(Sampler, GL_TEXTURE_LOD_BIAS, LODBias);
+		if (LODBias != 0.f)
+			glSamplerParameteri(Sampler, GL_TEXTURE_LOD_BIAS, appRound(LODBias));
 
 		CHECK_GL_ERROR();
 
@@ -181,6 +212,9 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 {
 	bool UnsupportedTexture = false;
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
+
+	if (Info.Texture)
+	debugf(TEXT("Uploading texture %ls"), *FObjectPathName(Info.Texture));
 
 	if (Info.NumMips && !Info.Mips[0])
 	{
@@ -666,22 +700,13 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	return !UnsupportedTexture;
 }
 
-void UXOpenGLRenderDevice::GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags)
+void UXOpenGLRenderDevice::GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, DWORD DrawFlags)
 {
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
-	bool SkipMipmaps = (!GenerateMipMaps && Info.NumMips == 1 && !AlwaysMipmap);
 	glGenTextures(1, &Bind->Ids[CacheSlot]);
 
 	if (!Bind->Sampler[CacheSlot])
 		glGenSamplers(1, &Bind->Sampler[CacheSlot]);
-
-	CHECK_GL_ERROR();
-
-#if ENGINE_VERSION==227
-	SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, DrawFlags);
-#else
-	SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, 0);
-#endif
 }
 
 void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags)
@@ -712,16 +737,14 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	Tex.UMult = 1.f / (Info.UScale * static_cast<FLOAT>(Info.USize));
 	Tex.VMult = 1.f / (Info.VScale * static_cast<FLOAT>(Info.VSize));
 
-    bool bBindlessRealtimeChanged = false;
-
-	// Determine slot to work around odd masked handling.
-	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format==TEXF_P8)) ? 1 : 0;
-
 	STAT(clockFast(Stats.BindCycles));
 
 	// Check if the texture is already bound to the correct TMU
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
-	FCachedTexture* Bind = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale);
+	FCachedTexture* Bind = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, TRUE);
+
+	// Determine slot to work around odd masked handling.
+	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
 
 	// Bail out early if the texture is fully up-to-date
 	if (Bind && IsResidentBindlessTexture && !IsTextureDataStale)
@@ -735,35 +758,38 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	Tex.CurrentCacheSlot = CacheSlot;
 	Tex.CurrentCacheID   = Info.CacheID;
 
-	BOOL FirstUpload = FALSE;
-	if ( !Bind )
+	if (!Bind)
 	{
 		// Figure out OpenGL-related scaling for the texture.
 		Bind = &BindMap->Set( Info.CacheID, FCachedTexture() );
 		memset(Bind, 0, sizeof(FCachedTexture));
-		FirstUpload = TRUE;
 	}
 
-	if (Bind->Ids[CacheSlot] == 0)
-		GenerateTextureAndSampler(Info, Bind, PolyFlags);
-
-	if (Bind->TexNum[CacheSlot] == 0)
+	UBOOL IsNewBind = Bind->Ids[CacheSlot] == 0;
+	if (IsNewBind)
+	{
+		UBOOL SkipMipmaps = (!GenerateMipMaps && Info.NumMips == 1 && !AlwaysMipmap);
+		UBOOL IsLightOrFogMap = Info.Format == TEXF_BGRA8_LM || Info.Format == TEXF_RGB10A2_LM;
+		GenerateTextureAndSampler(Info, Bind, PolyFlags, DrawFlags);
 		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
+		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, IsLightOrFogMap, DrawFlags);
+	}
+	else if (Bind->TexNum[CacheSlot] == 0)
+	{
+		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
+	}
 
 	STAT(unclockFast(Stats.BindCycles));
 
 	// Upload if needed.
 	STAT(clockFast(Stats.ImageCycles));
-	if( FirstUpload || Info.bRealtimeChanged || bBindlessRealtimeChanged )
-		UploadTexture(Info, Bind, PolyFlags, FirstUpload, bBindlessRealtimeChanged);
+	if( IsNewBind || Info.bRealtimeChanged || IsTextureDataStale )
+		UploadTexture(Info, Bind, PolyFlags, IsNewBind, IsResidentBindlessTexture);
 
-	// Try to make the texture resident as a bindless texture
-	bool UseBindlessTexture = true;
 	// stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in) - Smirftsch: Added manual override UseBindlessLightmaps
-	if (!UseBindlessLightmaps && !Info.Texture)
-		UseBindlessTexture = false;
-
-    if (UsingBindlessTextures && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures && UseBindlessTexture)
+	UBOOL ShouldMakeBindlessResident = UsingBindlessTextures && (UseBindlessLightmaps || Info.Texture);
+	
+    if (UsingBindlessTextures && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures && ShouldMakeBindlessResident)
     {
         guard(MakeTextureHandleResident);
         Bind->TexNum[CacheSlot]            = TexNum;
@@ -793,7 +819,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         }
         unguard;
     }
-    else if (FirstUpload)
+    else if (IsNewBind)
     {
         Bind->BindlessTexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
@@ -963,7 +989,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 	unguard;
 }
 
-BOOL UXOpenGLRenderDevice::WillItBlend(DWORD OldPolyFlags, DWORD NewPolyFlags)
+BOOL UXOpenGLRenderDevice::WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags)
 {
 	// stijn: returns true if the polyflag switch will cause a change in the blending mode
 	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog)) ? TRUE : FALSE;

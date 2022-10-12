@@ -225,7 +225,7 @@ void main(void)
 	    vec3 TangentViewDir  = normalize( gTangentViewPos - gTangentFragPos );
 
 		//normal from normal map
-		vec3 TextureNormal = GetTexel(gBumpMapTexNum, Texture2, gTexCoords).rgb * 2.0 - 1.0;
+		vec3 TextureNormal = GetTexel(gBumpTexNum, Texture2, gTexCoords).rgb * 2.0 - 1.0;
 		vec3 BumpColor;
 		vec3 TotalBumpColor=vec3(0.0,0.0,0.0);
 
