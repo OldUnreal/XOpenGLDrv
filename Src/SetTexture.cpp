@@ -213,9 +213,6 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	bool UnsupportedTexture = false;
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
 
-	if (Info.Texture)
-	debugf(TEXT("Uploading texture %ls"), *FObjectPathName(Info.Texture));
-
 	if (Info.NumMips && !Info.Mips[0])
 	{
 		GWarn->Logf(TEXT("Encountered texture %ls with invalid MipMaps!"), Info.Texture->GetPathName());
