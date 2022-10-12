@@ -733,7 +733,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     // Account for all the impact on scale normalization.
 	Tex.UMult = 1.f / (Info.UScale * static_cast<FLOAT>(Info.USize));
 	Tex.VMult = 1.f / (Info.VScale * static_cast<FLOAT>(Info.VSize));
-
+	
 	STAT(clockFast(Stats.BindCycles));
 
 	// Check if the texture is already bound to the correct TMU
@@ -744,7 +744,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
 
 	// Bail out early if the texture is fully up-to-date
-	if (Bind && IsResidentBindlessTexture && !IsTextureDataStale)
+	if (Bind && (IsResidentBindlessTexture || IsBoundToTMU) && !IsTextureDataStale)
 	{
 		Tex.TexNum = Bind->TexNum[CacheSlot];
 		STAT(unclockFast(Stats.BindCycles));
