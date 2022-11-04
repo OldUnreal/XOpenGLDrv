@@ -1220,7 +1220,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	DWORD SetPolyFlags(DWORD PolyFlags);
 	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
 	DWORD SetDepth(DWORD PolyFlags);
-	void  SetSampler(GLuint Multi, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags);
+	void  SetSampler(GLuint Multi, FTextureInfo& Info, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags);
 	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture);
 	void  GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, DWORD DrawFlags);
 	void  BindTextureAndSampler(INT Multi, FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags);

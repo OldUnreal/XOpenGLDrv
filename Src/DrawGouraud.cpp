@@ -163,7 +163,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 #endif
 		DrawGouraudDrawParams.DrawFlags() |= DF_BumpMap;
 
-		SetTexture(2, FTEXTURE_GET(DrawGouraudBumpMapInfo), Info.Texture->BumpMap->PolyFlags, 0.0, GouraudPolyVert_Prog, DF_BumpMap);
+		SetTexture(2, FTEXTURE_GET(DrawGouraudBumpMapInfo), Info.Texture->BumpMap->PolyFlags, 0.0, DF_BumpMap);
 		DrawGouraudDrawParams.DrawData[MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
 		DrawGouraudDrawParams.TexNum[2] = TexInfo[2].TexNum; //using Base Texture UV.
 	}

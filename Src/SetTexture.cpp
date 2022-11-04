@@ -150,7 +150,7 @@ void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags)
+void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags)
 {
 	guard(UOpenGLRenderDevice::SetSampler);
 	CHECK_GL_ERROR();
@@ -769,7 +769,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		UBOOL IsLightOrFogMap = Info.Format == TEXF_BGRA8_LM || Info.Format == TEXF_RGB10A2_LM;
 		GenerateTextureAndSampler(Info, Bind, PolyFlags, DrawFlags);
 		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
-		SetSampler(Bind->Sampler[CacheSlot], PolyFlags, SkipMipmaps, IsLightOrFogMap, DrawFlags);
+		SetSampler(Bind->Sampler[CacheSlot], Info, PolyFlags, SkipMipmaps, IsLightOrFogMap, DrawFlags);
 	}
 	else if (Bind->TexNum[CacheSlot] == 0)
 	{
