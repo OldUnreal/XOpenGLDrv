@@ -1236,9 +1236,8 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		dma.dmBitsPerPel = dmw.dmBitsPerPel = NewColorBytes * 8;
 		dma.dmFields = dmw.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_POSITION;// | DM_BITSPERPEL;
 
-# if !UNREAL_TOURNAMENT_OLDUNREAL
+		// stijn: I took this out between 469a and 469b, but doing so broke exclusive fullscreen support!
 		SetWindowPos(hWnd, HWND_TOPMOST, 0, 0, NewX, NewY, SWP_SHOWWINDOW);
-# endif
 
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: Fullscreen NewX %i NewY %i"), NewX, NewY);
 
