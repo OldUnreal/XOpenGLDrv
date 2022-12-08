@@ -168,7 +168,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
         currentTexCoords -= deltaTexCoords;
 
         // get depthmap value at current texture coordinates
-        currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r;        
+        currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r;
 
         // get depth of next layer
         currentLayerDepth += layerDepth;
@@ -179,7 +179,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
 
     // get depth after and before collision for linear interpolation
     float afterDepth  = currentDepthMapValue - currentLayerDepth;
-    float beforeDepth = GetTexel(TexNum, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;    
+    float beforeDepth = GetTexel(TexNum, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;
 
     // interpolation of texture coordinates
     float weight = afterDepth / (afterDepth - beforeDepth);
@@ -637,15 +637,23 @@ void main (void)
 #endif
 	}
 
-    if((vPolyFlags & PF_Modulated)!=PF_Modulated)
+#if EDITOR
+// Perhaps should make this work for in game as well, but this means an additional fork and a lot of unneeded overhead.
+    if ((vRendMap & REN_PlainTex)!=REN_PlainTex )
 	{
-	    TotalColor  = TotalColor * LightColor;
+        if((vPolyFlags & PF_Modulated)!=PF_Modulated)
+        {
+            TotalColor  = TotalColor * LightColor;
+        }
+        TotalColor += FogColor;
 	}
-	else
+#else
+    if((vPolyFlags & PF_Modulated)!=PF_Modulated)
     {
-		TotalColor = TotalColor;
+        TotalColor  = TotalColor * LightColor;
     }
     TotalColor += FogColor;
+#endif
 
  // Add DistanceFog, needs to be added after Light has been applied.
 #if ENGINE_VERSION==227
@@ -693,10 +701,6 @@ void main (void)
 			TotalColor = vec4(max(0.0,T),max(0.0,-T),0.0,1.0);
 		}
 	}
-	else if ( vRendMap==REN_PlainTex )
-	{
-		TotalColor = Color;
-	}
 
 	if ( (vRendMap!=REN_Normals)  && ((vPolyFlags&PF_Selected) == PF_Selected) )
 	{
@@ -724,7 +728,7 @@ void main (void)
 #else
 void main(void)
 {
-    //FragColor = GetTexel(TexNum[0], Texture0, vTexCoords);    
+    //FragColor = GetTexel(TexNum[0], Texture0, vTexCoords);
     FragColor = texture(sampler2D(Textures[TexNum[0]]), vTexCoords);
 
 }
