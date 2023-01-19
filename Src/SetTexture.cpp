@@ -34,14 +34,14 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-UXOpenGLRenderDevice::FCachedTexture* 
+UXOpenGLRenderDevice::FCachedTexture*
 UXOpenGLRenderDevice::GetCachedTextureInfo
 (
-	INT Multi, 
-	FTextureInfo& Info, 
-	DWORD PolyFlags, 
-	BOOL& IsResidentBindlessTexture, 
-	BOOL& IsBoundToTMU, 
+	INT Multi,
+	FTextureInfo& Info,
+	DWORD PolyFlags,
+	BOOL& IsResidentBindlessTexture,
+	BOOL& IsBoundToTMU,
 	BOOL& IsTextureDataStale,
 	BOOL ShouldResetStaleState
 )
@@ -83,7 +83,7 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 				Result->RealtimeChangeCount = Info.RenderTag;
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 				Result->RealtimeChangeCount = Info.Texture->RealtimeChangeCount;
-#endif				
+#endif
 			}
 		}
 		else
@@ -483,54 +483,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 					// TEXF_BGRA8_LM used by light and fogmaps.
 				case TEXF_BGRA8_LM:
 					guard(ConvertBGRA7777_RGBA8888);
-					ImgSrc = Compose;
-					DWORD* Ptr = (DWORD*)Compose;
-					INT ULimit = Min(USize, Info.UClamp); // Implicit assumes NumMips==1.
-					INT VLimit = Min(VSize, Info.VClamp);
-
-					//debugf(NAME_DevGraphics, TEXT("Unpacking lightmap %dx%d"), ULimit, VLimit);
-
-					// Do resampling. The area outside of the clamp gets filled up with the last valid values
-					// to emulate GL_CLAMP_TO_EDGE behaviour. This is done to avoid using NPOT textures.
-					for (INT v = 0; v < VLimit; v++)
-					{
-						// The AND 0x7F7F7F7F is used to eliminate the top bit as this was used internally by the LightManager.
-						if (UnpackSRGB)
-						{
-							for (INT u = 0; u < ULimit; u++)
-								*Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u + v * USize) << 2]) & 0x7F7F7F7F) << 1; // We want to unpack as sRGB.
-						}
-						else
-						{
-							for (INT u = 0; u < ULimit; u++)
-								*Ptr++ = (GET_COLOR_DWORD(Mip->DataPtr[(u + v * USize) << 2]) & 0x7F7F7F7F);
-						}
-
-						if (ULimit > 0)
-						{
-							// Copy last valid value until end of line.
-							DWORD LastValidValue = Ptr[-1];
-							for (INT ux = ULimit; ux < USize; ux++)
-								*Ptr++ = LastValidValue;
-						}
-						else
-						{
-							// If we had no valid value just memzero.
-							appMemzero(Ptr, USize * sizeof(DWORD));
-							Ptr += USize;
-						}
-					}
-					if (VLimit > 0)
-					{
-						// Copy last valid line until reaching the bottom.
-						BYTE* LastValidLine = Compose + (VLimit - 1) * USize * sizeof(DWORD); // Compose is BYTE*.
-						for (INT vx = VLimit; vx < VSize; vx++)
-							appMemcpy(Compose + vx * USize * sizeof(DWORD), LastValidLine, USize * sizeof(DWORD));
-					}
-					else // If we had no valid lines just memzero.
-						appMemzero(Compose, USize * VSize * sizeof(DWORD));
-
-					// What about mipmaps, or a higher order reconstruction filter in shader? -- Quality improved significant in singlepass, so not needed.
+					ImgSrc = Mip->DataPtr;
 					unguard;
 					break;
 
@@ -733,7 +686,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
     // Account for all the impact on scale normalization.
 	Tex.UMult = 1.f / (Info.UScale * static_cast<FLOAT>(Info.USize));
 	Tex.VMult = 1.f / (Info.VScale * static_cast<FLOAT>(Info.VSize));
-	
+
 	STAT(clockFast(Stats.BindCycles));
 
 	// Check if the texture is already bound to the correct TMU
@@ -785,7 +738,7 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 
 	// stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in) - Smirftsch: Added manual override UseBindlessLightmaps
 	UBOOL ShouldMakeBindlessResident = UsingBindlessTextures && (UseBindlessLightmaps || Info.Texture);
-	
+
     if (UsingBindlessTextures && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures && ShouldMakeBindlessResident)
     {
         guard(MakeTextureHandleResident);

@@ -440,11 +440,13 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 		if (OpenGLVersion == GL_ES)
         {
+            if (UseShaderDrawParameters)
+                GWarn->Logf(TEXT("OpenGL ES does not support gl_DrawID at this time, disabling UseShaderDrawParameters"));
             UsingShaderDrawParameters = false;
-            GWarn->Logf(TEXT("OpenGL ES does not support gl_DrawID at this time, disabling UseShaderDrawParameters"));
 
+            if (SimulateMultiPass)
+                GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
             SimulateMultiPass = false;
-            GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
 
            // UseSRGBTextures = true;
            // GWarn->Logf(TEXT("UseSRGBTextures enabled for OpenGL ES"));
@@ -662,7 +664,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
 #endif
-	
+
 	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
 
 	INT MajorVersion = 3;
@@ -684,7 +686,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 		MajorVersion = 4;
 		MinorVersion = 1;
 #else
-		
+
         if (UseBindlessTextures || UsePersistentBuffers)
         {
             MajorVersion = 4;
@@ -1802,7 +1804,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	}
 	CHECK_GL_ERROR();
 #endif
-	
+
 	//Flush Buffers.
 	SetProgram(No_Prog);
 
@@ -1823,7 +1825,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	// Disable clipping
 	while (NumClipPlanes > 0)
 		PopClipPlane();
-	
+
 	unguard;
 }
 
@@ -1870,7 +1872,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 {
 	guard(UXOpenGLRenderDevice::SetProjection);
-	
+
 	// Precompute stuff.
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	FLOAT zNear = 0.5f;
@@ -1943,7 +1945,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	}
 	XFrameCounter++;
 #endif
-	
+
 	check(LockCount == 0);
 	++LockCount;
 	CLEAR_GL_ERROR();
@@ -1954,8 +1956,19 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
 	CHECK_GL_ERROR();
-	glClearDepth(1.0);
-	glDepthRange(0.0, 1.0);
+
+	if (glClearDepthf)
+		glClearDepthf(1.f);
+#ifndef __EMSCRIPTEN__
+	else
+		glClearDepth(1.0);
+#endif
+	if (glDepthRangef)
+		glDepthRangef(0.f, 1.f);
+#ifndef __EMSCRIPTEN__
+	else
+		glDepthRange(0.0, 1.0);
+#endif
 
 	CHECK_GL_ERROR();
 	glPolygonOffset(-1.f, -1.f);
@@ -1977,7 +1990,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	// Lock hits.
 	HitData = InHitData;
 	HitSize = InHitSize;
-	
+
 	// Reset stats.
 	appMemzero(&Stats, sizeof(Stats));
 
@@ -2008,7 +2021,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		verify(SwapBuffers(hDC));
 	}
 #endif
-	
+
     // Check for optional frame rate limit
     // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
     // I am not happy with this solution, but it will do the trick for now...
@@ -2216,7 +2229,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 #endif
 	SetBlend(PF_Occlude, false);
 	glClear(GL_DEPTH_BUFFER_BIT);
-	
+
 	CHECK_GL_ERROR();
 	unguard;
 }

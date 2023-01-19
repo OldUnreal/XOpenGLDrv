@@ -86,7 +86,7 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint& ShaderObjec
 	Definitions += *FString::Printf(TEXT("#define RELIEF_PARALLAX %i\n"), ParallaxVersion == Parallax_Relief ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define SUPPORTSCLIPDISTANCE %d\n"), SupportsClipDistance ? 1 : 0);
 	Definitions += *FString::Printf(TEXT("#define SRGB %d\n"), UseSRGBTextures ? 1 : 0);
-
+	Definitions += *FString::Printf(TEXT("#define ENHANCED_LIGHTMAPS %i \n"), UseEnhancedLightmaps ? 1 : 0);
 
 	// LOAD EXTENSIONS
 	if (!appLoadFileToString(Extensions, TEXT("xopengl/Extensions.incl"))) // Load extensions config.

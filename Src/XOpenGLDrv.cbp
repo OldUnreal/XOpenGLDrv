@@ -306,7 +306,6 @@
 		<Unit filename="../../System/xopengl/DrawTile.vert" />
 		<Unit filename="../../System/xopengl/Extensions.incl" />
 		<Unit filename="../../System/xopengl/Globals.incl" />
-		<Unit filename="../Inc/UnShader.h" />
 		<Unit filename="../Inc/XOpenGL.h" />
 		<Unit filename="../Inc/XOpenGLDrv.h" />
 		<Unit filename="../Inc/XOpenGLTemplate.h" />
@@ -321,18 +320,17 @@
 			<Option target="Release Lin64" />
 		</Unit>
 		<Unit filename="CheckExtensions.cpp" />
-		<Unit filename="ClipPlanes.cpp" />
 		<Unit filename="DebugLog.cpp" />
 		<Unit filename="DrawComplex.cpp" />
-		<Unit filename="DrawDistanceFog.cpp" />
 		<Unit filename="DrawGouraud.cpp" />
 		<Unit filename="DrawSimple.cpp" />
 		<Unit filename="DrawTile.cpp" />
 		<Unit filename="EditorHit.cpp" />
 		<Unit filename="PersistentBuffers.cpp" />
-		<Unit filename="SetProgram.cpp" />
 		<Unit filename="SetTexture.cpp" />
+		<Unit filename="UnShader.cpp" />
 		<Unit filename="XOpenGL.cpp" />
+		<Unit filename="XOpenGLDrv.aps" />
 		<Unit filename="XOpenGLDrv.cpp" />
 		<Unit filename="glad.cpp" />
 		<Unit filename="resource.h">
