@@ -111,6 +111,13 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 
 	DrawGouraudDrawParams.PolyFlags() = NextPolyFlags;
 
+	const FLOAT TextureAlpha =
+#if ENGINE_VERSION==227
+		1.f;
+#else
+		Info.Texture->Alpha;
+#endif
+
 	// Editor Support.
 	if (GIsEditor)
 	{
@@ -122,7 +129,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		else
 		{
 			DrawGouraudDrawParams.HitTesting() = 0;
-			DrawGouraudDrawParams.DrawData[EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, Info.Texture->Alpha);
+			DrawGouraudDrawParams.DrawData[EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
 		}
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
@@ -130,7 +137,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	}
 
 	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, DF_DiffuseTexture);
-	DrawGouraudDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, Info.Texture->Alpha);
+	DrawGouraudDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
 	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
 
 	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture | NoNearZFlag;

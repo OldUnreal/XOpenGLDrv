@@ -121,12 +121,12 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		Color.Z = 1.0f;
 		Color.W = 1.0f;
 	}
-	if (Info.Texture && Info.Texture->Alpha > 0.f)
-		Color.W = Info.Texture->Alpha;
 #if ENGINE_VERSION==227
 	else if (!(PolyFlags & PF_AlphaBlend))
 		Color.W = 1.0f;
 #else
+    if (Info.Texture && Info.Texture->Alpha > 0.f)
+        Color.W = Info.Texture->Alpha;
 	else Color.W = 1.0f;
 #endif
 
