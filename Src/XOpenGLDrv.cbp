@@ -22,7 +22,6 @@
 					<Add option="-g" />
 					<Add option="-DGPackage=GPackageXOpenGLDrv" />
 					<Add option="-DThisPackage=XOpenGLDrv" />
-					<Add option="-DGLEW_STATIC" />
 					<Add directory="../Inc" />
 					<Add directory="../../Core/Inc" />
 					<Add directory="../../Engine/Inc" />
@@ -32,9 +31,7 @@
 					<Add option="-fsanitize=thread" />
 					<Add library="../../System/Core.lib" />
 					<Add library="../../System/Engine.lib" />
-					<Add library="C:/Program Files (x86)/Microsoft Visual Studio 12.0/VC/lib/glew32.lib" />
 					<Add library="../../System/Render.lib" />
-					<Add library="C:/Program Files (x86)/Microsoft Visual Studio 12.0/VC/lib/glew32s.lib" />
 					<Add library="OpenGL32" />
 				</Linker>
 			</Target>
@@ -50,7 +47,6 @@
 				<Compiler>
 					<Add option="-O3" />
 					<Add option="-DGPackage=GPackageXOpenGLDrv" />
-					<Add option="-DGLEW_STATIC" />
 					<Add directory="../Inc" />
 					<Add directory="../../Core/Inc" />
 					<Add directory="../../Engine/Inc" />
@@ -60,7 +56,6 @@
 					<Add library="../../System/Core.lib" />
 					<Add library="../../System/Engine.lib" />
 					<Add library="../../System/Render.lib" />
-					<Add library="C:/Program Files (x86)/Microsoft Visual Studio 12.0/VC/lib/glew32s.lib" />
 					<Add library="user32" />
 					<Add library="kernel32" />
 					<Add library="winmm" />
@@ -93,7 +88,6 @@
 				<Linker>
 					<Add option="-Wl,-soname,XOpenGLDrv.so" />
 					<Add library="../../System/libSDL2.so" />
-					<Add library="../../System/libGLEW.a" />
 				</Linker>
 			</Target>
 			<Target title="Release Lin32">
@@ -121,7 +115,6 @@
 				<Linker>
 					<Add option="-Wl,-soname,XOpenGLDrv.so" />
 					<Add library="../../System/libSDL2.so" />
-					<Add library="../../System/libGLEW.a" />
 				</Linker>
 			</Target>
 			<Target title="Debug Mac32">
@@ -152,7 +145,6 @@
 					<Add library="../../SystemOSX/Engine.dylib" />
 					<Add library="../../SystemOSX/Core.dylib" />
 					<Add library="X11" />
-					<Add library="../../System/libGLEW.so" />
 				</Linker>
 			</Target>
 			<Target title="Release Mac32">

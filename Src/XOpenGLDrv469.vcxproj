@@ -28,7 +28,7 @@
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{B08B7668-8A6F-4156-A2FD-8D6089DB45EE}</ProjectGuid>
-    <RootNamespace>XOpenGLDrv</RootNamespace>
+    <RootNamespace>XOpenGLDrv469</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -134,8 +134,8 @@
     <ClCompile>
       <Optimization>MaxSpeed</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\External\glm-0.9.9.8;..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\External\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -171,6 +171,12 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib;..\..\Engine\Lib;..\..\Render\Lib</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing Shaders...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
@@ -179,8 +185,8 @@
     <ClCompile>
       <Optimization>Full</Optimization>
       <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
-      <AdditionalIncludeDirectories>..\..\External\glm-0.9.9.8;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\External\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <StringPooling>true</StringPooling>
       <ExceptionHandling>Async</ExceptionHandling>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
@@ -215,6 +221,12 @@
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib64;..\..\Engine\Lib64;..\..\Render\Lib64</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing Shaders...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Midl>
@@ -224,7 +236,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\External\glm-0.9.9.6;..\..\External\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Async</ExceptionHandling>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
@@ -263,6 +275,12 @@
       <LargeAddressAware>true</LargeAddressAware>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib;..\..\Engine\Lib;..\..\Render\Lib</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing Shaders...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug ASAN|Win32'">
     <Midl>
@@ -272,7 +290,7 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\..\External\glm-0.9.9.6;..\..\External\glm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>GPackage=LocalPackageName$(TargetName);__STATIC_LINK;_WINDOWS;UNICODE;_DEBUG;WIN32;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Async</ExceptionHandling>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
@@ -310,6 +328,12 @@
       <GenerateMapFile>true</GenerateMapFile>
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
+    <PostBuildEvent>
+      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing Shaders...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
@@ -317,8 +341,8 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Sync</ExceptionHandling>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -352,6 +376,12 @@
       <AssemblyDebug>true</AssemblyDebug>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib64;..\..\Engine\Lib64;..\..\Render\Lib64</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing Shaders...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug ASAN|x64'">
     <Midl>
@@ -359,8 +389,8 @@
     </Midl>
     <ClCompile>
       <Optimization>Disabled</Optimization>
-      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>GPackage=LocalPackageName$(TargetName);__STATIC_LINK;_DEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;GLEW_STATIC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>..\..\External\glm;..\Inc;..\..\Core\Inc;..\..\Engine\Inc;..\..\Render\Inc;..\..\Render\Src;..\glm\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>GPackage=LocalPackageName$(TargetName);__STATIC_LINK;_DEBUG;_WINDOWS;WIN32;UNICODE;ThisPackage=XOpenGLDrv;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Sync</ExceptionHandling>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
@@ -393,6 +423,12 @@
       <MapExports>true</MapExports>
       <AssemblyDebug>true</AssemblyDebug>
     </Link>
+    <PostBuildEvent>
+      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Installing Shaders...</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CheckExtensions.cpp" />
@@ -418,20 +454,20 @@
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\System\XOpenGLDrv.int" />
-    <None Include="..\..\System\xopengl\DrawComplexSinglePass.frag" />
-    <None Include="..\..\System\xopengl\DrawComplexSinglePass.geo" />
-    <None Include="..\..\System\xopengl\DrawComplexSinglePass.vert" />
-    <None Include="..\..\System\xopengl\DrawGouraud.frag" />
-    <None Include="..\..\System\xopengl\DrawGouraud.geo" />
-    <None Include="..\..\System\xopengl\DrawGouraud.vert" />
-    <None Include="..\..\System\xopengl\DrawSimple.frag" />
-    <None Include="..\..\System\xopengl\DrawSimple.vert" />
-    <None Include="..\..\System\xopengl\DrawTile.frag" />
-    <None Include="..\..\System\xopengl\DrawTile.geo" />
-    <None Include="..\..\System\xopengl\DrawTile.vert" />
-    <None Include="..\..\System\xopengl\Extensions.incl" />
-    <None Include="..\..\System\xopengl\Globals.incl" />
+    <None Include="..\XOpenGLDrv.int" />
+    <None Include="..\Shaders\DrawComplexSinglePass.frag" />
+    <None Include="..\Shaders\DrawComplexSinglePass.geo" />
+    <None Include="..\Shaders\DrawComplexSinglePass.vert" />
+    <None Include="..\Shaders\DrawGouraud.frag" />
+    <None Include="..\Shaders\DrawGouraud.geo" />
+    <None Include="..\Shaders\DrawGouraud.vert" />
+    <None Include="..\Shaders\DrawSimple.frag" />
+    <None Include="..\Shaders\DrawSimple.vert" />
+    <None Include="..\Shaders\DrawTile.frag" />
+    <None Include="..\Shaders\DrawTile.geo" />
+    <None Include="..\Shaders\DrawTile.vert" />
+    <None Include="..\Shaders\Extensions.incl" />
+    <None Include="..\Shaders\Globals.incl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XOpenGLDrv.rc" />
