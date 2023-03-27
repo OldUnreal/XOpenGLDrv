@@ -522,6 +522,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD NoFiltering;
     BITFIELD ShareLists;
     BITFIELD AlwaysMipmap;
+    BITFIELD UsePrecache;
     BITFIELD UseTrilinear;
     BITFIELD UseAA;
     BITFIELD UseAASmoothing;

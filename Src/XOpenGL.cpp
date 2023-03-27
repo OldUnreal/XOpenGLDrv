@@ -102,6 +102,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("NoFiltering"), RF_Public)UBoolProperty(CPP_PROPERTY(NoFiltering), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("ShareLists"), RF_Public)UBoolProperty(CPP_PROPERTY(ShareLists), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("AlwaysMipmap"), RF_Public)UBoolProperty(CPP_PROPERTY(AlwaysMipmap), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UsePrecache"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePrecache), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseTrilinear"), RF_Public)UBoolProperty(CPP_PROPERTY(UseTrilinear), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseAA"), RF_Public)UBoolProperty(CPP_PROPERTY(UseAA), TEXT("Options"), CPF_Config);
 	//new(GetClass(), TEXT("UseAASmoothing"), RF_Public)UBoolProperty(CPP_PROPERTY(UseAASmoothing), TEXT("Options"), CPF_Config);
@@ -167,6 +168,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	LODBias = 0.f;
 	MaxAnisotropy = 4.f;
 	UseHWClipping = 1;
+	UsePrecache = 1;
 	ShareLists = 1;
 	UseAA = 1;
 	UseAASmoothing = 0;
@@ -314,6 +316,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
 #endif
 	debugf(NAME_DevLoad, TEXT("UseTrilinear %i"), UseTrilinear);
+	debugf(NAME_DevLoad, TEXT("UsePrecache %i"), UsePrecache);
 	debugf(NAME_DevLoad, TEXT("UseAA %i"), UseAA);
 	//debugf(NAME_DevLoad, TEXT("UseAASmoothing %i"), UseAASmoothing);
 	debugf(NAME_DevLoad, TEXT("NumAASamples %i"), NumAASamples);
@@ -564,7 +567,7 @@ void UXOpenGLRenderDevice::PostEditChange()
 		MapBuffers();
 	}
 
-	Flush(true);
+	Flush(UsePrecache);
 
 	unguard;
 }
@@ -1528,6 +1531,9 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	for (INT i = 0; i < 8; i++) // Also reset all multi textures.
 		SetNoTexture(i);
 
+	if (AllowPrecache && UsePrecache && !GIsEditor)
+		PrecacheOnFlip = 1;
+
 	CHECK_GL_ERROR();
 
 	if (Viewport && Viewport->GetOuterUClient())
@@ -2371,6 +2377,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseAA"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseAA)));
 	//GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseAASmoothing"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseAASmoothing)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseTrilinear"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseTrilinear)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePrecache"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePrecache)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("AlwaysMipmap"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(AlwaysMipmap)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("ShareLists"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(ShareLists)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoFiltering"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoFiltering)));

@@ -329,6 +329,12 @@ void UXOpenGLRenderDevice::CheckExtensions()
 #endif
 	}
 
+	if (GenerateMipMaps && !UsePrecache)
+	{
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: Enabling UsePrecache for GenerateMipMaps."));
+		UsePrecache = 1;
+	}
+
     // Extensions
     NumberOfExtensions = 0;
     glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
