@@ -55,7 +55,7 @@ section in the game ini. The following settings are currently available:
 
 * OpenGLVersion [Default: Core, Possible Values: Core, ES]: Selects the OpenGL
   profile. GPUs for embedded and mobile devices generally only support the ES
-  profile, whereas desktop GPUs often only support the Core profile.
+  profile, whereas desktop GPUs can often use both. 
 
 * ShareLists [Default: True, Type: Boolean]: Setting this to true allows
   different instances of XOpenGL to share texture resources. This leads to lower
