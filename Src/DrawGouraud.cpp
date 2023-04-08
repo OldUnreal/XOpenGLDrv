@@ -32,16 +32,6 @@
 #include "XOpenGL.h"
 //#include "UnStaticLight.h"
 
-enum DrawGouraudTexCoordsIndices
-{
-	DIFFUSE_INFO,			// UMult, VMult, Diffuse, Alpha
-	DETAIL_MACRO_INFO,		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
-	MISC_INFO,				// BumpMap Specular, Gamma, texture format, Unused
-	EDITOR_DRAWCOLOR,
-	DISTANCE_FOG_COLOR,
-	DISTANCE_FOG_INFO
-};
-
 UXOpenGLRenderDevice::DrawGouraudShaderDrawParams* UXOpenGLRenderDevice::DrawGouraudGetDrawParamsRef()
 {
 	return UsingShaderDrawParameters ?
@@ -124,12 +114,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		if (HitTesting()) // UED only.
 		{
 			DrawGouraudDrawParams.HitTesting() = 1;
-			DrawGouraudDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
+			DrawGouraudDrawParams.DrawData[DGTI_EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
 		}
 		else
 		{
 			DrawGouraudDrawParams.HitTesting() = 0;
-			DrawGouraudDrawParams.DrawData[EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
+			DrawGouraudDrawParams.DrawData[DGTI_EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
 		}
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
@@ -137,7 +127,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	}
 
 	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, DF_DiffuseTexture);
-	DrawGouraudDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
+	DrawGouraudDrawParams.DrawData[DGTI_DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
 	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
 
 	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture | NoNearZFlag;
@@ -152,12 +142,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		DrawGouraudDrawParams.DrawFlags() |= DF_DetailTexture;
 
 		SetTexture(1, FTEXTURE_GET(DrawGouraudDetailTextureInfo), Info.Texture->DetailTexture->PolyFlags, 0.0, DF_DetailTexture);
-		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
+		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
 		DrawGouraudDrawParams.TexNum[1] = TexInfo[1].TexNum;
 	}
 	else
 	{
-		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO] = glm::vec4(0.f, 0.f, 0.f, 0.f);
+		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO] = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	}
 
 #if ENGINE_VERSION==227
@@ -171,13 +161,13 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		DrawGouraudDrawParams.DrawFlags() |= DF_BumpMap;
 
 		SetTexture(2, FTEXTURE_GET(DrawGouraudBumpMapInfo), Info.Texture->BumpMap->PolyFlags, 0.0, DF_BumpMap);
-		DrawGouraudDrawParams.DrawData[MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
+		DrawGouraudDrawParams.DrawData[DGTI_MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
 		DrawGouraudDrawParams.TexNum[2] = TexInfo[2].TexNum; //using Base Texture UV.
 	}
 	else
 	{
 #endif // ENGINE_VERSION
-		DrawGouraudDrawParams.DrawData[MISC_INFO] = glm::vec4(0.f, Gamma, Info.Texture->Format, 0.f);
+		DrawGouraudDrawParams.DrawData[DGTI_MISC_INFO] = glm::vec4(0.f, Gamma, Info.Texture->Format, 0.f);
 #if ENGINE_VERSION==227
 	}
 #endif
@@ -194,12 +184,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		SetTexture(3, FTEXTURE_GET(DrawGouraudMacroTextureInfo), Info.Texture->MacroTexture->PolyFlags, 0.0, DF_MacroTexture);
 		DrawGouraudDrawParams.TexNum[3] = TexInfo[3].TexNum;
 
-		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO].z = TexInfo[3].UMult;
-		DrawGouraudDrawParams.DrawData[DETAIL_MACRO_INFO].w = TexInfo[3].VMult;
+		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO].z = TexInfo[3].UMult;
+		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO].w = TexInfo[3].VMult;
 	}
 
-	DrawGouraudDrawParams.DrawData[DISTANCE_FOG_COLOR] = DistanceFogColor;
-	DrawGouraudDrawParams.DrawData[DISTANCE_FOG_INFO]  = DistanceFogValues;
+	DrawGouraudDrawParams.DrawData[DGTI_DISTANCE_FOG_COLOR] = DistanceFogColor;
+	DrawGouraudDrawParams.DrawData[DGTI_DISTANCE_FOG_INFO]  = DistanceFogValues;
 }
 
 void UXOpenGLRenderDevice::DrawGouraudReleaseState(FTextureInfo& Info)

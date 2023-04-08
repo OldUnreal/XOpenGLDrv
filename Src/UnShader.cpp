@@ -16,6 +16,70 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
+#define USE_BUILT_IN_SHADERS 1
+
+#if USE_BUILT_IN_SHADERS
+#define READABLE_OUTPUT 0 // For nicer debug output.
+
+class FShaderOutputDevice : public FString, public FOutputDevice
+{
+#if READABLE_OUTPUT
+	TCHAR Intendents[32];
+	INT IntendIx;
+	const TCHAR* BufferTag;
+#endif
+public:
+	FShaderOutputDevice(const TCHAR* InTag)
+#if READABLE_OUTPUT
+		: BufferTag(InTag)
+	{
+		Intendents[0] = '\x0';
+		IntendIx = 0;
+	}
+#else
+	{}
+#endif
+#if READABLE_OUTPUT
+	~FShaderOutputDevice()
+	{
+		verify(IntendIx==0);
+		GLog->Logf(NAME_Event, TEXT("=================================================================== (%ls)"), BufferTag);
+		GLog->Log(NAME_Event, *this);
+		GLog->Log(NAME_Event, TEXT("==================================================================="));
+	}
+#endif
+	void Serialize(const TCHAR* Data, EName Event)
+	{
+#if READABLE_OUTPUT
+		if (Data[0] == '}')
+		{
+			verify(IntendIx > 0);
+			--IntendIx;
+			Intendents[IntendIx] = '\x0';
+		}
+		if (IntendIx)
+			*this += Intendents;
+		verify(appStrstr(Data, TEXT("PF_")) == NULL); // Make sure no PolyFlag constants slipped through...
+		verify(appStrstr(Data, TEXT("DF_")) == NULL);
+#endif
+		*this += Data;
+		
+#if READABLE_OUTPUT
+		* this += TEXT("\r\n");
+		if (Data[0] == '{' && (!Data[1] || Data[1] != ';'))
+		{
+			Intendents[IntendIx] = '\t';
+			++IntendIx;
+			Intendents[IntendIx] = '\x0';
+		}
+#else
+		* this += TEXT("\n");
+#endif
+	}
+};
+#include "XOpenGLShaders.h"
+#endif
+
 // Helpers
 void UXOpenGLRenderDevice::GetUniformBlockIndex(GLuint& Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName)
 {
@@ -44,6 +108,9 @@ void UXOpenGLRenderDevice::GetUniformLocation(GLuint& Uniform, GLuint& Program, 
 void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint& ShaderObject)
 {
 	guard(UXOpenGLRenderDevice::LoadShader);
+#if USE_BUILT_IN_SHADERS
+	appErrorf(TEXT("Not in use in this build!"));
+#else
 	GLint blen = 0;
 	GLsizei slen = 0;
 	GLint IsCompiled = 0;
@@ -140,8 +207,44 @@ void UXOpenGLRenderDevice::LoadShader(const TCHAR* Filename, GLuint& ShaderObjec
 	else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls"), Filename);
 
 	CHECK_GL_ERROR();
+#endif
 	unguard;
 }
+
+#if USE_BUILT_IN_SHADERS
+static void BuildShader(const TCHAR* ShaderProgName, GLuint& ShaderProg, UXOpenGLRenderDevice* GL, glShaderProg* Func)
+{
+	guard(BuildShader);
+	FShaderOutputDevice ShOut(ShaderProgName);
+	Implement_Extension(GL, ShOut);
+	(*Func)(GL, ShOut);
+
+	GLint blen = 0;
+	GLsizei slen = 0;
+	GLint IsCompiled = 0;
+	const GLchar* Shader = TCHAR_TO_ANSI(*ShOut);
+	GLint length = ShOut.Len();
+	glShaderSource(ShaderProg, 1, &Shader, &length);
+	glCompileShader(ShaderProg);
+
+	glGetShaderiv(ShaderProg, GL_COMPILE_STATUS, &IsCompiled);
+	if (!IsCompiled)
+		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls"), ShaderProgName);
+
+	glGetShaderiv(ShaderProg, GL_INFO_LOG_LENGTH, &blen);
+	if (blen > 1)
+	{
+		GLchar* compiler_log = new GLchar[blen + 1];
+		glGetShaderInfoLog(ShaderProg, blen, &slen, compiler_log);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), ShaderProgName, appFromAnsi(compiler_log));
+		delete[] compiler_log;
+	}
+	else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls"), ShaderProgName);
+
+	CHECK_GL_ERROR();
+	unguard;
+}
+#endif
 
 void UXOpenGLRenderDevice::LinkShader(const TCHAR* ShaderProgName, GLuint& ShaderProg)
 {
@@ -205,25 +308,52 @@ void UXOpenGLRenderDevice::InitShaders()
 	CHECK_GL_ERROR();
 	*/
 
-	// TODO!!! Add ini entries to handle shaders dynamically
-	LoadShader(TEXT("xopengl/DrawSimple.vert"), DrawSimpleVertObject);
-	//LoadShader(TEXT("xopengl/DrawSimple.geo"), DrawSimpleGeoObject);
-	LoadShader(TEXT("xopengl/DrawSimple.frag"), DrawSimpleFragObject);
+#if USE_BUILT_IN_SHADERS
+	{
+		BuildShader(TEXT("DrawSimple.vert"), DrawSimpleVertObject, this, Create_DrawSimple_Vert);
+		//if (OpenGLVersion == GL_Core)
+		//	BuildShader(TEXT("DrawSimple.geo"), DrawSimpleGeoObject, this, Create_DrawSimple_Geo);
+		BuildShader(TEXT("DrawSimple.frag"), DrawSimpleFragObject, this, Create_DrawSimple_Frag);
 
-	LoadShader(TEXT("xopengl/DrawTile.vert"), DrawTileVertObject);
-	if (OpenGLVersion == GL_Core)
-		LoadShader(TEXT("xopengl/DrawTile.geo"), DrawTileGeoObject);
-	LoadShader(TEXT("xopengl/DrawTile.frag"), DrawTileFragObject);
+		BuildShader(TEXT("DrawTile.vert"), DrawTileVertObject, this, Create_DrawTile_Vert);
+		if (OpenGLVersion == GL_Core)
+			BuildShader(TEXT("DrawTile.geo"), DrawTileGeoObject, this, Create_DrawTile_Geo);
+		BuildShader(TEXT("DrawTile.frag"), DrawTileFragObject, this, Create_DrawTile_Frag);
 
-	LoadShader(TEXT("xopengl/DrawGouraud.vert"), DrawGouraudVertObject);
-	if (OpenGLVersion == GL_Core)
-		LoadShader(TEXT("xopengl/DrawGouraud.geo"), DrawGouraudGeoObject);
-	LoadShader(TEXT("xopengl/DrawGouraud.frag"), DrawGouraudFragObject);
+		BuildShader(TEXT("DrawGouraud.vert"), DrawGouraudVertObject, this, Create_DrawGouraud_Vert);
+		if (OpenGLVersion == GL_Core)
+			BuildShader(TEXT("DrawGouraud.geo"), DrawGouraudGeoObject, this, Create_DrawGouraud_Geo);
+		BuildShader(TEXT("DrawGouraud.frag"), DrawGouraudFragObject, this, Create_DrawGouraud_Frag);
 
-	LoadShader(TEXT("xopengl/DrawComplexSinglePass.vert"), DrawComplexVertSinglePassObject);
-	//if (OpenGLVersion == GL_Core)
-	//	LoadShader(TEXT("xopengl/DrawComplexSinglePass.geo"), DrawComplexGeoSinglePassObject);
-	LoadShader(TEXT("xopengl/DrawComplexSinglePass.frag"), DrawComplexFragSinglePassObject);
+		BuildShader(TEXT("DrawComplexSinglePass.vert"), DrawComplexVertSinglePassObject, this, Create_DrawComplexSinglePass_Vert);
+		//if (OpenGLVersion == GL_Core)
+		//	BuildShader(TEXT("DrawComplexSinglePass.geo"), DrawComplexGeoSinglePassObject, this, Create_DrawComplexSinglePass_Geo);
+		BuildShader(TEXT("DrawComplexSinglePass.frag"), DrawComplexFragSinglePassObject, this, Create_DrawComplexSinglePass_Frag);
+	}
+#else
+	{
+		// TODO!!! Add ini entries to handle shaders dynamically
+		LoadShader(TEXT("xopengl/DrawSimple.vert"), DrawSimpleVertObject);
+		//if (OpenGLVersion == GL_Core)
+		//	LoadShader(TEXT("xopengl/DrawSimple.geo"), DrawSimpleGeoObject);
+		LoadShader(TEXT("xopengl/DrawSimple.frag"), DrawSimpleFragObject);
+
+		LoadShader(TEXT("xopengl/DrawTile.vert"), DrawTileVertObject);
+		if (OpenGLVersion == GL_Core)
+			LoadShader(TEXT("xopengl/DrawTile.geo"), DrawTileGeoObject);
+		LoadShader(TEXT("xopengl/DrawTile.frag"), DrawTileFragObject);
+
+		LoadShader(TEXT("xopengl/DrawGouraud.vert"), DrawGouraudVertObject);
+		if (OpenGLVersion == GL_Core)
+			LoadShader(TEXT("xopengl/DrawGouraud.geo"), DrawGouraudGeoObject);
+		LoadShader(TEXT("xopengl/DrawGouraud.frag"), DrawGouraudFragObject);
+
+		LoadShader(TEXT("xopengl/DrawComplexSinglePass.vert"), DrawComplexVertSinglePassObject);
+		//if (OpenGLVersion == GL_Core)
+		//	LoadShader(TEXT("xopengl/DrawComplexSinglePass.geo"), DrawComplexGeoSinglePassObject);
+		LoadShader(TEXT("xopengl/DrawComplexSinglePass.frag"), DrawComplexFragSinglePassObject);
+	}
+#endif
 
 	/*
 	// ShadowMap

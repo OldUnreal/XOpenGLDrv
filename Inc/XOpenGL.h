@@ -355,7 +355,7 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
     return String;
 }
 
-enum DrawFlags
+enum DrawFlags : DWORD
 {
 	DF_None				= 0x00000000,
 	DF_DiffuseTexture	= 0x00000001,
@@ -367,6 +367,36 @@ enum DrawFlags
 	DF_EnvironmentMap   = 0x00000040,
 	DF_HeightMap	 	= 0x00000080,
 	DF_NoNearZ			= 0x00000100,
+};
+
+enum DrawGouraudTexCoordsIndices : DWORD
+{
+	DGTI_DIFFUSE_INFO,			// UMult, VMult, Diffuse, Alpha
+	DGTI_DETAIL_MACRO_INFO,		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
+	DGTI_MISC_INFO,				// BumpMap Specular, Gamma, texture format, Unused
+	DGTI_EDITOR_DRAWCOLOR,
+	DGTI_DISTANCE_FOG_COLOR,
+	DGTI_DISTANCE_FOG_INFO
+};
+
+enum DrawComplexTexCoordsIndices : DWORD
+{
+	DCTI_DIFFUSE_COORDS,
+	DCTI_LIGHTMAP_COORDS,
+	DCTI_FOGMAP_COORDS,
+	DCTI_DETAIL_COORDS,
+	DCTI_MACRO_COORDS,
+	DCTI_ENVIROMAP_COORDS,
+	DCTI_DIFFUSE_INFO,
+	DCTI_MACRO_INFO,
+	DCTI_BUMPMAP_INFO,
+	DCTI_HEIGHTMAP_INFO,
+	DCTI_X_AXIS,
+	DCTI_Y_AXIS,
+	DCTI_Z_AXIS,
+	DCTI_EDITOR_DRAWCOLOR,
+	DCTI_DISTANCE_FOG_COLOR,
+	DCTI_DISTANCE_FOG_INFO
 };
 
 /*-----------------------------------------------------------------------------

@@ -20,26 +20,6 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-enum DrawComplexTexCoordsIndices
-{
-	DIFFUSE_COORDS,
-	LIGHTMAP_COORDS,
-	FOGMAP_COORDS,
-	DETAIL_COORDS,
-	MACRO_COORDS,
-	ENVIROMAP_COORDS,
-	DIFFUSE_INFO,
-	MACRO_INFO,
-	BUMPMAP_INFO,
-	HEIGHTMAP_INFO,
-	X_AXIS,
-	Y_AXIS,
-	Z_AXIS,
-	EDITOR_DRAWCOLOR,
-	DISTANCE_FOG_COLOR,
-	DISTANCE_FOG_INFO
-};
-
 UXOpenGLRenderDevice::DrawComplexShaderDrawParams* UXOpenGLRenderDevice::DrawComplexGetDrawParamsRef()
 {
 	return UsingShaderDrawParameters ?
@@ -107,7 +87,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	{
 		if (HitTesting())
 		{
-			DrawComplexDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
+			DrawComplexDrawParams.DrawData[DCTI_EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
 			DrawComplexDrawParams.HitTesting() = 1;
 		}
 		else
@@ -116,7 +96,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 			if (Surface.PolyFlags & PF_FlatShaded)
 				FPlane Flat = Surface.FlatColor.Plane();
 
-            DrawComplexDrawParams.DrawData[EDITOR_DRAWCOLOR] = FPlaneToVec4(Surface.FlatColor.Plane());
+            DrawComplexDrawParams.DrawData[DCTI_EDITOR_DRAWCOLOR] = FPlaneToVec4(Surface.FlatColor.Plane());
 		}
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
@@ -124,15 +104,15 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	}
 
 	// UDot/VDot
-	DrawComplexDrawParams.DrawData[X_AXIS] = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
-	DrawComplexDrawParams.DrawData[Y_AXIS] = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
-	DrawComplexDrawParams.DrawData[Z_AXIS] = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, Gamma);
+	DrawComplexDrawParams.DrawData[DCTI_X_AXIS] = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
+	DrawComplexDrawParams.DrawData[DCTI_Y_AXIS] = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
+	DrawComplexDrawParams.DrawData[DCTI_Z_AXIS] = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, Gamma);
 
 	SetTexture(0, *Surface.Texture, DrawComplexDrawParams.PolyFlags(), 0.0, DF_DiffuseTexture);
-	DrawComplexDrawParams.DrawData[DIFFUSE_COORDS] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
+	DrawComplexDrawParams.DrawData[DCTI_DIFFUSE_COORDS] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, TexInfo[0].UPan, TexInfo[0].VPan);
 	if(Surface.Texture->Texture)
-		DrawComplexDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->TEXTURE_SCALE_NAME);
-	else DrawComplexDrawParams.DrawData[DIFFUSE_INFO] = glm::vec4(1.f, 0.f, 0.f, 1.f);
+		DrawComplexDrawParams.DrawData[DCTI_DIFFUSE_INFO] = glm::vec4(Surface.Texture->Texture->Diffuse, Surface.Texture->Texture->Specular, Surface.Texture->Texture->Alpha, Surface.Texture->Texture->TEXTURE_SCALE_NAME);
+	else DrawComplexDrawParams.DrawData[DCTI_DIFFUSE_INFO] = glm::vec4(1.f, 0.f, 0.f, 1.f);
 	DrawComplexDrawParams.TexNum[0].x = TexInfo[0].TexNum;
 	DrawComplexDrawParams.TextureFormat() = Surface.Texture->Format;
 
@@ -140,29 +120,29 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_LightMap;
 		SetTexture(1, *Surface.LightMap, DrawComplexDrawParams.PolyFlags(), -0.5, DF_LightMap); //First parameter has to fit the uniform in the fragment shader
-		DrawComplexDrawParams.DrawData[LIGHTMAP_COORDS] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, TexInfo[1].UPan, TexInfo[1].VPan);
+		DrawComplexDrawParams.DrawData[DCTI_LIGHTMAP_COORDS] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, TexInfo[1].UPan, TexInfo[1].VPan);
 		DrawComplexDrawParams.TexNum[0].y = TexInfo[1].TexNum;
 	}
 	if (Surface.FogMap)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_FogMap;
 		SetTexture(2, *Surface.FogMap, PF_AlphaBlend, -0.5, DF_FogMap);
-		DrawComplexDrawParams.DrawData[FOGMAP_COORDS] = glm::vec4(TexInfo[2].UMult, TexInfo[2].VMult, TexInfo[2].UPan, TexInfo[2].VPan);
+		DrawComplexDrawParams.DrawData[DCTI_FOGMAP_COORDS] = glm::vec4(TexInfo[2].UMult, TexInfo[2].VMult, TexInfo[2].UPan, TexInfo[2].VPan);
 		DrawComplexDrawParams.TexNum[0].z = TexInfo[2].TexNum;
 	}
 	if (Surface.DetailTexture && DetailTextures)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_DetailTexture;
 		SetTexture(3, *Surface.DetailTexture, DrawComplexDrawParams.PolyFlags(), 0.0, DF_DetailTexture);
-		DrawComplexDrawParams.DrawData[DETAIL_COORDS] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
+		DrawComplexDrawParams.DrawData[DCTI_DETAIL_COORDS] = glm::vec4(TexInfo[3].UMult, TexInfo[3].VMult, TexInfo[3].UPan, TexInfo[3].VPan);
 		DrawComplexDrawParams.TexNum[0].w = TexInfo[3].TexNum;
 	}
 	if (Surface.MacroTexture && MacroTextures)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_MacroTexture;
 		SetTexture(4, *Surface.MacroTexture, DrawComplexDrawParams.PolyFlags(), 0.0, DF_MacroTexture);
-		DrawComplexDrawParams.DrawData[MACRO_COORDS] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
-		DrawComplexDrawParams.DrawData[MACRO_INFO] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->TEXTURE_SCALE_NAME);
+		DrawComplexDrawParams.DrawData[DCTI_MACRO_COORDS] = glm::vec4(TexInfo[4].UMult, TexInfo[4].VMult, TexInfo[4].UPan, TexInfo[4].VPan);
+		DrawComplexDrawParams.DrawData[DCTI_MACRO_INFO] = glm::vec4(Surface.MacroTexture->Texture->Diffuse, Surface.MacroTexture->Texture->Specular, Surface.MacroTexture->Texture->Alpha, Surface.MacroTexture->Texture->TEXTURE_SCALE_NAME);
 		DrawComplexDrawParams.TexNum[1].x = TexInfo[4].TexNum;
 	}
 #if ENGINE_VERSION==227
@@ -170,7 +150,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_BumpMap;
 		SetTexture(5, *Surface.BumpMap, DrawComplexDrawParams.PolyFlags(), 0.0, DF_BumpMap);
-		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->TEXTURE_SCALE_NAME);
+		DrawComplexDrawParams.DrawData[DCTI_BUMPMAP_INFO] = glm::vec4(Surface.BumpMap->Texture->Diffuse, Surface.BumpMap->Texture->Specular, Surface.BumpMap->Texture->Alpha, Surface.BumpMap->Texture->TEXTURE_SCALE_NAME);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
 #else
@@ -193,21 +173,21 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_EnvironmentMap;
 		SetTexture(6, *Surface.EnvironmentMap, DrawComplexDrawParams.PolyFlags(), 0.0, DF_EnvironmentMap);
-		DrawComplexDrawParams.DrawData[ENVIROMAP_COORDS] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
+		DrawComplexDrawParams.DrawData[DCTI_ENVIROMAP_COORDS] = glm::vec4(TexInfo[6].UMult, TexInfo[6].VMult, TexInfo[6].UPan, TexInfo[6].VPan);
 		DrawComplexDrawParams.TexNum[1].z = TexInfo[6].TexNum;
 	}
     if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
 	{
 		DrawComplexDrawParams.DrawFlags() |= DF_HeightMap;
 		SetTexture(7, *Surface.HeightMap, DrawComplexDrawParams.PolyFlags(), 0.0, DF_HeightMap);
-		DrawComplexDrawParams.DrawData[HEIGHTMAP_INFO] = glm::vec4(Surface.HeightMap->Texture->Diffuse, Surface.HeightMap->Texture->Specular, Surface.HeightMap->Texture->TEXTURE_SCALE_NAME, Surface.Level->TimeSeconds.GetFloat());
+		DrawComplexDrawParams.DrawData[DCTI_HEIGHTMAP_INFO] = glm::vec4(Surface.HeightMap->Texture->Diffuse, Surface.HeightMap->Texture->Specular, Surface.HeightMap->Texture->TEXTURE_SCALE_NAME, Surface.Level->TimeSeconds.GetFloat());
 		DrawComplexDrawParams.TexNum[1].w = TexInfo[7].TexNum;
 	}
 #endif
 
     // Timer
-	DrawComplexDrawParams.DrawData[DISTANCE_FOG_COLOR] = DistanceFogColor;
-	DrawComplexDrawParams.DrawData[DISTANCE_FOG_INFO] = DistanceFogValues;
+	DrawComplexDrawParams.DrawData[DCTI_DISTANCE_FOG_COLOR] = DistanceFogColor;
+	DrawComplexDrawParams.DrawData[DCTI_DISTANCE_FOG_INFO] = DistanceFogValues;
 
 	if (UsingShaderDrawParameters)
 		memcpy(DrawComplexGetDrawParamsRef(), &DrawComplexDrawParams, sizeof(DrawComplexDrawParams));
