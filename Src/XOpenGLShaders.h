@@ -73,44 +73,42 @@ static void Implement_Extension(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
 	Out.Log(TEXT("mat4 FrameUncoords;"));
 	Out.Log(TEXT("};"));
 
-	if (GL->UsingBindlessTextures)
+	if (GL->UsingBindlessTextures && GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_UBO)
 	{
-		if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_UBO)
-		{
-			Out.Log(TEXT("layout(std140) uniform TextureHandles"));
-			Out.Log(TEXT("{"));
-			Out.Logf(TEXT("layout(bindless_sampler) sampler2D Textures[%u];"), GL->MaxBindlessTextures);
-			Out.Log(TEXT("};"));
+		Out.Log(TEXT("layout(std140) uniform TextureHandles"));
+		Out.Log(TEXT("{"));
+		Out.Logf(TEXT("layout(bindless_sampler) sampler2D Textures[%u];"), GL->MaxBindlessTextures);
+		Out.Log(TEXT("};"));
 
-			Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("if (BindlessTexNum > 0u)"));
-			Out.Log(TEXT("return texture(Textures[BindlessTexNum], TexCoords);"));
-			Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
-			Out.Log(TEXT("}"));
-		}
-		else if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_SSBO)
-		{
-			Out.Log(TEXT("layout(std430, binding = 1) buffer TextureHandles"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("uvec2 Textures[];"));
-			Out.Log(TEXT("};"));
-
-			Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("if (BindlessTexNum > 0u)"));
-			Out.Log(TEXT("return texture(sampler2D(Textures[BindlessTexNum]), TexCoords);"));
-			Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
-			Out.Log(TEXT("}"));
-		}
-		else
-		{
-			Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
-			Out.Log(TEXT("}"));
-		}
+		Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
+		Out.Log(TEXT("{"));
+		Out.Log(TEXT("if (BindlessTexNum > 0u)"));
+		Out.Log(TEXT("return texture(Textures[BindlessTexNum], TexCoords);"));
+		Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
+		Out.Log(TEXT("}"));
 	}
+	else if (GL->UsingBindlessTextures && GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_SSBO)
+	{
+		Out.Log(TEXT("layout(std430, binding = 1) buffer TextureHandles"));
+		Out.Log(TEXT("{"));
+		Out.Log(TEXT("uvec2 Textures[];"));
+		Out.Log(TEXT("};"));
+
+		Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
+		Out.Log(TEXT("{"));
+		Out.Log(TEXT("if (BindlessTexNum > 0u)"));
+		Out.Log(TEXT("return texture(sampler2D(Textures[BindlessTexNum]), TexCoords);"));
+		Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
+		Out.Log(TEXT("}"));
+	}
+	else
+	{
+		Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
+		Out.Log(TEXT("{"));
+		Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
+		Out.Log(TEXT("}"));
+	}
+
 	//DistanceFog
 	Out.Log(TEXT("struct FogParameters"));
 	Out.Log(TEXT("{"));
@@ -176,7 +174,7 @@ static void Create_DrawSimple_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
 
 	// stijn: this is an attempt at stippled line drawing in GL4
 #if 0
-	Out.Logf(TEXT("if ((LineFlags & %u) == %u)"), LINE_Transparent, LINE_Transparent);
+	Out.Logf(TEXT("if ((LineFlags & %uu) == %uu)"), LINE_Transparent, LINE_Transparent);
 	Out.Log(TEXT("{"));
 	Out.Log(TEXT("if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)"));
 	Out.Log(TEXT("discard;"));
@@ -593,7 +591,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 			{
 				// ParallaxMap
 				Out.Log(TEXT("float parallaxHeight = 1.0;"));
-				Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_HeightMap, DF_HeightMap);
+				Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_HeightMap, DF_HeightMap);
 				Out.Log(TEXT("{"));
 				// get new texture coordinates from Parallax Mapping
 				Out.Log(TEXT("texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);"));
@@ -611,17 +609,17 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		Out.Log(TEXT("if (vBaseAlpha > 0.0)"));
 		Out.Log(TEXT("Color.a *= vBaseAlpha;")); // Alpha.
 
-		Out.Logf(TEXT("if (vTextureFormat == %u)"), TEXF_BC5); //BC5 (GL_COMPRESSED_RG_RGTC2) compression
+		Out.Logf(TEXT("if (vTextureFormat == %uu)"), TEXF_BC5); //BC5 (GL_COMPRESSED_RG_RGTC2) compression
 		Out.Log(TEXT("Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);"));
 
 		// Handle PF_Masked.
-		Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Masked, PF_Masked);
+		Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("if (Color.a < 0.5)"));
 		Out.Log(TEXT("discard;"));
 		Out.Log(TEXT("else Color.rgb /= Color.a;"));
 		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((vPolyFlags & %u) == %u && Color.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
+		Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && Color.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
 		Out.Log(TEXT("discard;"));
 		/*	if ((vPolyFlags&PF_Mirrored) == PF_Mirrored)
 		{
@@ -661,7 +659,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		else
 		{
 			// LightMap
-			Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_LightMap, DF_LightMap);
+			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_LightMap, DF_LightMap);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("LightColor = GetTexel(vLightMapTexNum, Texture1, vLightMapCoords);"));
 
@@ -676,7 +674,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		// DetailTextures
 		if (GL->DetailTextures)
 		{
-			Out.Logf(TEXT("if (((vDrawFlags & %u) == %u))"), DF_DetailTexture, DF_DetailTexture);
+			Out.Logf(TEXT("if (((vDrawFlags & %uu) == %uu))"), DF_DetailTexture, DF_DetailTexture);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("float NearZ = vCoords.z / 512.0;"));
 			Out.Log(TEXT("float DetailScale = 1.0;"));
@@ -709,16 +707,16 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		// MacroTextures
 		if (GL->MacroTextures)
 		{
-			Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_MacroTexture, DF_MacroTexture);
+			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_MacroTexture, DF_MacroTexture);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("vec4 MacrotexColor = GetTexel(vMacroTexNum, Texture4, vMacroTexCoords);"));
-			Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Masked, PF_Masked);
+			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("if (MacrotexColor.a < 0.5)"));
 			Out.Log(TEXT("discard;"));
 			Out.Log(TEXT("else MacrotexColor.rgb /= MacrotexColor.a;"));
 			Out.Log(TEXT("}"));
-			Out.Logf(TEXT("else if ((vPolyFlags & %u) == %u && MacrotexColor.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
+			Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && MacrotexColor.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
 			Out.Log(TEXT("discard;"));
 
 			Out.Log(TEXT("vec3 hsvMacroTex = rgb2hsv(MacrotexColor.rgb);"));
@@ -732,7 +730,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		// BumpMap (Normal Map)
 		if (GL->BumpMaps)
 		{
-			Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_BumpMap, DF_BumpMap);
+			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_BumpMap, DF_BumpMap);
 			Out.Log(TEXT("{"));
 			//normal from normal map
 			Out.Log(TEXT("vec3 TextureNormal = normalize(GetTexel(vBumpMapTexNum, Texture5, texCoords).rgb * 2.0 - 1.0);")); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
@@ -750,7 +748,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 			Out.Log(TEXT("if (NormalLightRadius == 0.0)"));
 			Out.Log(TEXT("NormalLightRadius = LightData2[i].w * 64.0;"));
 
-			Out.Logf(TEXT("bool bSunlight = (uint(LightData2[i].x) == %u);"), LE_Sunlight);
+			Out.Logf(TEXT("bool bSunlight = (uint(LightData2[i].x) == %uu);"), LE_Sunlight);
 			Out.Log(TEXT("vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords);")); // Frame->Coords.
 
 			Out.Log(TEXT("float dist = distance(vCoords, InLightPos);"));
@@ -759,7 +757,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 			Out.Logf(TEXT("float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * %f);"), MinLight);
 			Out.Log(TEXT("float attenuation = NormalLightRadius / (dist + b * dist * dist);"));
 
-			Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Unlit, PF_Unlit);
+			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Unlit, PF_Unlit);
 			Out.Log(TEXT("InLightPos = vec3(1.0, 1.0, 1.0);")); //no idea whats best here. Arbitrary value based on some tests.
 
 			Out.Log(TEXT("if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight)")); // Do not consider if not in range or in a different zone.
@@ -787,21 +785,21 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		}
 		// FogMap
 		Out.Log(TEXT("vec4 FogColor = vec4(0.0);"));
-		Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_FogMap, DF_FogMap);
+		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_FogMap, DF_FogMap);
 		Out.Log(TEXT("FogColor = GetTexel(vFogMapTexNum, Texture2, vFogMapCoords) * 2.0;"));
 
 		// EnvironmentMap
 #if ENGINE_VERSION==227
-		Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_EnvironmentMap, DF_EnvironmentMap);
+		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_EnvironmentMap, DF_EnvironmentMap);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("vec4 EnvironmentColor = GetTexel(vEnviroMapTexNum, Texture6, vEnvironmentTexCoords);"));
-		Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Masked, PF_Masked);
+		Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("if (EnvironmentColor.a < 0.5)"));
 		Out.Log(TEXT("discard;"));
 		Out.Log(TEXT("else EnvironmentColor.rgb /= EnvironmentColor.a;"));
 		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((vPolyFlags & %u) == %u && EnvironmentColor.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
+		Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && EnvironmentColor.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
 		Out.Log(TEXT("discard;"));
 
 		Out.Log(TEXT("TotalColor *= vec4(EnvironmentColor.rgb, 1.0);"));
@@ -809,7 +807,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 #endif
 
 		//TotalColor=clamp(TotalColor,0.0,1.0); //saturate.
-		Out.Logf(TEXT("if ((vPolyFlags & %u) != %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((vPolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("{"));
 		// Gamma
 		Out.Logf(TEXT("float InGamma = 1.0 / (vGamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier);
@@ -818,7 +816,7 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		Out.Log(TEXT("TotalColor.b = pow(TotalColor.b, InGamma);"));
 		Out.Log(TEXT("}"));
 
-		Out.Logf(TEXT("if ((vPolyFlags & %u) != %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((vPolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("TotalColor = TotalColor * LightColor;"));
 		//Out.Log(TEXT("else TotalColor = TotalColor;"));
 		Out.Log(TEXT("TotalColor += FogColor;"));
@@ -835,9 +833,9 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		Out.Log(TEXT("DistanceFogParams.FogDensity = vDistanceFogInfo.z;"));
 		Out.Log(TEXT("DistanceFogParams.FogMode = FogMode;"));
 
-		Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);"));
-		Out.Logf(TEXT("else if ((vPolyFlags & %u) == %u && (vPolyFlags & %u) != %u)"), PF_Translucent, PF_Translucent, PF_Environment, PF_Environment);
+		Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && (vPolyFlags & %uu) != %uu)"), PF_Translucent, PF_Translucent, PF_Environment, PF_Environment);
 		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);"));
 		Out.Log(TEXT("else DistanceFogParams.FogColor = vDistanceFogColor;"));
 
@@ -848,31 +846,31 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 		if (GIsEditor)
 		{
 			// Editor support.
-			Out.Logf(TEXT("if (vRendMap == %u || vRendMap == %u || vRendMap == %u)"), REN_Zones, REN_PolyCuts, REN_Polys);
+			Out.Logf(TEXT("if (vRendMap == %uu || vRendMap == %uu || vRendMap == %uu)"), REN_Zones, REN_PolyCuts, REN_Polys);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor += 0.5;"));
 			Out.Log(TEXT("TotalColor *= vDrawColor;"));
 			Out.Log(TEXT("}"));
 #if ENGINE_VERSION==227
-			Out.Logf(TEXT("else if (vRendMap == %u)"), REN_Normals); //Thank you han!
+			Out.Logf(TEXT("else if (vRendMap == %uu)"), REN_Normals); //Thank you han!
 			Out.Log(TEXT("{"));
 			// Dot.
 			Out.Log(TEXT("float T = 0.5 * dot(normalize(vCoords), vSurfaceNormal);"));
 			// Selected.
-			Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
 			Out.Log(TEXT("TotalColor = vec4(0.0, 0.0, abs(T), 1.0);"));
 			// Normal.
 			Out.Log(TEXT("else TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);"));
 			Out.Log(TEXT("}"));
 #endif
 
-			Out.Logf(TEXT("else if (vRendMap == %u)"), REN_PlainTex);
+			Out.Logf(TEXT("else if (vRendMap == %uu)"), REN_PlainTex);
 			Out.Log(TEXT("TotalColor = Color;"));
 
 #if ENGINE_VERSION==227
-			Out.Logf(TEXT("if ((vRendMap != %u) && ((vPolyFlags & %u) == %u))"), REN_Normals, PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((vRendMap != %uu) && ((vPolyFlags & %uu) == %uu))"), REN_Normals, PF_Selected, PF_Selected);
 #else
-			Out.Logf(TEXT("if ((vPolyFlags & %u) == %u)"), PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
 #endif
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor.r = (TotalColor.r * 0.75);"));
@@ -1104,7 +1102,7 @@ static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputD
 		Out.Log(TEXT("vTexCoords = (MapDot - TexMapPan) * TexMapMult;"));
 
 		//Texture UV Lightmap to fragment
-		Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_LightMap, DF_LightMap);
+		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_LightMap, DF_LightMap);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("vec2 LightMapMult = LightMapUV.xy;"));
 		Out.Log(TEXT("vec2 LightMapPan = LightMapUV.zw;"));
@@ -1112,7 +1110,7 @@ static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputD
 		Out.Log(TEXT("}"));
 
 		// Texture UV FogMap
-		Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_FogMap, DF_FogMap);
+		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_FogMap, DF_FogMap);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("vec2 FogMapMult = FogMapUV.xy;"));
 		Out.Log(TEXT("vec2 FogMapPan = FogMapUV.zw;"));
@@ -1122,7 +1120,7 @@ static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputD
 		// Texture UV DetailTexture
 		if (GL->DetailTextures)
 		{
-			Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_DetailTexture, DF_DetailTexture);
+			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_DetailTexture, DF_DetailTexture);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("vec2 DetailMult = DetailUV.xy;"));
 			Out.Log(TEXT("vec2 DetailPan = DetailUV.zw;"));
@@ -1133,7 +1131,7 @@ static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputD
 		// Texture UV Macrotexture
 		if (GL->MacroTextures)
 		{
-			Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_MacroTexture, DF_MacroTexture);
+			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_MacroTexture, DF_MacroTexture);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("vec2 MacroMult = MacroUV.xy;"));
 			Out.Log(TEXT("vec2 MacroPan = MacroUV.zw;"));
@@ -1143,7 +1141,7 @@ static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputD
 
 		// Texture UV EnvironmentMap
 #if ENGINE_VERSION==227
-		Out.Logf(TEXT("if ((vDrawFlags & %u) == %u)"), DF_EnvironmentMap, DF_EnvironmentMap);
+		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_EnvironmentMap, DF_EnvironmentMap);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("vec2 EnvironmentMapMult = EnviroMapUV.xy;"));
 		Out.Log(TEXT("vec2 EnvironmentMapPan = EnviroMapUV.zw;"));
@@ -1157,7 +1155,7 @@ static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputD
 		{
 			Out.Log(TEXT("vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);"));
 			Out.Log(TEXT("vec3 EyeSpacePos = normalize(FrameCoords[0].xyz);")); // despite pretty perfect results (so far) this still seems somewhat wrong to me.
-			Out.Logf(TEXT("if ((vDrawFlags & %u) != 0u)"), (DF_MacroTexture | DF_BumpMap));
+			Out.Logf(TEXT("if ((vDrawFlags & %uu) != 0u)"), (DF_MacroTexture | DF_BumpMap));
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("vec3 T = normalize(vec3(MapCoordsXAxis.x, MapCoordsXAxis.y, MapCoordsXAxis.z));"));
 			Out.Log(TEXT("vec3 B = normalize(vec3(MapCoordsYAxis.x, MapCoordsYAxis.y, MapCoordsYAxis.z));"));
@@ -1289,10 +1287,10 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		Out.Log(TEXT("Color *= gTextureInfo.x;")); // Diffuse factor.
 		Out.Log(TEXT("if (gTextureInfo.y > 0.0)"));
 		Out.Log(TEXT("Color.a *= gTextureInfo.y;")); // Alpha.
-		Out.Logf(TEXT("if (gTextureFormat == %u)"), TEXF_BC5); // BC5 (GL_COMPRESSED_RG_RGTC2) compression
+		Out.Logf(TEXT("if (gTextureFormat == %uu)"), TEXF_BC5); // BC5 (GL_COMPRESSED_RG_RGTC2) compression
 		Out.Log(TEXT("Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);"));
 
-		Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_AlphaBlend, PF_AlphaBlend);
+		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_AlphaBlend, PF_AlphaBlend);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("Color.a *= gLightColor.a;")); // Alpha.
 		Out.Log(TEXT("if (Color.a < 0.01)"));
@@ -1300,7 +1298,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		Out.Log(TEXT("}"));
 
 		// Handle PF_Masked.
-		Out.Logf(TEXT("else if ((gPolyFlags & %u) == %u)"), PF_Masked, PF_Masked);
+		Out.Logf(TEXT("else if ((gPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("if (Color.a < 0.5)"));
 		Out.Log(TEXT("discard;"));
@@ -1339,10 +1337,10 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		else Out.Log(TEXT("LightColor = gLightColor;"));
 
 		// Handle PF_RenderFog.
-		Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_RenderFog, PF_RenderFog);
+		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_RenderFog, PF_RenderFog);
 		Out.Log(TEXT("{"));
 		// Handle PF_RenderFog|PF_Modulated.
-		Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("{"));
 		// Compute delta to modulation identity.
 		Out.Log(TEXT("vec3 Delta = vec3(0.5) - Color.xyz;"));
@@ -1361,7 +1359,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		Out.Log(TEXT("TotalColor.a = Color.a;"));
 		Out.Log(TEXT("}"));
 		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((gPolyFlags & %u) == %u)"), PF_Modulated, PF_Modulated); // No Fog.
+		Out.Logf(TEXT("else if ((gPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated); // No Fog.
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("TotalColor = Color;"));
 		Out.Log(TEXT("}"));
@@ -1372,7 +1370,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 
 		if (GL->DetailTextures)
 		{
-			Out.Logf(TEXT("if (((gDrawFlags & %u) == %u))"), DF_DetailTexture, DF_DetailTexture);
+			Out.Logf(TEXT("if (((gDrawFlags & %uu) == %uu))"), DF_DetailTexture, DF_DetailTexture);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("float NearZ = gCoords.z / 512.0;"));
 			Out.Log(TEXT("float DetailScale = 1.0;"));
@@ -1404,7 +1402,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		}
 		if (GL->MacroTextures)
 		{
-			Out.Logf(TEXT("if ((gDrawFlags & %u) == %u && (gDrawFlags & %u) != %u)"), DF_MacroTexture, DF_MacroTexture, DF_BumpMap, DF_BumpMap);
+			Out.Logf(TEXT("if ((gDrawFlags & %uu) == %uu && (gDrawFlags & %uu) != %uu)"), DF_MacroTexture, DF_MacroTexture, DF_BumpMap, DF_BumpMap);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("vec4 MacroTexColor = GetTexel(gMacroTexNum, Texture3, gMacroTexCoords);"));
 			Out.Log(TEXT("vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);"));
@@ -1417,7 +1415,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		if (GL->BumpMaps)
 		{
 			// BumpMap
-			Out.Logf(TEXT("if ((gDrawFlags & %u) == %u)"), DF_BumpMap, DF_BumpMap);
+			Out.Logf(TEXT("if ((gDrawFlags & %uu) == %uu)"), DF_BumpMap, DF_BumpMap);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("vec3 TangentViewDir = normalize(gTangentViewPos - gTangentFragPos);"));
 			//normal from normal map
@@ -1434,14 +1432,14 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 			Out.Log(TEXT("float LightBrightness = LightData5[i].z / 255.0;"));
 			Out.Log(TEXT("if (NormalLightRadius == 0.0)"));
 			Out.Log(TEXT("NormalLightRadius = LightData2[i].w * 64.0;"));
-			Out.Logf(TEXT("bool bSunlight = (uint(LightData2[i].x) == %u);"), LE_Sunlight);
+			Out.Logf(TEXT("bool bSunlight = (uint(LightData2[i].x) == %uu);"), LE_Sunlight);
 			Out.Log(TEXT("vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords);")); // Frame->Coords.
 			Out.Log(TEXT("float dist = distance(gCoords, InLightPos);"));
 
 			constexpr FLOAT MinLight = 0.05;
 			Out.Logf(TEXT("float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * %f);"), MinLight);
 			Out.Log(TEXT("float attenuation = NormalLightRadius / (dist + b * dist * dist);"));
-			Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_Unlit, PF_Unlit);
+			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Unlit, PF_Unlit);
 			Out.Log(TEXT("InLightPos = vec3(1.0, 1.0, 1.0);")); // no idea whats best here. Arbitrary value based on some tests.
 
 			Out.Log(TEXT("if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight)")); // Do not consider if not in range or in a different zone.
@@ -1463,7 +1461,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 			Out.Log(TEXT("TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);"));
 			Out.Log(TEXT("}"));
 		}
-		Out.Logf(TEXT("if ((gPolyFlags & %u) != %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((gPolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("{"));
 		// Gamma
 		Out.Logf(TEXT("float InGamma = 1.0 / (gGamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier);
@@ -1482,9 +1480,9 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		Out.Log(TEXT("DistanceFogParams.FogDensity = gDistanceFogInfo.z;"));
 		Out.Log(TEXT("DistanceFogParams.FogMode = int(gDistanceFogInfo.w);"));
 
-		Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);"));
-		Out.Logf(TEXT("else if ((gPolyFlags & %u) == %u && (gPolyFlags & %u) != %u)"), PF_Translucent, PF_Translucent, PF_Environment, PF_Environment);
+		Out.Logf(TEXT("else if ((gPolyFlags & %uu) == %uu && (gPolyFlags & %uu) != %uu)"), PF_Translucent, PF_Translucent, PF_Environment, PF_Environment);
 		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);"));
 		Out.Log(TEXT("else DistanceFogParams.FogColor = gDistanceFogColor;"));
 
@@ -1496,18 +1494,18 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 		if (GIsEditor)
 		{
 			// Editor support.
-			Out.Logf(TEXT("if (gRendMap == %u || gRendMap == %u || gRendMap == %u)"), REN_Zones, REN_PolyCuts, REN_Polys);
+			Out.Logf(TEXT("if (gRendMap == %uu || gRendMap == %uu || gRendMap == %uu)"), REN_Zones, REN_PolyCuts, REN_Polys);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor += 0.5;"));
 			Out.Log(TEXT("TotalColor *= gDrawColor;"));
 			Out.Log(TEXT("}"));
 #if ENGINE_VERSION==227
-			Out.Logf(TEXT("else if (gRendMap == %u)"), REN_Normals);
+			Out.Logf(TEXT("else if (gRendMap == %uu)"), REN_Normals);
 			Out.Log(TEXT("{"));
 			// Dot.
 			Out.Log(TEXT("float T = 0.5 * dot(normalize(gCoords), gNormals.xyz);"));
 			// Selected.
-			Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor = vec4(0.0, 0.0, abs(T), 1.0);"));
 			Out.Log(TEXT("}"));
@@ -1518,15 +1516,15 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 			Out.Log(TEXT("}"));
 			Out.Log(TEXT("}"));
 #endif
-			Out.Logf(TEXT("else if (gRendMap == %u)"), REN_PlainTex);
+			Out.Logf(TEXT("else if (gRendMap == %uu)"), REN_PlainTex);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor = Color;"));
 			Out.Log(TEXT("}"));
 
 #if ENGINE_VERSION==227
-			Out.Logf(TEXT("if ((gRendMap != %u) && ((gPolyFlags & %u) == %u))"), REN_Normals, PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((gRendMap != %uu) && ((gPolyFlags & %uu) == %uu))"), REN_Normals, PF_Selected, PF_Selected);
 #else
-			Out.Logf(TEXT("if ((gPolyFlags & %u) == %u)"), PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
 #endif
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor.r = (TotalColor.r * 0.75);"));
@@ -1540,7 +1538,7 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 			Out.Log(TEXT("if (bool(gHitTesting))"));
 			Out.Log(TEXT("TotalColor = gDrawColor;")); // Use DrawColor.
 
-			Out.Logf(TEXT("if ((gPolyFlags & %u) == %u && gDrawColor.a > 0.0)"), PF_AlphaBlend, PF_AlphaBlend);
+			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu && gDrawColor.a > 0.0)"), PF_AlphaBlend, PF_AlphaBlend);
 			Out.Log(TEXT("TotalColor.a *= gDrawColor.a;"));
 		}
 		if (GL->SimulateMultiPass)
@@ -1994,18 +1992,18 @@ static void Create_DrawTile_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
 		Out.Log(TEXT("vec4 Color = GetTexel(gTexNum, Texture0, gTexCoords);"));
 
 		// Handle PF_Masked.
-		Out.Logf(TEXT("if ((PolyFlags & %u) == %u)"), PF_Masked, PF_Masked);
+		Out.Logf(TEXT("if ((PolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
 		Out.Log(TEXT("{"));
 		Out.Log(TEXT("if (Color.a < 0.5)"));
 		Out.Log(TEXT("discard;"));
 		Out.Log(TEXT("else Color.rgb /= Color.a;"));
 		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((PolyFlags & %u) == %u && Color.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
+		Out.Logf(TEXT("else if ((PolyFlags & %uu) == %uu && Color.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
 		Out.Log(TEXT("discard;"));
 
 		Out.Log(TEXT("TotalColor = Color * gDrawColor;")); // Add DrawColor.
 
-		Out.Logf(TEXT("if ((PolyFlags & %u) != %u)"), PF_Modulated, PF_Modulated);
+		Out.Logf(TEXT("if ((PolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
 		Out.Log(TEXT("{"));
 		// Gamma
 		Out.Logf(TEXT("float InGamma = 1.0 / (Gamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier);
@@ -2017,7 +2015,7 @@ static void Create_DrawTile_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
 		if (GIsEditor)
 		{
 			// Editor support.
-			Out.Logf(TEXT("if ((PolyFlags & %u) == %u)"), PF_Selected, PF_Selected);
+			Out.Logf(TEXT("if ((PolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
 			Out.Log(TEXT("{"));
 			Out.Log(TEXT("TotalColor.g = TotalColor.g - 0.04;"));
 			Out.Log(TEXT("TotalColor = clamp(TotalColor, 0.0, 1.0);"));
