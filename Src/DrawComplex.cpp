@@ -164,7 +164,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 # endif
 		DrawComplexDrawParams.DrawFlags() |= DF_BumpMap;
 		SetTexture(5, BumpMapInfo, DrawComplexDrawParams.PolyFlags(), 0.0, DF_BumpMap);
-		DrawComplexDrawParams.DrawData[BUMPMAP_INFO] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
+		DrawComplexDrawParams.DrawData[DCTI_BUMPMAP_INFO] = glm::vec4(BumpMapInfo.Texture->Diffuse, BumpMapInfo.Texture->Specular, BumpMapInfo.Texture->Alpha, BumpMapInfo.Texture->Scale);
 		DrawComplexDrawParams.TexNum[1].y = TexInfo[5].TexNum;
 	}
 #endif

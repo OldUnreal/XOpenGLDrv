@@ -8,9 +8,6 @@
     <Filter Include="Inc">
       <UniqueIdentifier>{61f1ea69-ad7f-4b7f-959a-d5383de5047e}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Shaders">
-      <UniqueIdentifier>{678a38c3-9317-4c50-98b0-7b1a2a3cb749}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="XOpenGL.cpp">
@@ -72,46 +69,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\Shaders\DrawComplexSinglePass.frag">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawComplexSinglePass.vert">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawGouraud.frag">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawGouraud.vert">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawSimple.frag">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawSimple.vert">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawTile.frag">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawTile.vert">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawComplexSinglePass.geo">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\Globals.incl">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawTile.geo">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="..\Shaders\DrawGouraud.geo">
-      <Filter>Shaders</Filter>
-    </None>
     <None Include="..\XOpenGLDrv.int" />
-    <None Include="..\Shaders\Extensions.incl">
-      <Filter>Shaders</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XOpenGLDrv.rc" />

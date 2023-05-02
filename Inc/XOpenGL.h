@@ -1267,7 +1267,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	void  InitShaders();
 	void  DeleteShaderBuffers();
-	void  LoadShader(const TCHAR* Filename, GLuint& ShaderObject);
 	void  LinkShader(const TCHAR* ShaderProgName, GLuint& ShaderProg);
 	void  GetUniformBlockIndex(GLuint& Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName);
 	void  GetUniformLocation(GLuint& Uniform, GLuint& Program, const char* Name, FString ProgramName);

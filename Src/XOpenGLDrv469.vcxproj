@@ -415,7 +415,6 @@
     <ClInclude Include="..\Inc\XOpenGLDrv.h" />
     <ClInclude Include="..\Inc\XOpenGLFuncs.h" />
     <ClInclude Include="..\Inc\XOpenGLTemplate.h" />
-    <ClInclude Include="..\Inc\XOpenGLShaders.h" />	
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
