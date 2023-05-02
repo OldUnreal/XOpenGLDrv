@@ -125,12 +125,6 @@
       <AdditionalLibraryDirectories>..\..\build\Win\x86\lib;..\..\build\Win\x86\PhysX\bin\release;..\..\External\dxsdk\Lib\x86\;..\..\BuildTmp\$(Platform)$(Configuration)\</AdditionalLibraryDirectories>
       <ProgramDatabaseFile>..\..\BuildTmp\$(Platform)$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-	<PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
@@ -175,12 +169,6 @@
       <AdditionalLibraryDirectories>..\..\build\Win\amd64\lib;..\..\build\Win\amd64\PhysX\bin\release;..\..\External\dxsdk\Lib\amd64\;..\..\BuildTmp\$(Platform)$(Configuration)\</AdditionalLibraryDirectories>
       <ProgramDatabaseFile>..\..\BuildTmp\$(Platform)$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-	<PostBuildEvent>
-	  <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Midl>
@@ -228,12 +216,6 @@
       <AdditionalLibraryDirectories>..\..\build\Win\x86\lib;..\..\build\Win\x86\PhysX\bin\debug;..\..\External\dxsdk\Lib\x86\;..\..\BuildTmp\$(Platform)$(Configuration)\</AdditionalLibraryDirectories>
       <ProgramDatabaseFile>..\..\BuildTmp\$(Platform)$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-	<PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
@@ -274,12 +256,6 @@
       <AdditionalLibraryDirectories>..\..\build\Win\amd64\lib;..\..\build\Win\amd64\PhysX\bin\debug;..\..\External\dxsdk\Lib\amd64\;..\..\BuildTmp\$(Platform)$(Configuration)\</AdditionalLibraryDirectories>
       <ProgramDatabaseFile>..\..\BuildTmp\$(Platform)$(Configuration)\$(TargetName).pdb</ProgramDatabaseFile>
     </Link>
-	<PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CheckExtensions.cpp" />
@@ -302,24 +278,11 @@
     <ClInclude Include="..\Inc\XOpenGLDrv.h" />
     <ClInclude Include="..\Inc\XOpenGLFuncs.h" />
     <ClInclude Include="..\Inc\XOpenGLTemplate.h" />
+    <ClInclude Include="..\Inc\XOpenGLShaders.h" />	
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\XOpenGLDrv.int" />
-    <None Include="..\Shaders\DrawComplexSinglePass.frag" />
-    <None Include="..\Shaders\DrawComplexSinglePass.geo" />
-    <None Include="..\Shaders\DrawComplexSinglePass.vert" />
-    <None Include="..\Shaders\DrawGouraud.frag" />
-    <None Include="..\Shaders\DrawGouraud.geo" />
-    <None Include="..\Shaders\DrawGouraud.vert" />
-    <None Include="..\Shaders\DrawSimple.frag" />
-    <None Include="..\Shaders\DrawSimple.geo" />
-    <None Include="..\Shaders\DrawSimple.vert" />
-    <None Include="..\Shaders\DrawTile.frag" />
-    <None Include="..\Shaders\DrawTile.geo" />
-    <None Include="..\Shaders\DrawTile.vert" />
-    <None Include="..\Shaders\Extensions.incl" />
-    <None Include="..\Shaders\Globals.incl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XOpenGLDrv.rc" />

@@ -171,12 +171,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib;..\..\Engine\Lib;..\..\Render\Lib</AdditionalLibraryDirectories>
     </Link>
-    <PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Midl>
@@ -221,12 +215,6 @@
       <GenerateDebugInformation>DebugFull</GenerateDebugInformation>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib64;..\..\Engine\Lib64;..\..\Render\Lib64</AdditionalLibraryDirectories>
     </Link>
-    <PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Midl>
@@ -275,12 +263,6 @@
       <LargeAddressAware>true</LargeAddressAware>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib;..\..\Engine\Lib;..\..\Render\Lib</AdditionalLibraryDirectories>
     </Link>
-    <PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug ASAN|Win32'">
     <Midl>
@@ -328,12 +310,6 @@
       <GenerateMapFile>true</GenerateMapFile>
       <LargeAddressAware>true</LargeAddressAware>
     </Link>
-    <PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <Midl>
@@ -376,12 +352,6 @@
       <AssemblyDebug>true</AssemblyDebug>
       <AdditionalLibraryDirectories>..\..\Build\$(Platform)$(Configuration)\;..\..\Core\Lib64;..\..\Engine\Lib64;..\..\Render\Lib64</AdditionalLibraryDirectories>
     </Link>
-    <PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug ASAN|x64'">
     <Midl>
@@ -423,12 +393,6 @@
       <MapExports>true</MapExports>
       <AssemblyDebug>true</AssemblyDebug>
     </Link>
-    <PostBuildEvent>
-      <Command>$(ProjectDir)\..\CopyShaders64.bat</Command>
-    </PostBuildEvent>
-    <PostBuildEvent>
-      <Message>Installing Shaders...</Message>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CheckExtensions.cpp" />
@@ -451,23 +415,11 @@
     <ClInclude Include="..\Inc\XOpenGLDrv.h" />
     <ClInclude Include="..\Inc\XOpenGLFuncs.h" />
     <ClInclude Include="..\Inc\XOpenGLTemplate.h" />
+    <ClInclude Include="..\Inc\XOpenGLShaders.h" />	
     <ClInclude Include="resource.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\XOpenGLDrv.int" />
-    <None Include="..\Shaders\DrawComplexSinglePass.frag" />
-    <None Include="..\Shaders\DrawComplexSinglePass.geo" />
-    <None Include="..\Shaders\DrawComplexSinglePass.vert" />
-    <None Include="..\Shaders\DrawGouraud.frag" />
-    <None Include="..\Shaders\DrawGouraud.geo" />
-    <None Include="..\Shaders\DrawGouraud.vert" />
-    <None Include="..\Shaders\DrawSimple.frag" />
-    <None Include="..\Shaders\DrawSimple.vert" />
-    <None Include="..\Shaders\DrawTile.frag" />
-    <None Include="..\Shaders\DrawTile.geo" />
-    <None Include="..\Shaders\DrawTile.vert" />
-    <None Include="..\Shaders\Extensions.incl" />
-    <None Include="..\Shaders\Globals.incl" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="XOpenGLDrv.rc" />
