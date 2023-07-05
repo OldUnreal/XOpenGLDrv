@@ -16,973 +16,1166 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-#define READABLE_OUTPUT 0 // For nicer debug output.
+#define END_LINE "\n"
 
-class FShaderOutputDevice : public FString, public FOutputDevice
+// This is Higor's FCharWriter. We could (and should? move it elsewhere because
+// OpenGLDrv also uses it)
+class FCharWriter
 {
-#if READABLE_OUTPUT
-	TCHAR Intendents[32];
-	INT IntendIx;
-	const TCHAR* BufferTag;
-#endif
 public:
-	FShaderOutputDevice(const TCHAR* InTag)
-#if READABLE_OUTPUT
-		: BufferTag(InTag)
+	TArray<ANSICHAR> Data;
+
+	FCharWriter()
 	{
-		Intendents[0] = '\x0';
-		IntendIx = 0;
+		Data.Reserve(1000);
+		Data.AddNoCheck();
+		Data(0) = '\0';
 	}
-#else
-	{}
-#endif
-#if READABLE_OUTPUT
-	~FShaderOutputDevice()
+
+#if __cplusplus > 201103L || _MSVC_LANG > 201103L
+	template < INT Size > FCharWriter& operator<<( const char(&Input)[Size])
 	{
-		verify(IntendIx==0);
-		GLog->Logf(NAME_Event, TEXT("=================================================================== (%ls)"), BufferTag);
-		GLog->Log(NAME_Event, *this);
-		GLog->Log(NAME_Event, TEXT("==================================================================="));
+		if ( Size > 1 )
+		{
+			INT i = Data.Add(Size-1) - 1;
+			appMemcpy( &Data(i), Input, Size);
+		}
+		check(Data.Last() == '\0');
+		return *this;
 	}
 #endif
-	void Serialize(const TCHAR* Data, EName Event)
+
+	FCharWriter& operator<<( const char* Input)
 	{
-#if READABLE_OUTPUT
-		if (Data[0] == '}')
+		const char* InputEnd = Input;
+		while ( *InputEnd != '\0' )
+			InputEnd++;
+		if ( InputEnd != Input )
 		{
-			verify(IntendIx > 0);
-			--IntendIx;
-			Intendents[IntendIx] = '\x0';
+			INT Len = (INT)(InputEnd - Input);
+			INT i = Data.Add(Len) - 1;
+			check(Len > 0);
+			check(Len < 4096);
+			appMemcpy( &Data(i), Input, Len+1);
 		}
-		if (IntendIx)
-			*this += Intendents;
-		verify(appStrstr(Data, TEXT("PF_")) == NULL); // Make sure no PolyFlag constants slipped through...
-		verify(appStrstr(Data, TEXT("DF_")) == NULL);
-#endif
-		*this += Data;
-		
-#if READABLE_OUTPUT
-		* this += TEXT("\r\n");
-		if (Data[0] == '{' && (!Data[1] || Data[1] != ';'))
-		{
-			Intendents[IntendIx] = '\t';
-			++IntendIx;
-			Intendents[IntendIx] = '\x0';
-		}
-#else
-		* this += TEXT("\n");
-#endif
+		check(Data.Last() == '\0');
+		return *this;
+	}
+
+	FCharWriter& operator<<(INT Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf( Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FCharWriter& operator<<(UXOpenGLRenderDevice::DrawTileDrawDataIndices Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf( Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FCharWriter& operator<<(UXOpenGLRenderDevice::DrawComplexDrawDataIndices Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf( Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FCharWriter& operator<<(UXOpenGLRenderDevice::DrawGouraudDrawDataIndices Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf( Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FCharWriter& operator<<(DrawFlags Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf( Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FCharWriter& operator<<(EPolyFlags Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf( Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+
+	FCharWriter& operator<<(FLOAT Input)
+	{
+		TCHAR Buffer[32];
+		appSprintf(Buffer, TEXT("%f"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	const char* operator*()
+	{
+		return &Data(0);
+	}
+
+	GLsizei Length()
+	{
+		return (GLsizei)(Data.Num() - 1);
+	}
+
+	void Reset()
+	{
+		Data.EmptyNoRealloc();
+		Data.AddNoCheck();
+		Data(0) = '\0';
 	}
 };
 
-typedef void (glShaderProg)(class UXOpenGLRenderDevice*, FOutputDevice&);
+class FShaderOutputDevice : public FCharWriter
+{
+public:
+	const TCHAR* ProgName;
+	
+	FShaderOutputDevice(const TCHAR* _ProgName)
+	{
+		ProgName = _ProgName;
+	}
+};
 
-static void Implement_Extension(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+typedef void (glShaderProg)(class UXOpenGLRenderDevice*, FShaderOutputDevice&);
+
+static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
 	// VERSION
 	if (GL->OpenGLVersion == GL_Core)
 	{
 		if (GL->UsingShaderDrawParameters)
-			Out.Log(TEXT("#version 460 core"));
+			Out << "#version 460 core" END_LINE;
 		else if (GL->UsingBindlessTextures || GL->UsingPersistentBuffers)
-			Out.Log(TEXT("#version 450 core"));
-		else Out.Log(TEXT("#version 330 core"));
+			Out << "#version 450 core" END_LINE;
+		else
+			Out << "#version 330 core" END_LINE;
 	}
-	else Out.Log(TEXT("#version 310 es\n"));
+	else Out << "#version 310 es" END_LINE;
 
 	if (GL->UsingBindlessTextures) // defined for all variants of our bindlesstextures support
 	{
-		Out.Log(TEXT("#extension GL_ARB_bindless_texture : require"));
+		Out << "#extension GL_ARB_bindless_texture : require" END_LINE;
 
 		if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_UBO) // defined if we're going to store handles in a UBO
 		{
 		}
 		else if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_SSBO) // defined if we're going to store handles in a (much larger) SSBO
-			Out.Log(TEXT("#extension GL_ARB_shading_language_420pack : require"));
+			Out << "#extension GL_ARB_shading_language_420pack : require" END_LINE;
 		else if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_INT) // defined if we're going to pass handles directly to the shader using uniform parameters or the drawcall's parameters in the parameter SSBO
-			Out.Log(TEXT("#extension GL_ARB_gpu_shader_int64 : require"));
+			Out << "#extension GL_ARB_gpu_shader_int64 : require" END_LINE;
 	}
 
 	if (GL->UsingShaderDrawParameters)
 	{
-		Out.Log(TEXT("#extension GL_ARB_shader_draw_parameters : require"));
-		Out.Log(TEXT("#extension GL_ARB_shading_language_420pack : require"));
+		Out << R"(
+#extension GL_ARB_shader_draw_parameters : require
+#extension GL_ARB_shading_language_420pack : require
+)";
 	}
 	if (GL->OpenGLVersion == GL_ES)
 	{
-		Out.Log(TEXT("#extension GL_EXT_clip_cull_distance : enable")); // The following extension appears not to be available on RaspberryPi4 at the moment.
+		Out << R"(
+// The following extension appears not to be available on RaspberryPi4 at the moment.
+#extension GL_EXT_clip_cull_distance : enable
 
-		// This determines how much precision the GPU uses when calculating. Performance critical (especially on low end)!! Not every option is available on any platform. Todo: separate option for vert and frag?
-		Out.Log(TEXT("precision highp float;")); // options: lowp/mediump/highp, should be mediump for performance reasons, but appears to cause trouble determining DrawFlags then !?! (Currently on NVIDIA 470.103.01).
-		Out.Log(TEXT("precision highp int;"));
+// This determines how much precision the GPU uses when calculating. 
+// Performance critical (especially on low end)!! 
+// Not every option is available on any platform. 
+// TODO: separate option for vert and frag?
+// options: lowp/mediump/highp, should be mediump for performance reasons, but appears to cause trouble determining DrawFlags then !?! (Currently on NVIDIA 470.103.01).
+precision highp float;
+precision highp int;
+)";
 	}
 
-	Out.Log(TEXT("layout(std140) uniform GlobalMatrices"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("mat4 modelMat;"));
-	Out.Log(TEXT("mat4 viewMat;"));
-	Out.Log(TEXT("mat4 modelviewMat;"));
-	Out.Log(TEXT("mat4 modelviewprojMat;"));
-	Out.Log(TEXT("mat4 lightSpaceMat;"));
-	Out.Log(TEXT("};"));
+	Out << R"(
+layout(std140) uniform GlobalMatrices
+{
+  mat4 modelMat;
+  mat4 viewMat;
+  mat4 modelviewMat;
+  mat4 modelviewprojMat;
+  mat4 lightSpaceMat;
+};
 
-	Out.Log(TEXT("layout(std140) uniform ClipPlaneParams"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("vec4  ClipParams;")); // Clipping params, ClipIndex,0,0,0
-	Out.Log(TEXT("vec4  ClipPlane;")); // Clipping planes. Plane.X, Plane.Y, Plane.Z, Plane.W
-	Out.Log(TEXT("};"));
+layout(std140) uniform ClipPlaneParams
+{
+  vec4  ClipParams; // Clipping params, ClipIndex,0,0,0
+  vec4  ClipPlane;  // Clipping planes. Plane.X, Plane.Y, Plane.Z, Plane.W
+};
 
-	// Light information.
-	Out.Log(TEXT("layout(std140) uniform StaticLightInfo"));
-	Out.Log(TEXT("{"));
-	Out.Logf(TEXT("vec4 LightPos[%u];"), MAX_LIGHTS);
-	Out.Logf(TEXT("vec4 LightData1[%u];"), MAX_LIGHTS); // LightBrightness, LightHue, LightSaturation, LightCone
-	Out.Logf(TEXT("vec4 LightData2[%u];"), MAX_LIGHTS); // LightEffect, LightPeriod, LightPhase, LightRadius
-	Out.Logf(TEXT("vec4 LightData3[%u];"), MAX_LIGHTS); // LightType, VolumeBrightness, VolumeFog, VolumeRadius
-	Out.Logf(TEXT("vec4 LightData4[%u];"), MAX_LIGHTS); // WorldLightRadius, NumLights, ZoneNumber, CameraRegion->ZoneNumber
-	Out.Logf(TEXT("vec4 LightData5[%u];"), MAX_LIGHTS); // NormalLightRadius, bZoneNormalLight, unused, unused
-	Out.Log(TEXT("};"));
+// Light information.
+layout(std140) uniform StaticLightInfo
+{
+  vec4 LightPos[)" << MAX_LIGHTS << R"(];
+  vec4 LightData1[)" << MAX_LIGHTS << R"(]; // LightBrightness, LightHue, LightSaturation, LightCone
+  vec4 LightData2[)" << MAX_LIGHTS << R"(]; // LightEffect, LightPeriod, LightPhase, LightRadius
+  vec4 LightData3[)" << MAX_LIGHTS << R"(]; // LightType, VolumeBrightness, VolumeFog, VolumeRadius
+  vec4 LightData4[)" << MAX_LIGHTS << R"(]; // WorldLightRadius, NumLights, ZoneNumber, CameraRegion->ZoneNumber
+  vec4 LightData5[)" << MAX_LIGHTS << R"(]; // NormalLightRadius, bZoneNormalLight, unused, unused
+};
 
-	Out.Log(TEXT("layout(std140) uniform GlobalCoords"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("mat4 FrameCoords;"));
-	Out.Log(TEXT("mat4 FrameUncoords;"));
-	Out.Log(TEXT("};"));
+layout(std140) uniform GlobalCoords
+{
+  mat4 FrameCoords;
+  mat4 FrameUncoords;
+};
+)";
 
 	if (GL->UsingBindlessTextures && GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_UBO)
 	{
-		Out.Log(TEXT("layout(std140) uniform TextureHandles"));
-		Out.Log(TEXT("{"));
-		Out.Logf(TEXT("layout(bindless_sampler) sampler2D Textures[%u];"), GL->MaxBindlessTextures);
-		Out.Log(TEXT("};"));
+		Out << R"(
+layout(std140) uniform TextureHandles
+{
+  layout(bindless_sampler) sampler2D Textures[)" << GL->MaxBindlessTextures << R"(];
+};
 
-		Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if (BindlessTexNum > 0u)"));
-		Out.Log(TEXT("return texture(Textures[BindlessTexNum], TexCoords);"));
-		Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
-		Out.Log(TEXT("}"));
+vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
+{
+  if (BindlessTexNum > 0u)
+    return texture(Textures[BindlessTexNum], TexCoords);
+  return texture(BoundSampler, TexCoords);
+}
+)";
 	}
 	else if (GL->UsingBindlessTextures && GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_SSBO)
 	{
-		Out.Log(TEXT("layout(std430, binding = 1) buffer TextureHandles"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("uvec2 Textures[];"));
-		Out.Log(TEXT("};"));
+		Out << R"(
+layout(std430, binding = 1) buffer TextureHandles
+{
+  uvec2 Textures[];
+};
 
-		Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if (BindlessTexNum > 0u)"));
-		Out.Log(TEXT("return texture(sampler2D(Textures[BindlessTexNum]), TexCoords);"));
-		Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
-		Out.Log(TEXT("}"));
+vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
+{
+  if (BindlessTexNum > 0u)
+    return texture(sampler2D(Textures[BindlessTexNum]), TexCoords);
+  return texture(BoundSampler, TexCoords);
+}
+)";
 	}
 	else
 	{
-		Out.Log(TEXT("vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("return texture(BoundSampler, TexCoords);"));
-		Out.Log(TEXT("}"));
+		// texture bound to TMU. BindlessTexBum is meaningless here
+		Out << R"(
+vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
+{
+  return texture(BoundSampler, TexCoords);
+}
+)";
 	}
 
 	//DistanceFog
-	Out.Log(TEXT("struct FogParameters"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("vec4  FogColor;")); // Fog color
-	Out.Log(TEXT("float FogStart;")); // Only for linear fog
-	Out.Log(TEXT("float FogEnd;")); // Only for linear fog
-	Out.Log(TEXT("float FogDensity;")); // For exp and exp2 equation
-	Out.Log(TEXT("float FogCoord;"));
-	Out.Log(TEXT("int FogMode;")); // 0 = linear, 1 = exp, 2 = exp2
-	Out.Log(TEXT("};"));
+    Out << R"(
+struct FogParameters
+{
+  vec4  FogColor;   // Fog color
+  float FogStart;   // Only for linear fog
+  float FogEnd;     // Only for linear fog
+  float FogDensity; // For exp and exp2 equation
+  float FogCoord;
+  int FogMode;      // 0 = linear, 1 = exp, 2 = exp2
+};
 
-	Out.Log(TEXT("float getFogFactor(FogParameters DistanceFog)"));
-	Out.Log(TEXT("{"));
-	// DistanceFogValues.x = FogStart
-	// DistanceFogValues.y = FogEnd
-	// DistanceFogValues.z = FogDensity
-	// DistanceFogValues.w = FogMode
-	//FogResult = (Values.y-FogCoord)/(Values.y-Values.x);
-	Out.Log(TEXT("float FogResult = 1.0;"));
-	Out.Log(TEXT("if (DistanceFog.FogMode == 0)"));
-	Out.Log(TEXT("FogResult = ((DistanceFog.FogEnd - DistanceFog.FogCoord) / (DistanceFog.FogEnd - DistanceFog.FogStart));"));
-	Out.Log(TEXT("else if (DistanceFog.FogMode == 1)"));
-	Out.Log(TEXT("FogResult = exp(-DistanceFog.FogDensity * DistanceFog.FogCoord);"));
-	Out.Log(TEXT("else if (DistanceFog.FogMode == 2)"));
-	Out.Log(TEXT("FogResult = exp(-pow(DistanceFog.FogDensity * DistanceFog.FogCoord, 2.0));"));
-	Out.Log(TEXT("FogResult = 1.0 - clamp(FogResult, 0.0, 1.0);"));
-	Out.Log(TEXT("return FogResult;"));
-	Out.Log(TEXT("}"));
+float getFogFactor(FogParameters DistanceFog)
+{
+  // DistanceFogValues.x = FogStart
+  // DistanceFogValues.y = FogEnd
+  // DistanceFogValues.z = FogDensity
+  // DistanceFogValues.w = FogMode
+  // FogResult = (Values.y-FogCoord)/(Values.y-Values.x);
 
-	Out.Log(TEXT("float PlaneDot(vec4 Plane, vec3 Point)"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("return dot(Plane.xyz, Point) - Plane.w;"));
-	Out.Log(TEXT("}"));
+  float FogResult = 1.0;
+  if (DistanceFog.FogMode == 0)
+    FogResult = ((DistanceFog.FogEnd - DistanceFog.FogCoord) / (DistanceFog.FogEnd - DistanceFog.FogStart));
+  else if (DistanceFog.FogMode == 1)
+    FogResult = exp(-DistanceFog.FogDensity * DistanceFog.FogCoord);
+  else if (DistanceFog.FogMode == 2)
+    FogResult = exp(-pow(DistanceFog.FogDensity * DistanceFog.FogCoord, 2.0));
+  FogResult = 1.0 - clamp(FogResult, 0.0, 1.0);
+  return FogResult;
+}
 
-	// The following directive resets the line number to 1 to have the correct output logging for a possible error within the shader files.
-	Out.Log(TEXT("#line 1"));
+float PlaneDot(vec4 Plane, vec3 Point)
+{
+  return dot(Plane.xyz, Point) - Plane.w;
+}
+
+// The following directive resets the line number to 1 
+// to have the correct output logging for a possible 
+// error within the shader files.
+#line 1
+)";
+
 }
 
 // Fragmentshader for DrawSimple, line drawing.
-static void Create_DrawSimple_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawSimple_Frag(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("uniform vec4 DrawColor;"));
-	Out.Log(TEXT("uniform uint LineFlags;"));
-	Out.Log(TEXT("uniform bool bHitTesting;"));
-	Out.Log(TEXT("uniform float Gamma;"));
+	Out << R"(
+uniform vec4 DrawColor;
+uniform uint LineFlags;
+uniform bool bHitTesting;
+uniform float Gamma;
+)";
 
 	if (GL->OpenGLVersion == GL_ES)
 	{
-		Out.Log(TEXT("layout(location = 0) out vec4 FragColor;"));
+		Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout ( location = 1 ) out vec4 FragColor1;"));
+			Out << "layout ( location = 1 ) out vec4 FragColor1;" END_LINE;
 	}
 	else
 	{
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 0, index = 1) out vec4 FragColor1;"));
-		Out.Log(TEXT("layout(location = 0, index = 0) out vec4 FragColor;"));
+			Out << "layout(location = 0, index = 1) out vec4 FragColor1;" END_LINE;
+		Out << "layout(location = 0, index = 0) out vec4 FragColor;" END_LINE;
 	}
 
-	Out.Log(TEXT("void main(void)"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("vec4 TotalColor = DrawColor;"));
-
-	// stijn: this is an attempt at stippled line drawing in GL4
+	Out << R"(
+void main(void)
+{
+  vec4 TotalColor = DrawColor;
+)";
+	
+  // stijn: this is an attempt at stippled line drawing in GL4
 #if 0
-	Out.Logf(TEXT("if ((LineFlags & %uu) == %uu)"), LINE_Transparent, LINE_Transparent);
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)"));
-	Out.Log(TEXT("discard;"));
-	Out.Log(TEXT("}"));
+	Out << R"(
+  if ((LineFlags & )" << LINE_Transparent << R"(u) == )" << LINE_Transparent << R"(u)
+  {
+    if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)
+      discard;
+  }
+)";
 #endif
+	
 	if (GIsEditor)
 	{
-		Out.Log(TEXT("if (!bHitTesting)"));
-		Out.Log(TEXT("{"));
+		Out << "  if (!bHitTesting) {" END_LINE;
 	}
-	Out.Logf(TEXT("float InGamma = 1.0 / (Gamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier); // Gamma
-	Out.Log(TEXT("TotalColor.r = pow(TotalColor.r, InGamma);"));
-	Out.Log(TEXT("TotalColor.g = pow(TotalColor.g, InGamma);"));
-	Out.Log(TEXT("TotalColor.b = pow(TotalColor.b, InGamma);"));
+	
+	Out << R"(
+  float InGamma = 1.0 / (Gamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"(); // Gamma
+  TotalColor.r = pow(TotalColor.r, InGamma);
+  TotalColor.g = pow(TotalColor.g, InGamma);
+  TotalColor.b = pow(TotalColor.b, InGamma);
+)";
+	
 	if (GIsEditor)
-		Out.Log(TEXT("}"));
+		Out << "  }" END_LINE;
 
 	if (GL->SimulateMultiPass)
-		Out.Log(TEXT("FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;"));
-	else Out.Log(TEXT("FragColor = TotalColor;"));
-	Out.Log(TEXT("}"));
+		Out << "  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;" END_LINE;
+	else 
+        Out << "  FragColor = TotalColor;" END_LINE;
+	Out << "}" END_LINE;
 }
 
 // Vertexshader for DrawSimple, Line drawing.
-static void Create_DrawSimple_Vert(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawSimple_Vert(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(location = 0) in vec3 Coords;")); // == gl_Vertex
+    Out << "layout(location = 0) in vec3 Coords; // == gl_Vertex" END_LINE; 
 
 	if (GL->OpenGLVersion != GL_ES)
-		Out.Logf(TEXT("out float gl_ClipDistance[%i];"), GL->MaxClippingPlanes);
+		Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
 
-	Out.Log(TEXT("void main(void)"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("vec4 vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);"));
-	Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Coords, 1.0);"));
+	Out << R"(
+void main(void)
+{
+  vec4 vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);
+  gl_Position = modelviewprojMat * vec4(Coords, 1.0);
+)";
+	
 	if (GL->OpenGLVersion != GL_ES)
 	{
-		Out.Log(TEXT("uint ClipIndex = uint(ClipParams.x);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords);"));
+		Out << R"(
+  uint ClipIndex = uint(ClipParams.x);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords);
+)";
 	}
-	Out.Log(TEXT("}"));
+	
+	Out << "}" END_LINE;
 }
 
 // Geoemtry shader for DrawSimple, line drawing.
-static void Create_DrawSimple_Geo(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawSimple_Geo(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(lines) in;"));
-	Out.Log(TEXT("layout(line_strip, max_vertices = 2) out;"));
+	Out << R"(
+layout(lines) in;
+layout(line_strip, max_vertices = 2) out;
+noperspective out float texCoord;
 
-	Out.Log(TEXT("noperspective out float texCoord;"));
+void main()
+{
+  mat4 modelviewMat = modelMat * viewMat;
+  vec2 winPos1 = vec2(512, 384) * gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w;
+  vec2 winPos2 = vec2(512, 384) * gl_in[1].gl_Position.xy / gl_in[1].gl_Position.w;
 
-	{
-		Out.Log(TEXT("void main()"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("mat4 modelviewMat = modelMat * viewMat;"));
-		Out.Log(TEXT("vec2 winPos1 = vec2(512, 384) * gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w;"));
-		Out.Log(TEXT("vec2 winPos2 = vec2(512, 384) * gl_in[1].gl_Position.xy / gl_in[1].gl_Position.w;"));
+  // Line Start
+  gl_Position = modelviewprojMat * (gl_in[0].gl_Position);
+  texCoord = 0.0;
+  EmitVertex();
 
-		// Line Start
-		Out.Log(TEXT("gl_Position = modelviewprojMat * (gl_in[0].gl_Position);"));
-		Out.Log(TEXT("texCoord = 0.0;"));
-		Out.Log(TEXT("EmitVertex();"));
-
-		// Line End
-		Out.Log(TEXT("gl_Position = modelviewprojMat * (gl_in[1].gl_Position);"));
-		Out.Log(TEXT("texCoord = length(winPos2 - winPos1);"));
-		Out.Log(TEXT("EmitVertex();"));
-		Out.Log(TEXT("EndPrimitive();"));
-		Out.Log(TEXT("}"));
-	}
+  // Line End
+  gl_Position = modelviewprojMat * (gl_in[1].gl_Position);
+  texCoord = length(winPos2 - winPos1);
+  EmitVertex();
+  EndPrimitive();
+}
+)";
+	
 }
 
 // Fragmentshader for DrawComplexSurface, single pass.
-static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("uniform sampler2D Texture0;")); //Base Texture
-	Out.Log(TEXT("uniform sampler2D Texture1;")); //Lightmap
-	Out.Log(TEXT("uniform sampler2D Texture2;")); //Fogmap
-	Out.Log(TEXT("uniform sampler2D Texture3;")); //Detail Texture
-	Out.Log(TEXT("uniform sampler2D Texture4;")); //Macro Texture
-	Out.Log(TEXT("uniform sampler2D Texture5;")); //BumpMap
-	Out.Log(TEXT("uniform sampler2D Texture6;")); //EnvironmentMap
-	Out.Log(TEXT("uniform sampler2D Texture7;")); //HeightMap
+	Out << R"(
+uniform sampler2D Texture0; //Base Texture
+uniform sampler2D Texture1; //Lightmap
+uniform sampler2D Texture2; //Fogmap
+uniform sampler2D Texture3; //Detail Texture
+uniform sampler2D Texture4; //Macro Texture
+uniform sampler2D Texture5; //BumpMap
+uniform sampler2D Texture6; //EnvironmentMap
+uniform sampler2D Texture7; //HeightMap
 
-	Out.Log(TEXT("in vec3 vCoords;"));
+in vec3 vCoords;
+)";
+
 	if (GIsEditor)
-		Out.Log(TEXT("flat in vec3 vSurfaceNormal;"));
+		Out << "flat in vec3 vSurfaceNormal;" END_LINE;
 #if ENGINE_VERSION!=227
 	if (GL->BumpMaps)
 #endif
 	{
-		Out.Log(TEXT("in vec4 vEyeSpacePos;"));
-		Out.Log(TEXT("flat in mat3 vTBNMat;"));
+		Out << "in vec4 vEyeSpacePos;" END_LINE;
+		Out << "flat in mat3 vTBNMat;" END_LINE;
 	}
-	Out.Log(TEXT("in vec2 vTexCoords;"));
-	Out.Log(TEXT("in vec2 vLightMapCoords;"));
-	Out.Log(TEXT("in vec2 vFogMapCoords;"));
-	Out.Log(TEXT("in vec3 vTangentViewPos;"));
-	Out.Log(TEXT("in vec3 vTangentFragPos;"));
+	
+	Out << R"(
+in vec2 vTexCoords;
+in vec2 vLightMapCoords;
+in vec2 vFogMapCoords;
+in vec3 vTangentViewPos;
+in vec3 vTangentFragPos;
+)";
+	
 	if (GL->DetailTextures)
-		Out.Log(TEXT("in vec2 vDetailTexCoords;"));
+		Out << "in vec2 vDetailTexCoords;" END_LINE;
 	if (GL->MacroTextures)
-		Out.Log(TEXT("in vec2 vMacroTexCoords;"));
+		Out << "in vec2 vMacroTexCoords;" END_LINE;
 	if (GL->BumpMaps)
-		Out.Log(TEXT("in vec2 vBumpTexCoords;"));
+		Out << "in vec2 vBumpTexCoords;" END_LINE;
 #if ENGINE_VERSION==227
-	Out.Log(TEXT("in vec2 vEnvironmentTexCoords;"));
+	Out << "in vec2 vEnvironmentTexCoords;" END_LINE;
 #endif
 	if (GL->OpenGLVersion == GL_ES)
 	{
-		Out.Log(TEXT("layout(location = 0) out vec4 FragColor;"));
+		Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 1) out vec4 FragColor1;"));
+			Out << "layout(location = 1) out vec4 FragColor1;" END_LINE;
 	}
 	else
 	{
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 0, index = 1) out vec4 FragColor1;"));
-		Out.Log(TEXT("layout(location = 0, index = 0) out vec4 FragColor;"));
+			Out << "layout(location = 0, index = 1) out vec4 FragColor1;" END_LINE;
+		Out << "layout(location = 0, index = 0) out vec4 FragColor;" END_LINE;
 	}
 	if (GL->UsingShaderDrawParameters)
 	{
-		Out.Log(TEXT("flat in uint vTexNum;"));
-		Out.Log(TEXT("flat in uint vLightMapTexNum;"));
-		Out.Log(TEXT("flat in uint vFogMapTexNum;"));
-		Out.Log(TEXT("flat in uint vDetailTexNum;"));
-		Out.Log(TEXT("flat in uint vMacroTexNum;"));
-		Out.Log(TEXT("flat in uint vBumpMapTexNum;"));
-		Out.Log(TEXT("flat in uint vEnviroMapTexNum;"));
-		Out.Log(TEXT("flat in uint vHeightMapTexNum;"));
-		Out.Log(TEXT("flat in uint vDrawFlags;"));
-		Out.Log(TEXT("flat in uint vTextureFormat;"));
-		Out.Log(TEXT("flat in uint vPolyFlags;"));
-		Out.Log(TEXT("flat in float vBaseDiffuse;"));
-		Out.Log(TEXT("flat in float vBaseAlpha;"));
-		Out.Log(TEXT("flat in float vParallaxScale;"));
-		Out.Log(TEXT("flat in float vGamma;"));
-		Out.Log(TEXT("flat in float vBumpMapSpecular;"));
+		Out << R"(
+flat in uint vTexNum;
+flat in uint vLightMapTexNum;
+flat in uint vFogMapTexNum;
+flat in uint vDetailTexNum;
+flat in uint vMacroTexNum;
+flat in uint vBumpMapTexNum;
+flat in uint vEnviroMapTexNum;
+flat in uint vHeightMapTexNum;
+flat in uint vDrawFlags;
+flat in uint vTextureFormat;
+flat in uint vPolyFlags;
+flat in float vBaseDiffuse;
+flat in float vBaseAlpha;
+flat in float vParallaxScale;
+flat in float vGamma;
+flat in float vBumpMapSpecular;
+)";
+
 		if (GIsEditor)
 		{
-			Out.Log(TEXT("flat in uint vHitTesting;"));
-			Out.Log(TEXT("flat in uint vRendMap;"));
-			Out.Log(TEXT("flat in vec4 vDrawColor;"));
+			Out << R"(
+flat in uint vHitTesting;
+flat in uint vRendMap;
+flat in vec4 vDrawColor;
+)";
 		}
-		Out.Log(TEXT("flat in vec4 vDistanceFogColor;"));
-		Out.Log(TEXT("flat in vec4 vDistanceFogInfo;"));
+		Out << R"(
+flat in vec4 vDistanceFogColor;
+flat in vec4 vDistanceFogInfo;
+)";
 	}
 	else
 	{
-		Out.Log(TEXT("float vBumpMapSpecular;"));
-		Out.Log(TEXT("uniform vec4 TexCoords[16];"));
-		Out.Log(TEXT("uniform uint TexNum[16];"));
-		Out.Log(TEXT("uniform uint DrawFlags[4];"));
+		Out << R"(
+float vBumpMapSpecular;
+uniform vec4 TexCoords[16];
+uniform uint TexNum[16];
+uniform uint DrawFlags[4];
+)";
 	}
 
-	Out.Log(TEXT("vec3 rgb2hsv(vec3 c)"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);")); // some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
-	Out.Log(TEXT("vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);"));
-	Out.Log(TEXT("vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);"));
-	Out.Log(TEXT("float d = q.x - min(q.w, q.y);"));
-	Out.Log(TEXT("float e = 1.0e-10;"));
-	Out.Log(TEXT("return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);"));
-	Out.Log(TEXT("}"));
+	Out << R"(
+vec3 rgb2hsv(vec3 c)
+{
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0); // some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
+  vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);
+  vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
 
-	Out.Log(TEXT("vec3 hsv2rgb(vec3 c)"));
-	Out.Log(TEXT("{"));
-	Out.Log(TEXT("vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);"));
-	Out.Log(TEXT("vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);"));
-	Out.Log(TEXT("return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);"));
-	Out.Log(TEXT("}"));
+vec3 hsv2rgb(vec3 c)
+{
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+)";
 
 #if ENGINE_VERSION==227
+	Out << R"(
+vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float parallaxHeight)
+{
+)";
+	if (GL->ParallaxVersion == Parallax_Basic) // very basic implementation
 	{
-		Out.Log(TEXT("vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float parallaxHeight)"));
-		Out.Log(TEXT("{"));
-		if (GL->ParallaxVersion == Parallax_Basic) // very basic implementation
-		{
-			Out.Log(TEXT("float height = GetTexel(TexNum, Texture7, ptexCoords).r;"));
-			Out.Log(TEXT("return ptexCoords - viewDir.xy * (height * 0.1);"));
-		}
-		else if (GL->ParallaxVersion == Parallax_Occlusion) // parallax occlusion mapping
-		{
-			if (!GL->UsingShaderDrawParameters)
-			{
-				Out.Logf(TEXT("float vParallaxScale = TexCoords[%u].z * 0.025;"), DCTI_HEIGHTMAP_INFO); // arbitrary to get DrawScale into (for this purpose) sane regions.
-				Out.Logf(TEXT("float vTimeSeconds = TexCoords[%u].w;"), DCTI_HEIGHTMAP_INFO); // Surface.Level->TimeSeconds
-			}
-			//vParallaxScale += 8.0f * sin(vTimeSeconds) + 4.0 * cos(2.3f * vTimeSeconds);
-			// number of depth layers
-			constexpr FLOAT minLayers = 8.f;
-			constexpr FLOAT maxLayers = 32.f;
-			Out.Logf(TEXT("float numLayers = mix(%f, %f, abs(dot(vec3(0.0, 0.0, 1.0), viewDir)));"), maxLayers, minLayers);
-			Out.Log(TEXT("float layerDepth = 1.0 / numLayers;")); // calculate the size of each layer
-			Out.Log(TEXT("float currentLayerDepth = 0.0;")); // depth of current layer
-
-			// the amount to shift the texture coordinates per layer (from vector P)
-			Out.Log(TEXT("vec2 P = viewDir.xy / viewDir.z * vParallaxScale;"));
-			Out.Log(TEXT("vec2 deltaTexCoords = P / numLayers;"));
-
-			// get initial values
-			Out.Log(TEXT("vec2  currentTexCoords = ptexCoords;"));
-			Out.Log(TEXT("float currentDepthMapValue = 0.0;"));
-			Out.Log(TEXT("currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r;"));
-
-			Out.Log(TEXT("while (currentLayerDepth < currentDepthMapValue)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("currentTexCoords -= deltaTexCoords;")); // shift texture coordinates along direction of P
-			Out.Log(TEXT("currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r;")); // get depthmap value at current texture coordinates
-			Out.Log(TEXT("currentLayerDepth += layerDepth;")); // get depth of next layer
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("vec2 prevTexCoords = currentTexCoords + deltaTexCoords;")); // get texture coordinates before collision (reverse operations)
-
-			// get depth after and before collision for linear interpolation
-			Out.Log(TEXT("float afterDepth = currentDepthMapValue - currentLayerDepth;"));
-			Out.Log(TEXT("float beforeDepth = GetTexel(TexNum, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;"));
-
-			// interpolation of texture coordinates
-			Out.Log(TEXT("float weight = afterDepth / (afterDepth - beforeDepth);"));
-			Out.Log(TEXT("vec2 finalTexCoords = prevTexCoords * weight + currentTexCoords * (1.0 - weight);"));
-			Out.Log(TEXT("return finalTexCoords;"));
-		}
-		else if (GL->ParallaxVersion == Parallax_Relief) // Relief Parallax Mapping
-		{
-			// determine required number of layers
-			constexpr FLOAT minLayers = 10.f;
-			constexpr FLOAT maxLayers = 15.f;
-			Out.Logf(TEXT("float numLayers = mix(%f, %f, abs(dot(vec3(0, 0, 1), viewDir)));"), maxLayers, minLayers);
-
-			if (!GL->UsingShaderDrawParameters)
-			{
-				Out.Logf(TEXT("float vParallaxScale = TexCoords[%u].z * 0.025;"), DCTI_HEIGHTMAP_INFO); // arbitrary to get DrawScale into (for this purpose) sane regions.
-				Out.Logf(TEXT("float vTimeSeconds = TexCoords[%u].w;"), DCTI_HEIGHTMAP_INFO); // Surface.Level->TimeSeconds
-			}
-			Out.Log(TEXT("float layerHeight = 1.0 / numLayers;")); // height of each layer
-			Out.Log(TEXT("float currentLayerHeight = 0.0;")); // depth of current layer
-			Out.Log(TEXT("vec2 dtex = vParallaxScale * viewDir.xy / viewDir.z / numLayers;")); // shift of texture coordinates for each iteration
-			Out.Log(TEXT("vec2 currentTexCoords = ptexCoords;")); // current texture coordinates
-			Out.Log(TEXT("float heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;")); // depth from heightmap
-
-			// while point is above surface
-			Out.Log(TEXT("while (heightFromTexture > currentLayerHeight)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("currentLayerHeight += layerHeight;")); // go to the next layer
-			Out.Log(TEXT("currentTexCoords -= dtex;")); // shift texture coordinates along V
-			Out.Log(TEXT("heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;")); // new depth from heightmap
-			Out.Log(TEXT("}"));
-
-			///////////////////////////////////////////////////////////
-			// Start of Relief Parallax Mapping
-			// decrease shift and height of layer by half
-			Out.Log(TEXT("vec2 deltaTexCoord = dtex / 2.0;"));
-			Out.Log(TEXT("float deltaHeight = layerHeight / 2.0;"));
-
-			// return to the mid point of previous layer
-			Out.Log(TEXT("currentTexCoords += deltaTexCoord;"));
-			Out.Log(TEXT("currentLayerHeight -= deltaHeight;"));
-
-			// binary search to increase precision of Steep Paralax Mapping
-			constexpr INT numSearches = 5;
-			Out.Logf(TEXT("for (int i = 0; i < %u; i++)"), numSearches);
-			Out.Log(TEXT("{"));
-			// decrease shift and height of layer by half
-			Out.Log(TEXT("deltaTexCoord /= 2.0;"));
-			Out.Log(TEXT("deltaHeight /= 2.0;"));
-
-			// new depth from heightmap
-			Out.Log(TEXT("heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;"));
-
-			// shift along or agains vector V
-			Out.Log(TEXT("if (heightFromTexture > currentLayerHeight)")); // below the surface
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("currentTexCoords -= deltaTexCoord;"));
-			Out.Log(TEXT("currentLayerHeight += deltaHeight;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("else")); // above the surface
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("currentTexCoords += deltaTexCoord;"));
-			Out.Log(TEXT("currentLayerHeight -= deltaHeight;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-
-			// return results
-			Out.Log(TEXT("parallaxHeight = currentLayerHeight;"));
-			Out.Log(TEXT("return currentTexCoords;"));
-		}
-		else
-		{
-			Out.Log(TEXT("return ptexCoords;"));
-		}
-		Out.Log(TEXT("}"));
+		Out << R"(
+  float height = GetTexel(TexNum, Texture7, ptexCoords).r;
+  return ptexCoords - viewDir.xy * (height * 0.1);
+}
+)";
 	}
-
-	// unused. Maybe later.
-#if 0
+	else if (GL->ParallaxVersion == Parallax_Occlusion) // parallax occlusion mapping
 	{
-		Out.Log(TEXT("float parallaxSoftShadowMultiplier(in vec3 L, in vec2 initialTexCoord, in float initialHeight)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("float shadowMultiplier = 1;"));
-
-		constexpr FLOAT minLayers = 15;
-		constexpr FLOAT maxLayers = 30;
 		if (!GL->UsingShaderDrawParameters)
-			Out.Log(TEXT("float vParallaxScale = TexCoords[%u].w * 0.025;"), DCTI_MACRO_INFO); // arbitrary to get DrawScale into (for this purpose) sane regions.
+		{
+			Out << "  float vParallaxScale = TexCoords[" << UXOpenGLRenderDevice::DCDD_HEIGHTMAP_INFO << "].z * 0.025; // arbitrary to get DrawScale into (for this purpose) sane regions." END_LINE;
+			Out << "  float vTimeSeconds = TexCoords[" << UXOpenGLRenderDevice::DCDD_HEIGHTMAP_INFO << "].w; // Surface.Level->TimeSeconds" END_LINE;
+		}
+		//vParallaxScale += 8.0f * sin(vTimeSeconds) + 4.0 * cos(2.3f * vTimeSeconds);
+		// number of depth layers
+		constexpr FLOAT minLayers = 8.f;
+		constexpr FLOAT maxLayers = 32.f;
+		Out << "  float numLayers = mix(" << maxLayers << ", " << minLayers << ", abs(dot(vec3(0.0, 0.0, 1.0), viewDir)));" END_LINE;
+		Out << R"(
+  float layerDepth = 1.0 / numLayers; // calculate the size of each layer
+  float currentLayerDepth = 0.0; // depth of current layer
 
-		// calculate lighting only for surface oriented to the light source
-		Out.Log(TEXT("if(dot(vec3(0, 0, 1), L) > 0)"));
-		Out.Log(TEXT("{"));
-		// calculate initial parameters
-		Out.Log(TEXT("float numSamplesUnderSurface = 0;"));
-		Out.Log(TEXT("shadowMultiplier = 0;"));
-		Out.Logf(TEXT("float numLayers = mix(%f, %f, abs(dot(vec3(0, 0, 1), L)));"), maxLayers, minLayers);
-		Out.Log(TEXT("float layerHeight = initialHeight / numLayers;"));
-		Out.Log(TEXT("vec2 texStep = vParallaxScale * L.xy / L.z / numLayers;"));
+  // the amount to shift the texture coordinates per layer (from vector P)
+  vec2 P = viewDir.xy / viewDir.z * vParallaxScale;
+  vec2 deltaTexCoords = P / numLayers;
 
-		// current parameters
-		Out.Log(TEXT("float currentLayerHeight = initialHeight - layerHeight;"));
-		Out.Log(TEXT("vec2 currentTexCoords = initialTexCoord + texStep;"));
-		Out.Log(TEXT("float heightFromTexture = GetTexel(vMacroTexNum, Texture7, currentTexCoords).r;"));
+  // get initial values
+  vec2  currentTexCoords = ptexCoords;
+  float currentDepthMapValue = 0.0;
+  currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r;
 
-		Out.Log(TEXT("int stepIndex = 1;"));
+  while (currentLayerDepth < currentDepthMapValue)
+  {
+    currentTexCoords -= deltaTexCoords; // shift texture coordinates along direction of P
+    currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r; // get depthmap value at current texture coordinates
+    currentLayerDepth += layerDepth; // get depth of next layer
+  }
 
-		// while point is below depth 0.0 )
-		Out.Log(TEXT("while(currentLayerHeight > 0)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if(heightFromTexture < currentLayerHeight)")); // if point is under the surface
-		Out.Log(TEXT("{"));
-		// calculate partial shadowing factor
-		Out.Log(TEXT("numSamplesUnderSurface += 1;"));
-		Out.Log(TEXT("float newShadowMultiplier = (currentLayerHeight - heightFromTexture) * (1.0 - stepIndex / numLayers);"));
-		Out.Log(TEXT("shadowMultiplier = max(shadowMultiplier, newShadowMultiplier);"));
-		Out.Log(TEXT("}"));
-		// offset to the next layer
-		Out.Log(TEXT("stepIndex += 1;"));
-		Out.Log(TEXT("currentLayerHeight -= layerHeight;"));
-		Out.Log(TEXT("currentTexCoords += texStep;"));
-		Out.Log(TEXT("heightFromTexture = GetTexel(vMacroTexNum, Texture7, currentTexCoords).r;"));
-		Out.Log(TEXT("}"));
+  vec2 prevTexCoords = currentTexCoords + deltaTexCoords; // get texture coordinates before collision (reverse operations)
 
-		// Shadowing factor should be 1 if there were no points under the surface
-		Out.Log(TEXT("if(numSamplesUnderSurface < 1)"));
-		Out.Log(TEXT("shadowMultiplier = 1;"));
-		Out.Log(TEXT("else"));
-		Out.Log(TEXT("shadowMultiplier = 1.0 - shadowMultiplier;"));
-		Out.Log(TEXT("}"));
-		Out.Log(TEXT("return shadowMultiplier;"));
-		Out.Log(TEXT("}"));
+  // get depth after and before collision for linear interpolation
+  float afterDepth = currentDepthMapValue - currentLayerDepth;
+  float beforeDepth = GetTexel(TexNum, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;
+
+  // interpolation of texture coordinates
+  float weight = afterDepth / (afterDepth - beforeDepth);
+  vec2 finalTexCoords = prevTexCoords * weight + currentTexCoords * (1.0 - weight);
+  return finalTexCoords;
+}
+)";
 	}
-#endif
-#endif
+	else if (GL->ParallaxVersion == Parallax_Relief) // Relief Parallax Mapping
+	{
+		// determine required number of layers
+		constexpr FLOAT minLayers = 10.f;
+		constexpr FLOAT maxLayers = 15.f;
+		constexpr INT numSearches = 5;
+		Out << "  float numLayers = mix(" << maxLayers << ", " << minLayers << ", abs(dot(vec3(0, 0, 1), viewDir)));" END_LINE;
+
+		if (!GL->UsingShaderDrawParameters)
+		{
+			Out << "  float vParallaxScale = TexCoords[" << UXOpenGLRenderDevice::DCDD_HEIGHTMAP_INFO << "].z * 0.025; // arbitrary to get DrawScale into (for this purpose) sane regions." END_LINE;
+			Out << "  float vTimeSeconds = TexCoords[" << UXOpenGLRenderDevice::DCDD_HEIGHTMAP_INFO << "].w; // Surface.Level->TimeSeconds" END_LINE;
+		}
+		
+		Out << R"(
+  float layerHeight = 1.0 / numLayers; // height of each layer
+  float currentLayerHeight = 0.0; // depth of current layer
+  vec2 dtex = vParallaxScale * viewDir.xy / viewDir.z / numLayers; // shift of texture coordinates for each iteration
+  vec2 currentTexCoords = ptexCoords; // current texture coordinates
+  float heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;" // depth from heightmap
+
+  // while point is above surface
+  while (heightFromTexture > currentLayerHeight)
+  {
+    currentLayerHeight += layerHeight; // go to the next layer
+    currentTexCoords -= dtex; // shift texture coordinates along V
+    heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r; // new depth from heightmap
+  }
+
+  ///////////////////////////////////////////////////////////
+  // Start of Relief Parallax Mapping
+  // decrease shift and height of layer by half
+  vec2 deltaTexCoord = dtex / 2.0;
+  float deltaHeight = layerHeight / 2.0;
+
+  // return to the mid point of previous layer
+  currentTexCoords += deltaTexCoord;
+  currentLayerHeight -= deltaHeight;
+
+  // binary search to increase precision of Steep Paralax Mapping
+  for (int i = 0; i < )" << numSearches << R"(; i++)
+  {
+    // decrease shift and height of layer by half
+    deltaTexCoord /= 2.0;
+    deltaHeight /= 2.0;
+ 
+    // new depth from heightmap
+    heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;
+
+    // shift along or agains vector V
+    if (heightFromTexture > currentLayerHeight) // below the surface
+    {
+      currentTexCoords -= deltaTexCoord;
+      currentLayerHeight += deltaHeight;
+    }
+    else // above the surface
+    {
+      currentTexCoords += deltaTexCoord;
+      currentLayerHeight -= deltaHeight;
+    }
+  }
+
+  // return results
+  parallaxHeight = currentLayerHeight;
+  return currentTexCoords;
+}
+)";
+  
+	}
+	else
+	{
+		Out << R"(
+  return ptexCoords;
+}
+)";
+	}
+
+// unused. Maybe later.
+# if 0
+	Out << R"(
+float parallaxSoftShadowMultiplier(in vec3 L, in vec2 initialTexCoord, in float initialHeight)
+{
+  float shadowMultiplier = 1;
+)";
+
+	constexpr FLOAT minLayers = 15;
+	constexpr FLOAT maxLayers = 30;
+	if (!GL->UsingShaderDrawParameters)
+		Out << "float vParallaxScale = TexCoords[" << UXOpenGLRenderDevice::DCDD_MACRO_INFO << "].w * 0.025; // arbitrary to get DrawScale into (for this purpose) sane regions." END_LINE;
+
+	// calculate lighting only for surface oriented to the light source
+    Out << R"(
+if(dot(vec3(0, 0, 1), L) > 0)
+{
+  // calculate initial parameters
+  "float numSamplesUnderSurface = 0;
+  "shadowMultiplier = 0;"
+)";
+	
+	Out << "  float numLayers = mix(" << maxLayers << ", " << minLayers << ", abs(dot(vec3(0, 0, 1), L)));" END_LINE;
+	Out << R"(
+  float layerHeight = initialHeight / numLayers;
+  vec2 texStep = vParallaxScale * L.xy / L.z / numLayers;
+
+  // current parameters
+  float currentLayerHeight = initialHeight - layerHeight;
+  vec2 currentTexCoords = initialTexCoord + texStep;
+  float heightFromTexture = GetTexel(vMacroTexNum, Texture7, currentTexCoords).r;
+
+  int stepIndex = 1;
+
+  // while point is below depth 0.0 )
+  while(currentLayerHeight > 0)
+  {
+    if(heightFromTexture < currentLayerHeight) // if point is under the surface
+    {
+      // calculate partial shadowing factor
+      numSamplesUnderSurface += 1;
+      float newShadowMultiplier = (currentLayerHeight - heightFromTexture) * (1.0 - stepIndex / numLayers);
+      shadowMultiplier = max(shadowMultiplier, newShadowMultiplier);
+    }
+
+    // offset to the next layer
+    stepIndex += 1;
+    currentLayerHeight -= layerHeight;
+    currentTexCoords += texStep;
+    heightFromTexture = GetTexel(vMacroTexNum, Texture7, currentTexCoords).r;
+  }
+
+  // Shadowing factor should be 1 if there were no points under the surface
+  if(numSamplesUnderSurface < 1)
+    shadowMultiplier = 1;
+  else
+    shadowMultiplier = 1.0 - shadowMultiplier;
+
+  return shadowMultiplier;
+}
+)";
+	
+# endif // 0
+#endif // ENGINE_VERSION==227
 
 #if 1
+	Out << R"(
+void main(void)
+{
+  mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
+  mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
+
+  vec4 TotalColor = vec4(1.0);
+  vec2 texCoords = vTexCoords;
+)";
+
+	if (!GL->UsingShaderDrawParameters)
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz);")); // TransformPointBy...
-		Out.Log(TEXT("mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);"));
-
-		Out.Log(TEXT("vec4 TotalColor = vec4(1.0);"));
-		Out.Log(TEXT("vec2 texCoords = vTexCoords;"));
-
-		if (!GL->UsingShaderDrawParameters)
+		Out << R"(
+  uint vDrawFlags = DrawFlags[0];
+  uint vTextureFormat = DrawFlags[1];
+  uint vPolyFlags = DrawFlags[2];
+  uint vRendMap = DrawFlags[3];
+  bool bHitTesting = bool(TexNum[12]);
+  float vBaseDiffuse = TexCoords[)" << UXOpenGLRenderDevice::DCDD_DIFFUSE_INFO << R"(].x;
+  float vBaseAlpha = TexCoords[)" << UXOpenGLRenderDevice::DCDD_DIFFUSE_INFO << R"(].z;
+  float vGamma = TexCoords[)" << UXOpenGLRenderDevice::DCDD_Z_AXIS << R"(].w;
+  vec4 vDrawColor = TexCoords[)" << UXOpenGLRenderDevice::DCDD_EDITOR_DRAWCOLOR << R"(];
+  vec4 vBumpMapInfo = TexCoords[)" << UXOpenGLRenderDevice::DCDD_BUMPMAP_INFO << R"(];
+  vec4 vDistanceFogColor = TexCoords[)" << UXOpenGLRenderDevice::DCDD_DISTANCE_FOG_COLOR << R"(];
+  vec4 vDistanceFogInfo = TexCoords[)" << UXOpenGLRenderDevice::DCDD_DISTANCE_FOG_INFO << R"(];
+  vec4 vHeightMapInfo = TexCoords[)" << UXOpenGLRenderDevice::DCDD_HEIGHTMAP_INFO << R"(];
+)";
+		
+		if (GL->UsingBindlessTextures)
 		{
-			Out.Log(TEXT("uint vDrawFlags = DrawFlags[0];"));
-			Out.Log(TEXT("uint vTextureFormat = DrawFlags[1];"));
-			Out.Log(TEXT("uint vPolyFlags = DrawFlags[2];"));
-			Out.Log(TEXT("uint vRendMap = DrawFlags[3];"));
-			Out.Log(TEXT("bool bHitTesting = bool(TexNum[12]);"));
-			Out.Logf(TEXT("float vBaseDiffuse = TexCoords[%u].x;"), DCTI_DIFFUSE_INFO);
-			Out.Logf(TEXT("float vBaseAlpha = TexCoords[%u].z;"), DCTI_DIFFUSE_INFO);
-			Out.Logf(TEXT("float vGamma = TexCoords[%u].w;"), DCTI_Z_AXIS);
-			Out.Logf(TEXT("vec4 vDrawColor = TexCoords[%u];"), DCTI_EDITOR_DRAWCOLOR);
-			Out.Logf(TEXT("vec4 vBumpMapInfo = TexCoords[%u];"), DCTI_BUMPMAP_INFO);
-			Out.Logf(TEXT("vec4 vDistanceFogColor = TexCoords[%u];"), DCTI_DISTANCE_FOG_COLOR);
-			Out.Logf(TEXT("vec4 vDistanceFogInfo = TexCoords[%u];"), DCTI_DISTANCE_FOG_INFO);
-			Out.Logf(TEXT("vec4 vHeightMapInfo = TexCoords[%u];"), DCTI_HEIGHTMAP_INFO);
-
-			if (GL->UsingBindlessTextures)
-			{
-				Out.Log(TEXT("uint vTexNum = TexNum[0];"));
-				Out.Log(TEXT("uint vLightMapTexNum = TexNum[1];"));
-				Out.Log(TEXT("uint vFogMapTexNum = TexNum[2];"));
-				Out.Log(TEXT("uint vDetailTexNum = TexNum[3];"));
-				Out.Log(TEXT("uint vMacroTexNum = TexNum[4];"));
-				Out.Log(TEXT("uint vBumpMapTexNum = TexNum[5];"));
-				Out.Log(TEXT("uint vEnviroMapTexNum = TexNum[6];"));
-				Out.Log(TEXT("uint vHeightMapTexNum = TexNum[7];"));
-			}
-			else
-			{
-				Out.Log(TEXT("uint vTexNum = 0u;"));
-				Out.Log(TEXT("uint vLightMapTexNum = 0u;"));
-				Out.Log(TEXT("uint vFogMapTexNum = 0u;"));
-				Out.Log(TEXT("uint vDetailTexNum = 0u;"));
-				Out.Log(TEXT("uint vMacroTexNum = 0u;"));
-				Out.Log(TEXT("uint vBumpMapTexNum = 0u;"));
-				Out.Log(TEXT("uint vEnviroMapTexNum = 0u;"));
-				Out.Log(TEXT("uint vHeightMapTexNum = 0u;"));
-				Out.Log(TEXT(""));
-			}
-		}
-		else if (GIsEditor)
-			Out.Log(TEXT("bool bHitTesting = bool(vHitTesting);"));
-
-		if (GL->UseHWLighting || GL->BumpMaps)
-		{
-			Out.Log(TEXT("vec3 TangentViewDir = normalize(vTangentViewPos - vTangentFragPos);"));
-			Out.Log(TEXT("int NumLights = int(LightData4[0].y);"));
-
-			if (!GL->UsingShaderDrawParameters)
-				Out.Logf(TEXT("vBumpMapSpecular = TexCoords[%u].y;"), DCTI_BUMPMAP_INFO);
-
-			if (GL->ParallaxVersion == Parallax_Basic || GL->ParallaxVersion == Parallax_Occlusion || GL->ParallaxVersion == Parallax_Relief)
-			{
-				// ParallaxMap
-				Out.Log(TEXT("float parallaxHeight = 1.0;"));
-				Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_HeightMap, DF_HeightMap);
-				Out.Log(TEXT("{"));
-				// get new texture coordinates from Parallax Mapping
-				Out.Log(TEXT("texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);"));
-				//Out.Log(TEXT("if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)"));
-				//Out.Log(TEXT("discard;")); // texCoords = vTexCoords;
-				Out.Log(TEXT("}"));
-			}
-		}
-
-		Out.Log(TEXT("vec4 Color = GetTexel(vTexNum, Texture0, texCoords);"));
-
-		Out.Log(TEXT("if (vBaseDiffuse > 0.0)"));
-		Out.Log(TEXT("Color *= vBaseDiffuse;")); // Diffuse factor.
-
-		Out.Log(TEXT("if (vBaseAlpha > 0.0)"));
-		Out.Log(TEXT("Color.a *= vBaseAlpha;")); // Alpha.
-
-		Out.Logf(TEXT("if (vTextureFormat == %uu)"), TEXF_BC5); //BC5 (GL_COMPRESSED_RG_RGTC2) compression
-		Out.Log(TEXT("Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);"));
-
-		// Handle PF_Masked.
-		Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if (Color.a < 0.5)"));
-		Out.Log(TEXT("discard;"));
-		Out.Log(TEXT("else Color.rgb /= Color.a;"));
-		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && Color.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
-		Out.Log(TEXT("discard;"));
-		/*	if ((vPolyFlags&PF_Mirrored) == PF_Mirrored)
-		{
-		//add mirror code here.
-		}*/
-
-		Out.Log(TEXT("TotalColor = Color;"));
-		Out.Log(TEXT("vec4 LightColor = vec4(1.0);"));
-
-		if (GL->UseHWLighting)
-		{
-			Out.Log(TEXT("float LightAdd = 0.0f;"));
-			Out.Log(TEXT("LightColor = vec4(0.0);"));
-
-			Out.Log(TEXT("for (int i = 0; i < NumLights; i++)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("float WorldLightRadius = LightData4[i].x;"));
-			Out.Log(TEXT("float LightRadius = LightData2[i].w;"));
-			Out.Log(TEXT("float RWorldLightRadius = WorldLightRadius * WorldLightRadius;"));
-
-			Out.Log(TEXT("vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords);")); // Frame->Coords.
-			Out.Log(TEXT("float dist = distance(vCoords, InLightPos);"));
-
-			Out.Log(TEXT("if (dist < RWorldLightRadius)"));
-			Out.Log(TEXT("{"));
-			// Light color
-			Out.Log(TEXT("vec4 CurrentLightColor = vec4(LightData1[i].x, LightData1[i].y, LightData1[i].z, 1.0);"));
-			constexpr FLOAT MinLight = 0.05;
-			Out.Logf(TEXT("float b = WorldLightRadius / (RWorldLightRadius * %f);"), MinLight);
-			Out.Log(TEXT("float attenuation = WorldLightRadius / (dist + b * dist * dist);"));
-			// Out.Log(TEXT("float attenuation = 0.82*(1.0-smoothstep(LightRadius,24.0*LightRadius+0.50,dist));"));
-			Out.Log(TEXT("LightColor += CurrentLightColor * attenuation;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("TotalColor *= LightColor;"));
+			Out << R"(
+  uint vTexNum = TexNum[0];
+  uint vLightMapTexNum = TexNum[1];
+  uint vFogMapTexNum = TexNum[2];
+  uint vDetailTexNum = TexNum[3];
+  uint vMacroTexNum = TexNum[4];
+  uint vBumpMapTexNum = TexNum[5];
+  uint vEnviroMapTexNum = TexNum[6];
+  uint vHeightMapTexNum = TexNum[7];
+)";
 		}
 		else
 		{
-			// LightMap
-			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_LightMap, DF_LightMap);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("LightColor = GetTexel(vLightMapTexNum, Texture1, vLightMapCoords);"));
-
-			// Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
-			if (GL->OpenGLVersion == GL_ES)
-				Out.Log(TEXT("LightColor.bgr = LightColor.bgr * (2.0 * 255.0 / 127.0);"));
-			else Out.Log(TEXT("LightColor.rgb = LightColor.rgb * (2.0 * 255.0 / 127.0);"));
-			Out.Log(TEXT("LightColor.a = 1.0;"));
-			Out.Log(TEXT("}"));
+			Out << R"(
+  uint vTexNum = 0u;
+  uint vLightMapTexNum = 0u;
+  uint vFogMapTexNum = 0u;
+  uint vDetailTexNum = 0u;
+  uint vMacroTexNum = 0u;
+  uint vBumpMapTexNum = 0u;
+  uint vEnviroMapTexNum = 0u;
+  uint vHeightMapTexNum = 0u;
+)";
 		}
-
-		// DetailTextures
-		if (GL->DetailTextures)
-		{
-			Out.Logf(TEXT("if (((vDrawFlags & %uu) == %uu))"), DF_DetailTexture, DF_DetailTexture);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("float NearZ = vCoords.z / 512.0;"));
-			Out.Log(TEXT("float DetailScale = 1.0;"));
-			Out.Log(TEXT("float bNear;"));
-			Out.Log(TEXT("vec4 DetailTexColor;"));
-			Out.Log(TEXT("vec3 hsvDetailTex;"));
-
-			Out.Logf(TEXT("for (int i = 0; i < %i; ++i)"), GL->DetailMax);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("if (i > 0)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("NearZ *= 4.223f;"));
-			Out.Log(TEXT("DetailScale *= 4.223f;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("bNear = clamp(0.65 - NearZ, 0.0, 1.0);"));
-			Out.Log(TEXT("if (bNear > 0.0)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("DetailTexColor = GetTexel(vDetailTexNum, Texture3, vDetailTexCoords * DetailScale);"));
-			Out.Log(TEXT("vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb);")); // cool idea Han :)
-			Out.Log(TEXT("hsvDetailTex.b += (DetailTexColor.r - 0.1);"));
-			Out.Log(TEXT("hsvDetailTex = hsv2rgb(hsvDetailTex);"));
-			Out.Log(TEXT("DetailTexColor = vec4(hsvDetailTex, 0.0);"));
-			Out.Log(TEXT("DetailTexColor = mix(vec4(1.0, 1.0, 1.0, 1.0), DetailTexColor, bNear);")); //fading out.
-			Out.Log(TEXT("TotalColor.rgb *= DetailTexColor.rgb;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-		}
-
-		// MacroTextures
-		if (GL->MacroTextures)
-		{
-			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_MacroTexture, DF_MacroTexture);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec4 MacrotexColor = GetTexel(vMacroTexNum, Texture4, vMacroTexCoords);"));
-			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("if (MacrotexColor.a < 0.5)"));
-			Out.Log(TEXT("discard;"));
-			Out.Log(TEXT("else MacrotexColor.rgb /= MacrotexColor.a;"));
-			Out.Log(TEXT("}"));
-			Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && MacrotexColor.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
-			Out.Log(TEXT("discard;"));
-
-			Out.Log(TEXT("vec3 hsvMacroTex = rgb2hsv(MacrotexColor.rgb);"));
-			Out.Log(TEXT("hsvMacroTex.b += (MacrotexColor.r - 0.1);"));
-			Out.Log(TEXT("hsvMacroTex = hsv2rgb(hsvMacroTex);"));
-			Out.Log(TEXT("MacrotexColor = vec4(hsvMacroTex, 1.0);"));
-			Out.Log(TEXT("TotalColor *= MacrotexColor;"));
-			Out.Log(TEXT("}"));
-		}
-
-		// BumpMap (Normal Map)
-		if (GL->BumpMaps)
-		{
-			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_BumpMap, DF_BumpMap);
-			Out.Log(TEXT("{"));
-			//normal from normal map
-			Out.Log(TEXT("vec3 TextureNormal = normalize(GetTexel(vBumpMapTexNum, Texture5, texCoords).rgb * 2.0 - 1.0);")); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
-			Out.Log(TEXT("vec3 BumpColor;"));
-			Out.Log(TEXT("vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);"));
-
-			Out.Log(TEXT("for (int i = 0; i < NumLights; ++i)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec3 CurrentLightColor = vec3(LightData1[i].x, LightData1[i].y, LightData1[i].z);"));
-
-			Out.Log(TEXT("float NormalLightRadius = LightData5[i].x;"));
-			Out.Log(TEXT("bool bZoneNormalLight = bool(LightData5[i].y);"));
-			Out.Log(TEXT("float LightBrightness = LightData5[i].z / 255.0;")); // use LightBrightness to adjust specular reflection.
-
-			Out.Log(TEXT("if (NormalLightRadius == 0.0)"));
-			Out.Log(TEXT("NormalLightRadius = LightData2[i].w * 64.0;"));
-
-#if ENGINE_VERSION==227
-			Out.Logf(TEXT("bool bSunlight = (uint(LightData2[i].x) == %uu);"), LE_Sunlight);
-#else
-			Out.Log(TEXT("bool bSunlight = false;"));
-#endif
-			Out.Log(TEXT("vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords);")); // Frame->Coords.
-
-			Out.Log(TEXT("float dist = distance(vCoords, InLightPos);"));
-
-			constexpr float MinLight = 0.05;
-			Out.Logf(TEXT("float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * %f);"), MinLight);
-			Out.Log(TEXT("float attenuation = NormalLightRadius / (dist + b * dist * dist);"));
-
-			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Unlit, PF_Unlit);
-			Out.Log(TEXT("InLightPos = vec3(1.0, 1.0, 1.0);")); //no idea whats best here. Arbitrary value based on some tests.
-
-			Out.Log(TEXT("if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight)")); // Do not consider if not in range or in a different zone.
-			Out.Log(TEXT("continue;"));
-
-			Out.Log(TEXT("vec3 TangentLightPos = vTBNMat * InLightPos;"));
-			Out.Log(TEXT("vec3 TangentlightDir = normalize(TangentLightPos - vTangentFragPos);"));
-
-			// ambient
-			Out.Log(TEXT("vec3 ambient = 0.1 * TotalColor.xyz;"));
-
-			// diffuse
-			Out.Log(TEXT("float diff = max(dot(TangentlightDir, TextureNormal), 0.0);"));
-			Out.Log(TEXT("vec3 diffuse = diff * TotalColor.xyz;"));
-
-			// specular
-			Out.Log(TEXT("vec3 halfwayDir = normalize(TangentlightDir + TangentViewDir);"));
-			Out.Log(TEXT("float spec = pow(max(dot(TextureNormal, halfwayDir), 0.0), 8.0);"));
-			Out.Log(TEXT("vec3 specular = vec3(max(vBumpMapSpecular, 0.1)) * spec * CurrentLightColor * LightBrightness;"));
-
-			Out.Log(TEXT("TotalBumpColor += (ambient + diffuse + specular) * attenuation;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);"));
-			Out.Log(TEXT("}"));
-		}
-		// FogMap
-		Out.Log(TEXT("vec4 FogColor = vec4(0.0);"));
-		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_FogMap, DF_FogMap);
-		Out.Log(TEXT("FogColor = GetTexel(vFogMapTexNum, Texture2, vFogMapCoords) * 2.0;"));
-
-		// EnvironmentMap
-#if ENGINE_VERSION==227
-		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_EnvironmentMap, DF_EnvironmentMap);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec4 EnvironmentColor = GetTexel(vEnviroMapTexNum, Texture6, vEnvironmentTexCoords);"));
-		Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if (EnvironmentColor.a < 0.5)"));
-		Out.Log(TEXT("discard;"));
-		Out.Log(TEXT("else EnvironmentColor.rgb /= EnvironmentColor.a;"));
-		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && EnvironmentColor.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
-		Out.Log(TEXT("discard;"));
-
-		Out.Log(TEXT("TotalColor *= vec4(EnvironmentColor.rgb, 1.0);"));
-		Out.Log(TEXT("}"));
-#endif
-
-		//TotalColor=clamp(TotalColor,0.0,1.0); //saturate.
-		Out.Logf(TEXT("if ((vPolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("{"));
-		// Gamma
-		Out.Logf(TEXT("float InGamma = 1.0 / (vGamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier);
-		Out.Log(TEXT("TotalColor.r = pow(TotalColor.r, InGamma);"));
-		Out.Log(TEXT("TotalColor.g = pow(TotalColor.g, InGamma);"));
-		Out.Log(TEXT("TotalColor.b = pow(TotalColor.b, InGamma);"));
-		Out.Log(TEXT("}"));
-
-		Out.Logf(TEXT("if ((vPolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("TotalColor = TotalColor * LightColor;"));
-		//Out.Log(TEXT("else TotalColor = TotalColor;"));
-		Out.Log(TEXT("TotalColor += FogColor;"));
-
-		// Add DistanceFog, needs to be added after Light has been applied.
-#if ENGINE_VERSION==227
-		// stijn: Very slow! Went from 135 to 155FPS on CTF-BT-CallousV3 by just disabling this branch even tho 469 doesn't do distance fog
-		Out.Log(TEXT("int FogMode = int(vDistanceFogInfo.w);"));
-		Out.Log(TEXT("if (FogMode >= 0)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("FogParameters DistanceFogParams;"));
-		Out.Log(TEXT("DistanceFogParams.FogStart = vDistanceFogInfo.x;"));
-		Out.Log(TEXT("DistanceFogParams.FogEnd = vDistanceFogInfo.y;"));
-		Out.Log(TEXT("DistanceFogParams.FogDensity = vDistanceFogInfo.z;"));
-		Out.Log(TEXT("DistanceFogParams.FogMode = FogMode;"));
-
-		Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);"));
-		Out.Logf(TEXT("else if ((vPolyFlags & %uu) == %uu && (vPolyFlags & %uu) != %uu)"), PF_Translucent, PF_Translucent, PF_Environment, PF_Environment);
-		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);"));
-		Out.Log(TEXT("else DistanceFogParams.FogColor = vDistanceFogColor;"));
-
-		Out.Log(TEXT("DistanceFogParams.FogCoord = abs(vEyeSpacePos.z / vEyeSpacePos.w);"));
-		Out.Log(TEXT("TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));"));
-		Out.Log(TEXT("}"));
-#endif
-		if (GIsEditor)
-		{
-			// Editor support.
-			Out.Logf(TEXT("if (vRendMap == %uu || vRendMap == %uu || vRendMap == %uu)"), REN_Zones, REN_PolyCuts, REN_Polys);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor += 0.5;"));
-			Out.Log(TEXT("TotalColor *= vDrawColor;"));
-			Out.Log(TEXT("}"));
-#if ENGINE_VERSION==227
-			Out.Logf(TEXT("else if (vRendMap == %uu)"), REN_Normals); //Thank you han!
-			Out.Log(TEXT("{"));
-			// Dot.
-			Out.Log(TEXT("float T = 0.5 * dot(normalize(vCoords), vSurfaceNormal);"));
-			// Selected.
-			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
-			Out.Log(TEXT("TotalColor = vec4(0.0, 0.0, abs(T), 1.0);"));
-			// Normal.
-			Out.Log(TEXT("else TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);"));
-			Out.Log(TEXT("}"));
-#endif
-
-			Out.Logf(TEXT("else if (vRendMap == %uu)"), REN_PlainTex);
-			Out.Log(TEXT("TotalColor = Color;"));
-
-#if ENGINE_VERSION==227
-			Out.Logf(TEXT("if ((vRendMap != %uu) && ((vPolyFlags & %uu) == %uu))"), REN_Normals, PF_Selected, PF_Selected);
-#else
-			Out.Logf(TEXT("if ((vPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
-#endif
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor.r = (TotalColor.r * 0.75);"));
-			Out.Log(TEXT("TotalColor.g = (TotalColor.g * 0.75);"));
-			Out.Log(TEXT("TotalColor.b = (TotalColor.b * 0.75) + 0.1;"));
-			Out.Log(TEXT("TotalColor = clamp(TotalColor, 0.0, 1.0);"));
-			Out.Log(TEXT("if (TotalColor.a < 0.5)"));
-			Out.Log(TEXT("TotalColor.a = 0.51;"));
-			Out.Log(TEXT("}"));
-
-			// HitSelection, Zoneview etc.
-			Out.Log(TEXT("if (bHitTesting)"));
-			Out.Log(TEXT("TotalColor = vDrawColor;")); // Use ONLY DrawColor.
-		}
-
-		if (GL->SimulateMultiPass)
-		{
-			Out.Log(TEXT("FragColor = TotalColor;"));
-			Out.Log(TEXT("FragColor1 = ((vec4(1.0) - TotalColor) * LightColor);"));
-		}
-		else Out.Log(TEXT("FragColor = TotalColor;"));
-
-		Out.Log(TEXT("}"));
 	}
-#else
+	else if (GIsEditor)
+		Out << "  bool bHitTesting = bool(vHitTesting);" END_LINE;
+
+	if (GL->UseHWLighting || GL->BumpMaps)
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		//FragColor = GetTexel(TexNum[0], Texture0, vTexCoords);   
-		Out.Log(TEXT("FragColor = texture(sampler2D(Textures[TexNum[0]]), vTexCoords);"));
-		Out.Log(TEXT("}"));
+		Out << R"(
+  vec3 TangentViewDir = normalize(vTangentViewPos - vTangentFragPos);
+  int NumLights = int(LightData4[0].y);
+)";
+
+		if (!GL->UsingShaderDrawParameters)
+			Out << "  vBumpMapSpecular = TexCoords[" << UXOpenGLRenderDevice::DCDD_BUMPMAP_INFO << "].y;" END_LINE;
+
+		if (GL->ParallaxVersion == Parallax_Basic ||
+			GL->ParallaxVersion == Parallax_Occlusion ||
+			GL->ParallaxVersion == Parallax_Relief)
+		{
+			// ParallaxMap
+			Out << R"(
+  float parallaxHeight = 1.0;
+  if ((vDrawFlags & )" << DF_HeightMap << R"(u) == )" << DF_HeightMap << R"(u)
+  {
+    // get new texture coordinates from Parallax Mapping
+    texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);
+    //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
+    //discard; // texCoords = vTexCoords;
+  }
+)";
+		}
 	}
+
+	Out << R"(
+  vec4 Color = GetTexel(vTexNum, Texture0, texCoords);
+
+  if (vBaseDiffuse > 0.0)
+    Color *= vBaseDiffuse; // Diffuse factor.
+
+  if (vBaseAlpha > 0.0)
+    Color.a *= vBaseAlpha; // Alpha.
+
+  if (vTextureFormat == )" << TEXF_BC5 << R"(u) //BC5 (GL_COMPRESSED_RG_RGTC2) compression
+    Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);
+
+  // Handle PF_Masked.
+  if ((vPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
+  {
+    if (Color.a < 0.5)
+      discard;
+    else Color.rgb /= Color.a;
+  }
+  else if ((vPolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && Color.a < 0.01)
+    discard;
+  // if ((vPolyFlags&PF_Mirrored) == PF_Mirrored)
+  // {
+  //   add mirror code here.
+  // }
+
+  TotalColor = Color;
+  vec4 LightColor = vec4(1.0);
+)";
+
+	if (GL->UseHWLighting)
+	{
+		constexpr FLOAT MinLight = 0.05;
+		Out << R"(
+  float LightAdd = 0.0f;
+  LightColor = vec4(0.0);
+
+  for (int i = 0; i < NumLights; i++)
+  {
+    float WorldLightRadius = LightData4[i].x;
+    float LightRadius = LightData2[i].w;
+    float RWorldLightRadius = WorldLightRadius * WorldLightRadius;
+
+    vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords); // Frame->Coords.
+    float dist = distance(vCoords, InLightPos);
+
+    if (dist < RWorldLightRadius)
+    {
+      // Light color
+      vec4 CurrentLightColor = vec4(LightData1[i].x, LightData1[i].y, LightData1[i].z, 1.0);
+      float b = WorldLightRadius / (RWorldLightRadius * )" << MinLight << R"();
+      float attenuation = WorldLightRadius / (dist + b * dist * dist);
+      //float attenuation = 0.82*(1.0-smoothstep(LightRadius,24.0*LightRadius+0.50,dist));
+      LightColor += CurrentLightColor * attenuation;
+    }
+  }
+  
+  TotalColor *= LightColor;
+)";
+	}
+	else // Software Lighting
+	{
+		const char* LightColorOrder = GL->OpenGLVersion == GL_ES ? "bgr" : "rgb";
+		
+		// LightMap
+		Out << R"(
+  if ((vDrawFlags & )" << DF_LightMap << R"(u) == )" << DF_LightMap << R"(u)
+  {
+    LightColor = GetTexel(vLightMapTexNum, Texture1, vLightMapCoords);
+    // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
+    LightColor.)" << LightColorOrder << R"( = LightColor.)" << LightColorOrder << R"( * (2.0 * 255.0 / 127.0);
+    LightColor.a = 1.0;
+  }
+)";
+		
+	}
+
+	// DetailTextures
+	if (GL->DetailTextures)
+	{
+		Out << R"(
+  if ((vDrawFlags & )" << DF_DetailTexture << R"(u) == )" << DF_DetailTexture << R"(u)
+  {
+    float NearZ = vCoords.z / 512.0;
+    float DetailScale = 1.0;
+    float bNear;
+    vec4 DetailTexColor;
+    vec3 hsvDetailTex;
+
+    for (int i = 0; i < )" << GL->DetailMax << R"(; ++i)
+    {
+      if (i > 0)
+      {
+        NearZ *= 4.223f;
+        DetailScale *= 4.223f;
+      }
+      bNear = clamp(0.65 - NearZ, 0.0, 1.0);
+      if (bNear > 0.0)
+      {
+        DetailTexColor = GetTexel(vDetailTexNum, Texture3, vDetailTexCoords * DetailScale);
+        vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
+        hsvDetailTex.b += (DetailTexColor.r - 0.1);
+        hsvDetailTex = hsv2rgb(hsvDetailTex);
+        DetailTexColor = vec4(hsvDetailTex, 0.0);
+        DetailTexColor = mix(vec4(1.0, 1.0, 1.0, 1.0), DetailTexColor, bNear); //fading out.
+        TotalColor.rgb *= DetailTexColor.rgb;
+      }
+    }
+  }
+)";
+	}
+
+	// MacroTextures
+	if (GL->MacroTextures)
+	{
+		Out << R"(
+  if ((vDrawFlags & )" << DF_MacroTexture << R"(u) == )" << DF_MacroTexture << R"(u)
+  {
+    vec4 MacrotexColor = GetTexel(vMacroTexNum, Texture4, vMacroTexCoords); 
+    if ((vPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
+    {
+      if (MacrotexColor.a < 0.5)
+        discard;
+      else MacrotexColor.rgb /= MacrotexColor.a;
+    }
+    else if ((vPolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && MacrotexColor.a < 0.01)
+      discard;
+
+    vec3 hsvMacroTex = rgb2hsv(MacrotexColor.rgb);
+    hsvMacroTex.b += (MacrotexColor.r - 0.1);
+    hsvMacroTex = hsv2rgb(hsvMacroTex);
+    MacrotexColor = vec4(hsvMacroTex, 1.0);
+    TotalColor *= MacrotexColor;
+  }
+)";
+	}
+
+	// BumpMap (Normal Map)
+	if (GL->BumpMaps)
+	{
+		constexpr float MinLight = 0.05;
+#if ENGINE_VERSION == 227
+		FString Sunlight = FString::Printf(TEXT("bool bSunlight = (uint(LightData2[i].x == %du));"), LE_Sunlight);
+#else
+		FString Sunlight = TEXT("bool bSunlight = false;");
+#endif
+
+		Out << R"(
+  if ((vDrawFlags & )" << DF_BumpMap << R"(u) == )" << DF_BumpMap << R"(u)
+  {
+    //normal from normal map
+    vec3 TextureNormal = normalize(GetTexel(vBumpMapTexNum, Texture5, texCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
+    vec3 BumpColor;
+    vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
+
+    for (int i = 0; i < NumLights; ++i)
+    {
+      vec3 CurrentLightColor = vec3(LightData1[i].x, LightData1[i].y, LightData1[i].z);
+      
+      float NormalLightRadius = LightData5[i].x;
+      bool bZoneNormalLight = bool(LightData5[i].y);
+      float LightBrightness = LightData5[i].z / 255.0; // use LightBrightness to adjust specular reflection.
+
+      if (NormalLightRadius == 0.0)
+        NormalLightRadius = LightData2[i].w * 64.0;
+
+      )" << appToAnsi(*Sunlight) << R"(
+
+      vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords); // Frame->Coords.
+      float dist = distance(vCoords, InLightPos);
+
+      float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * )" << MinLight << R"();
+      float attenuation = NormalLightRadius / (dist + b * dist * dist);
+
+      if ((vPolyFlags & )" << PF_Unlit << R"(u) == )" << PF_Unlit << R"(u)
+        InLightPos = vec3(1.0, 1.0, 1.0); //no idea whats best here. Arbitrary value based on some tests.
+
+      if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight) // Do not consider if not in range or in a different zone.
+        continue;
+
+      vec3 TangentLightPos = vTBNMat * InLightPos;
+      vec3 TangentlightDir = normalize(TangentLightPos - vTangentFragPos);
+
+      // ambient
+      vec3 ambient = 0.1 * TotalColor.xyz;
+
+      // diffuse
+      float diff = max(dot(TangentlightDir, TextureNormal), 0.0);
+      vec3 diffuse = diff * TotalColor.xyz;
+
+      // specular
+      vec3 halfwayDir = normalize(TangentlightDir + TangentViewDir);
+      float spec = pow(max(dot(TextureNormal, halfwayDir), 0.0), 8.0);
+      vec3 specular = vec3(max(vBumpMapSpecular, 0.1)) * spec * CurrentLightColor * LightBrightness;
+
+      TotalBumpColor += (ambient + diffuse + specular) * attenuation;
+    }
+    TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);
+  }
+)";
+	}
+	
+	// FogMap
+	Out << R"(
+  vec4 FogColor = vec4(0.0);
+  if ((vDrawFlags & )" << DF_FogMap << R"(u) == )" << DF_FogMap << R"(u)
+    FogColor = GetTexel(vFogMapTexNum, Texture2, vFogMapCoords) * 2.0;
+
+  // EnvironmentMap
+)";
+
+#if ENGINE_VERSION==227
+	Out << R"(
+  if ((vDrawFlags & )" << DF_EnvironmentMap << R"(u) == )" << DF_EnvironmentMap << R"(u)
+  {
+    vec4 EnvironmentColor = GetTexel(vEnviroMapTexNum, Texture6, vEnvironmentTexCoords);
+    if ((vPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
+    {
+      if (EnvironmentColor.a < 0.5)
+        discard;
+      else EnvironmentColor.rgb /= EnvironmentColor.a;
+    }
+    else if ((vPolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && EnvironmentColor.a < 0.01)
+      discard;
+
+    TotalColor *= vec4(EnvironmentColor.rgb, 1.0);
+  }
+)";
+#endif
+
+	Out << R"(
+  //TotalColor=clamp(TotalColor,0.0,1.0); //saturate.
+  if ((vPolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+  {
+    // Gamma
+    float InGamma = 1.0 / (vGamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
+    TotalColor.r = pow(TotalColor.r, InGamma);
+    TotalColor.g = pow(TotalColor.g, InGamma);
+    TotalColor.b = pow(TotalColor.b, InGamma);
+
+    TotalColor = TotalColor * LightColor;
+  }
+
+  TotalColor += FogColor;
+
+  // Add DistanceFog, needs to be added after Light has been applied.
+)";
+	
+#if ENGINE_VERSION==227
+	// stijn: Very slow! Went from 135 to 155FPS on CTF-BT-CallousV3 by just disabling this branch even tho 469 doesn't do distance fog
+	Out << R"(
+  int FogMode = int(vDistanceFogInfo.w);
+  if (FogMode >= 0)
+  {
+    FogParameters DistanceFogParams;
+    DistanceFogParams.FogStart = vDistanceFogInfo.x;
+    DistanceFogParams.FogEnd = vDistanceFogInfo.y;
+    DistanceFogParams.FogDensity = vDistanceFogInfo.z;
+    DistanceFogParams.FogMode = FogMode;
+
+    if ((vPolyFlags & )" << PF_Modulated << R"(u) == )" << PF_Modulated << R"(u)
+      DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);
+    else if ((vPolyFlags & )" << PF_Translucent << R"(u) == )" << PF_Translucent << R"(u && (vPolyFlags & )" << PF_Environment << R"(u) != )" << PF_Environment << R"(u)
+      DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);
+    else DistanceFogParams.FogColor = vDistanceFogColor;
+
+    DistanceFogParams.FogCoord = abs(vEyeSpacePos.z / vEyeSpacePos.w);
+    TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));
+  }
+)";
+#endif
+	if (GIsEditor)
+	{
+		// Editor support.
+		Out << R"(
+  if (vRendMap == )" << REN_Zones << R"(u || vRendMap == )" << REN_PolyCuts << R"(u || vRendMap == )" << REN_Polys << R"(u)
+  {
+    TotalColor += 0.5;
+    TotalColor *= vDrawColor;
+  }
+)";
+		
+#if ENGINE_VERSION==227
+		Out << R"(
+  else if (vRendMap == )" << REN_Normals << R"(u) //Thank you han!
+  {
+    // Dot.
+    float T = 0.5 * dot(normalize(vCoords), vSurfaceNormal);
+    // Selected.
+    if ((vPolyFlags & )" << PF_Selected << R"(u) == )" << PF_Selected << R"(u)
+      TotalColor = vec4(0.0, 0.0, abs(T), 1.0);
+    // Normal.
+    else TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);
+  }
+)";
+#endif
+		Out << R"(
+  else if (vRendMap == )" << REN_PlainTex << R"(u)
+    TotalColor = Color;
+)";
+		
+#if ENGINE_VERSION==227
+		Out << "  if ((vRendMap != " << REN_Normals << "u) && ((vPolyFlags & " << PF_Selected << "u) == " << PF_Selected << "u))" END_LINE;
+#else
+		Out << "  if ((vPolyFlags & " << PF_Selected << "u) == " << PF_Selected << "u)" END_LINE;
+#endif
+		Out << R"(
+  {
+    TotalColor.r = (TotalColor.r * 0.75);
+    TotalColor.g = (TotalColor.g * 0.75);
+    TotalColor.b = (TotalColor.b * 0.75) + 0.1;
+    TotalColor = clamp(TotalColor, 0.0, 1.0);
+    if (TotalColor.a < 0.5)
+      TotalColor.a = 0.51;
+  }
+
+  // HitSelection, Zoneview etc.
+  if (bHitTesting)
+    TotalColor = vDrawColor; // Use ONLY DrawColor.
+)";
+	}
+
+	if (GL->SimulateMultiPass)
+	{
+		Out << R"(
+  FragColor = TotalColor;
+  FragColor1 = ((vec4(1.0) - TotalColor) * LightColor);
+)";
+	}
+	else Out << "  FragColor = TotalColor;" END_LINE;
+
+	Out << "}" END_LINE;
+#else
+	Out << R"(
+void main(void)
+{
+  //FragColor = GetTexel(TexNum[0], Texture0, vTexCoords);   
+  FragColor = texture(sampler2D(Textures[TexNum[0]]), vTexCoords);
+}
+)";
 #endif
 
 	/*
@@ -995,644 +1188,712 @@ static void Create_DrawComplexSinglePass_Frag(UXOpenGLRenderDevice* GL, FOutputD
 	//
 	vec2 EnviroMap( vec3 Point, vec3 Normal )
 	{
-		vec3 R = reflect(normalize(Point),Normal);
-		return vec2(0.5*dot(R,Uncoords_XAxis)+0.5,0.5*dot(R,Uncoords_YAxis)+0.5);
+	vec3 R = reflect(normalize(Point),Normal);
+	return vec2(0.5*dot(R,Uncoords_XAxis)+0.5,0.5*dot(R,Uncoords_YAxis)+0.5);
 	}
 	*/
 }
 
 // Vertexshader for DrawComplexSurface, single pass.
-static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawComplexSinglePass_Vert(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(location = 0) in vec4 Coords;")); // == gl_Vertex
-	Out.Log(TEXT("layout(location = 1) in vec4 Normal;")); // == gl_Vertex
+	Out << R"(
+layout(location = 0) in vec4 Coords; // == gl_Vertex
+layout(location = 1) in vec4 Normal; // == gl_Vertex
 
-	Out.Log(TEXT("out vec3 vCoords;"));
-	Out.Log(TEXT("out vec4 vEyeSpacePos;"));
-	Out.Log(TEXT("out vec2 vTexCoords;"));
-	Out.Log(TEXT("out vec2 vLightMapCoords;"));
-	Out.Log(TEXT("out vec2 vFogMapCoords;"));
-	Out.Log(TEXT("out vec3 vTangentViewPos;"));
-	Out.Log(TEXT("out vec3 vTangentFragPos;"));
+out vec3 vCoords;
+out vec4 vEyeSpacePos;
+out vec2 vTexCoords;
+out vec2 vLightMapCoords;
+out vec2 vFogMapCoords;
+out vec3 vTangentViewPos;
+out vec3 vTangentFragPos;
+)";
+	
 	if (GL->DetailTextures)
-		Out.Log(TEXT("out vec2 vDetailTexCoords;"));
+		Out << "out vec2 vDetailTexCoords;" END_LINE;
 	if (GL->MacroTextures)
-		Out.Log(TEXT("out vec2 vMacroTexCoords;"));
+		Out << "out vec2 vMacroTexCoords;" END_LINE;
 	if (GL->BumpMaps)
-		Out.Log(TEXT("out vec2 vBumpTexCoords;"));
+		Out << "out vec2 vBumpTexCoords;" END_LINE;
 #if ENGINE_VERSION==227
-	Out.Log(TEXT("out vec2 vEnvironmentTexCoords;"));
+	Out << "out vec2 vEnvironmentTexCoords;" END_LINE;
 #endif
 	if (GIsEditor)
-		Out.Log(TEXT("flat out vec3 vSurfaceNormal;")); // f.e. Render normal view.
+		Out << "flat out vec3 vSurfaceNormal;" END_LINE; // f.e. Render normal view.
 #if ENGINE_VERSION!=227
 	if (GL->BumpMaps)
 #endif
 	{
-		Out.Log(TEXT("flat out mat3 vTBNMat;"));
+		Out << "flat out mat3 vTBNMat;" END_LINE;
 	}
 
 	if (GL->UsingShaderDrawParameters)
 	{
-		Out.Log(TEXT("struct DrawComplexShaderDrawParams"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec4 DiffuseUV;"));	// 0
-		Out.Log(TEXT("vec4 LightMapUV;"));	// 1
-		Out.Log(TEXT("vec4 FogMapUV;"));	// 2
-		Out.Log(TEXT("vec4 DetailUV;"));	// 3
-		Out.Log(TEXT("vec4 MacroUV;"));		// 4
-		Out.Log(TEXT("vec4 EnviroMapUV;"));	// 5
-		Out.Log(TEXT("vec4 DiffuseInfo;"));	// 6
-		Out.Log(TEXT("vec4 MacroInfo;"));	// 7
-		Out.Log(TEXT("vec4 BumpMapInfo;"));	// 8
-		Out.Log(TEXT("vec4 HeightMapInfo;"));// 9
-		Out.Log(TEXT("vec4 XAxis;"));		// 10
-		Out.Log(TEXT("vec4 YAxis;"));		// 11
-		Out.Log(TEXT("vec4 ZAxis;"));		// 12
-		Out.Log(TEXT("vec4 DrawColor;"));	// 13
-		Out.Log(TEXT("vec4 DistanceFogColor;"));// 14
-		Out.Log(TEXT("vec4 DistanceFogInfo;"));// 15
-		Out.Log(TEXT("uvec4 TexNum[4];"));
-		Out.Log(TEXT("uvec4 DrawFlags;"));
-		Out.Log(TEXT("};"));
+		Out << R"(
+struct DrawComplexShaderDrawParams
+{
+  vec4 DiffuseUV;        // 0
+  vec4 LightMapUV;       // 1
+  vec4 FogMapUV;         // 2
+  vec4 DetailUV;         // 3
+  vec4 MacroUV;          // 4
+  vec4 EnviroMapUV;      // 5
+  vec4 DiffuseInfo;      // 6
+  vec4 MacroInfo;        // 7
+  vec4 BumpMapInfo;      // 8
+  vec4 HeightMapInfo;    // 9
+  vec4 XAxis;            // 10
+  vec4 YAxis;            // 11
+  vec4 ZAxis;            // 12
+  vec4 DrawColor;        // 13
+  vec4 DistanceFogColor; // 14
+  vec4 DistanceFogInfo;  // 15
+  uvec4 TexNum[4];
+  uvec4 DrawFlags;
+};
 
-		Out.Log(TEXT("layout(std430, binding = 6) buffer AllDrawComplexShaderDrawParams"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("DrawComplexShaderDrawParams DrawComplexParams[];"));
-		Out.Log(TEXT("};"));
+layout(std430, binding = 6) buffer AllDrawComplexShaderDrawParams
+{
+  DrawComplexShaderDrawParams DrawComplexParams[];
+};
 
-		Out.Log(TEXT("flat out uint vTexNum;"));
-		Out.Log(TEXT("flat out uint vLightMapTexNum;"));
-		Out.Log(TEXT("flat out uint vFogMapTexNum;"));
-		Out.Log(TEXT("flat out uint vDetailTexNum;"));
-		Out.Log(TEXT("flat out uint vMacroTexNum;"));
-		Out.Log(TEXT("flat out uint vBumpMapTexNum;"));
-		Out.Log(TEXT("flat out uint vEnviroMapTexNum;"));
-		Out.Log(TEXT("flat out uint vHeightMapTexNum;"));
-		Out.Log(TEXT("flat out uint vHeightMapNum;"));
-		Out.Log(TEXT("flat out uint vDrawFlags;"));
-		Out.Log(TEXT("flat out uint vTextureFormat;"));
-		Out.Log(TEXT("flat out uint vPolyFlags;"));
-		Out.Log(TEXT("flat out float vBaseDiffuse;"));
-		Out.Log(TEXT("flat out float vBaseAlpha;"));
-		Out.Log(TEXT("flat out float vParallaxScale;"));
-		Out.Log(TEXT("flat out float vGamma;"));
-		Out.Log(TEXT("flat out float vBumpMapSpecular;"));
-		Out.Log(TEXT("flat out float vTimeSeconds;"));
+flat out uint vTexNum;
+flat out uint vLightMapTexNum;
+flat out uint vFogMapTexNum;
+flat out uint vDetailTexNum;
+flat out uint vMacroTexNum;
+flat out uint vBumpMapTexNum;
+flat out uint vEnviroMapTexNum;
+flat out uint vHeightMapTexNum;
+flat out uint vHeightMapNum;
+flat out uint vDrawFlags;
+flat out uint vTextureFormat;
+flat out uint vPolyFlags;
+flat out float vBaseDiffuse;
+flat out float vBaseAlpha;
+flat out float vParallaxScale;
+flat out float vGamma;
+flat out float vBumpMapSpecular;
+flat out float vTimeSeconds;
+)";
 
 		if (GIsEditor)
 		{
-			Out.Log(TEXT("flat out uint vHitTesting;"));
-			Out.Log(TEXT("flat out uint vRendMap;"));
-			Out.Log(TEXT("flat out vec4 vDrawColor;"));
+			Out << R"(
+flat out uint vHitTesting;
+flat out uint vRendMap;
+flat out vec4 vDrawColor;
+)";
 		}
-		Out.Log(TEXT("flat out vec4 vDistanceFogColor;"));
-		Out.Log(TEXT("flat out vec4 vDistanceFogInfo;"));
+		Out << R"(
+flat out vec4 vDistanceFogColor;
+flat out vec4 vDistanceFogInfo;
+)";
 	}
 	else
 	{
-		Out.Log(TEXT("uniform vec4 TexCoords[16];"));
-		Out.Log(TEXT("uniform uint TexNum[16];"));
-		Out.Log(TEXT("uniform uint DrawFlags[4];"));
+		// No shader draw params support
+		Out << R"(
+uniform vec4 TexCoords[16];
+uniform uint TexNum[16];
+uniform uint DrawFlags[4];
+)";
 	}
+	
 	if (GL->SupportsClipDistance)
-		Out.Logf(TEXT("out float gl_ClipDistance[%i];"), GL->MaxClippingPlanes);
+		Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
 
 #if 1
+	Out << R"(
+void main(void)
+{
+)";
+	
+	if (GL->UsingShaderDrawParameters)
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		if (GL->UsingShaderDrawParameters)
-		{
-			Out.Log(TEXT("vec4 XAxis = DrawComplexParams[gl_DrawID].XAxis;"));
-			Out.Log(TEXT("vec4 YAxis = DrawComplexParams[gl_DrawID].YAxis;"));
-			Out.Log(TEXT("vec4 ZAxis = DrawComplexParams[gl_DrawID].ZAxis;"));
-			Out.Log(TEXT("vec4 DiffuseUV = DrawComplexParams[gl_DrawID].DiffuseUV;"));
-			Out.Log(TEXT("vec4 LightMapUV = DrawComplexParams[gl_DrawID].LightMapUV;"));
-			Out.Log(TEXT("vec4 FogMapUV = DrawComplexParams[gl_DrawID].FogMapUV;"));
-			Out.Log(TEXT("vec4 DetailUV = DrawComplexParams[gl_DrawID].DetailUV;"));
-			Out.Log(TEXT("vec4 MacroUV = DrawComplexParams[gl_DrawID].MacroUV;"));
-			Out.Log(TEXT("vec4 EnviroMapUV = DrawComplexParams[gl_DrawID].EnviroMapUV;"));
+		Out << R"(
+  vec4 XAxis = DrawComplexParams[gl_DrawID].XAxis;
+  vec4 YAxis = DrawComplexParams[gl_DrawID].YAxis;
+  vec4 ZAxis = DrawComplexParams[gl_DrawID].ZAxis;
+  vec4 DiffuseUV = DrawComplexParams[gl_DrawID].DiffuseUV;
+  vec4 LightMapUV = DrawComplexParams[gl_DrawID].LightMapUV;
+  vec4 FogMapUV = DrawComplexParams[gl_DrawID].FogMapUV;
+  vec4 DetailUV = DrawComplexParams[gl_DrawID].DetailUV;
+  vec4 MacroUV = DrawComplexParams[gl_DrawID].MacroUV;
+  vec4 EnviroMapUV = DrawComplexParams[gl_DrawID].EnviroMapUV;
 
-			Out.Log(TEXT("vDrawFlags = DrawComplexParams[gl_DrawID].DrawFlags[0];"));
-			Out.Log(TEXT("vTextureFormat = DrawComplexParams[gl_DrawID].DrawFlags[1];"));
-			Out.Log(TEXT("vPolyFlags = DrawComplexParams[gl_DrawID].DrawFlags[2];"));
+  vDrawFlags = DrawComplexParams[gl_DrawID].DrawFlags[0];
+  vTextureFormat = DrawComplexParams[gl_DrawID].DrawFlags[1];
+  vPolyFlags = DrawComplexParams[gl_DrawID].DrawFlags[2];"));
+)";
 
-			if (GIsEditor)
-			{
-				Out.Log(TEXT("vRendMap = DrawComplexParams[gl_DrawID].DrawFlags[3];"));
-				Out.Log(TEXT("vHitTesting = DrawComplexParams[gl_DrawID].TexNum[3].x;"));
-				Out.Log(TEXT("vDrawColor = DrawComplexParams[gl_DrawID].DrawColor;"));
-			}
-
-			Out.Log(TEXT("vTexNum = DrawComplexParams[gl_DrawID].TexNum[0].x;"));
-			Out.Log(TEXT("vLightMapTexNum = DrawComplexParams[gl_DrawID].TexNum[0].y;"));
-			Out.Log(TEXT("vFogMapTexNum = DrawComplexParams[gl_DrawID].TexNum[0].z;"));
-			Out.Log(TEXT("vDetailTexNum = DrawComplexParams[gl_DrawID].TexNum[0].w;"));
-			Out.Log(TEXT("vMacroTexNum = DrawComplexParams[gl_DrawID].TexNum[1].x;"));
-			Out.Log(TEXT("vBumpMapTexNum = DrawComplexParams[gl_DrawID].TexNum[1].y;"));
-			Out.Log(TEXT("vEnviroMapTexNum = DrawComplexParams[gl_DrawID].TexNum[1].z;"));
-			Out.Log(TEXT("vHeightMapTexNum = DrawComplexParams[gl_DrawID].TexNum[1].w;"));
-			Out.Log(TEXT("vBaseDiffuse = DrawComplexParams[gl_DrawID].DiffuseInfo.x;"));
-			Out.Log(TEXT("vBaseAlpha = DrawComplexParams[gl_DrawID].DiffuseInfo.z;"));
-			Out.Log(TEXT("vBumpMapSpecular = DrawComplexParams[gl_DrawID].BumpMapInfo.y;"));
-			Out.Log(TEXT("vParallaxScale = DrawComplexParams[gl_DrawID].HeightMapInfo.z * 0.025;"));
-			Out.Log(TEXT("vTimeSeconds = DrawComplexParams[gl_DrawID].HeightMapInfo.w;"));
-			Out.Log(TEXT("vGamma = ZAxis.w;"));
-			Out.Log(TEXT("vDistanceFogColor = DrawComplexParams[gl_DrawID].DistanceFogColor;"));
-			Out.Log(TEXT("vDistanceFogInfo = DrawComplexParams[gl_DrawID].DistanceFogInfo;"));
-		}
-		else
-		{
-			Out.Logf(TEXT("vec4 XAxis = TexCoords[%u];"), DCTI_X_AXIS);
-			Out.Logf(TEXT("vec4 YAxis = TexCoords[%u];"), DCTI_Y_AXIS);
-			Out.Logf(TEXT("vec4 ZAxis = TexCoords[%u];"), DCTI_Z_AXIS);
-			Out.Logf(TEXT("vec4 DiffuseUV = TexCoords[%u];"), DCTI_DIFFUSE_COORDS);
-			Out.Logf(TEXT("vec4 LightMapUV = TexCoords[%u];"), DCTI_LIGHTMAP_COORDS);
-			Out.Logf(TEXT("vec4 FogMapUV = TexCoords[%u];"), DCTI_FOGMAP_COORDS);
-			Out.Logf(TEXT("vec4 DetailUV = TexCoords[%u];"), DCTI_DETAIL_COORDS);
-			Out.Logf(TEXT("vec4 MacroUV = TexCoords[%u];"), DCTI_MACRO_COORDS);
-			Out.Logf(TEXT("vec4 EnviroMapUV = TexCoords[%u];"), DCTI_ENVIROMAP_COORDS);
-
-			Out.Log(TEXT("uint vDrawFlags = DrawFlags[0];"));
-		}
-		// Point Coords
-		Out.Log(TEXT("vCoords = Coords.xyz;"));
-
-		// UDot/VDot calculation.
-		Out.Log(TEXT("vec3 MapCoordsXAxis = XAxis.xyz;"));
-		Out.Log(TEXT("vec3 MapCoordsYAxis = YAxis.xyz;"));
-
-#if ENGINE_VERSION!=227
-		if (GIsEditor || GL->BumpMaps)
-#endif
-		{
-			Out.Log(TEXT("vec3 MapCoordsZAxis = ZAxis.xyz;"));
-		}
-		Out.Log(TEXT("float UDot = XAxis.w;"));
-		Out.Log(TEXT("float VDot = YAxis.w;"));
-
-		Out.Log(TEXT("float MapDotU = dot(MapCoordsXAxis, Coords.xyz) - UDot;"));
-		Out.Log(TEXT("float MapDotV = dot(MapCoordsYAxis, Coords.xyz) - VDot;"));
-		Out.Log(TEXT("vec2  MapDot = vec2(MapDotU, MapDotV);"));
-
-		//Texture UV to fragment
-		Out.Log(TEXT("vec2 TexMapMult = DiffuseUV.xy;"));
-		Out.Log(TEXT("vec2 TexMapPan = DiffuseUV.zw;"));
-		Out.Log(TEXT("vTexCoords = (MapDot - TexMapPan) * TexMapMult;"));
-
-		//Texture UV Lightmap to fragment
-		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_LightMap, DF_LightMap);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec2 LightMapMult = LightMapUV.xy;"));
-		Out.Log(TEXT("vec2 LightMapPan = LightMapUV.zw;"));
-		Out.Log(TEXT("vLightMapCoords = (MapDot - LightMapPan) * LightMapMult;"));
-		Out.Log(TEXT("}"));
-
-		// Texture UV FogMap
-		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_FogMap, DF_FogMap);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec2 FogMapMult = FogMapUV.xy;"));
-		Out.Log(TEXT("vec2 FogMapPan = FogMapUV.zw;"));
-		Out.Log(TEXT("vFogMapCoords = (MapDot - FogMapPan) * FogMapMult;"));
-		Out.Log(TEXT("}"));
-
-		// Texture UV DetailTexture
-		if (GL->DetailTextures)
-		{
-			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_DetailTexture, DF_DetailTexture);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec2 DetailMult = DetailUV.xy;"));
-			Out.Log(TEXT("vec2 DetailPan = DetailUV.zw;"));
-			Out.Log(TEXT("vDetailTexCoords = (MapDot - DetailPan) * DetailMult;"));
-			Out.Log(TEXT("}"));
-		}
-
-		// Texture UV Macrotexture
-		if (GL->MacroTextures)
-		{
-			Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_MacroTexture, DF_MacroTexture);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec2 MacroMult = MacroUV.xy;"));
-			Out.Log(TEXT("vec2 MacroPan = MacroUV.zw;"));
-			Out.Log(TEXT("vMacroTexCoords = (MapDot - MacroPan) * MacroMult;"));
-			Out.Log(TEXT("}"));
-		}
-
-		// Texture UV EnvironmentMap
-#if ENGINE_VERSION==227
-		Out.Logf(TEXT("if ((vDrawFlags & %uu) == %uu)"), DF_EnvironmentMap, DF_EnvironmentMap);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec2 EnvironmentMapMult = EnviroMapUV.xy;"));
-		Out.Log(TEXT("vec2 EnvironmentMapPan = EnviroMapUV.zw;"));
-		Out.Log(TEXT("vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;"));
-		Out.Log(TEXT("}"));
-#endif
-
-#if ENGINE_VERSION!=227
-		if (GL->BumpMaps)
-#endif
-		{
-			Out.Log(TEXT("vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);"));
-			Out.Log(TEXT("vec3 EyeSpacePos = normalize(FrameCoords[0].xyz);")); // despite pretty perfect results (so far) this still seems somewhat wrong to me.
-			Out.Logf(TEXT("if ((vDrawFlags & %uu) != 0u)"), (DF_MacroTexture | DF_BumpMap));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec3 T = normalize(vec3(MapCoordsXAxis.x, MapCoordsXAxis.y, MapCoordsXAxis.z));"));
-			Out.Log(TEXT("vec3 B = normalize(vec3(MapCoordsYAxis.x, MapCoordsYAxis.y, MapCoordsYAxis.z));"));
-			Out.Log(TEXT("vec3 N = normalize(vec3(MapCoordsZAxis.x, MapCoordsZAxis.y, MapCoordsZAxis.z));")); //SurfNormals.
-
-			// TBN must have right handed coord system.
-			//if (dot(cross(N, T), B) < 0.0)
-			//   T = T * -1.0;
-			Out.Log(TEXT("vTBNMat = transpose(mat3(T, B, N));"));
-
-			Out.Log(TEXT("vTangentViewPos = vTBNMat * EyeSpacePos.xyz;"));
-			Out.Log(TEXT("vTangentFragPos = vTBNMat * Coords.xyz;"));
-			Out.Log(TEXT("}"));
-		}
 		if (GIsEditor)
-			Out.Log(TEXT("vSurfaceNormal = MapCoordsZAxis;"));
-
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);"));
-
-		if (GL->SupportsClipDistance)
 		{
-			Out.Log(TEXT("uint ClipIndex = uint(ClipParams.x);"));
-			Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords.xyz);"));
+			Out << R"(
+  vRendMap = DrawComplexParams[gl_DrawID].DrawFlags[3];
+  vHitTesting = DrawComplexParams[gl_DrawID].TexNum[3].x;
+  vDrawColor = DrawComplexParams[gl_DrawID].DrawColor;
+)";
 		}
-		Out.Log(TEXT("}"));
+
+		Out << R"(
+  vTexNum = DrawComplexParams[gl_DrawID].TexNum[0].x;
+  vLightMapTexNum = DrawComplexParams[gl_DrawID].TexNum[0].y;
+  vFogMapTexNum = DrawComplexParams[gl_DrawID].TexNum[0].z;
+  vDetailTexNum = DrawComplexParams[gl_DrawID].TexNum[0].w;
+  vMacroTexNum = DrawComplexParams[gl_DrawID].TexNum[1].x;
+  vBumpMapTexNum = DrawComplexParams[gl_DrawID].TexNum[1].y;
+  vEnviroMapTexNum = DrawComplexParams[gl_DrawID].TexNum[1].z;
+  vHeightMapTexNum = DrawComplexParams[gl_DrawID].TexNum[1].w;
+  vBaseDiffuse = DrawComplexParams[gl_DrawID].DiffuseInfo.x;
+  vBaseAlpha = DrawComplexParams[gl_DrawID].DiffuseInfo.z;
+  vBumpMapSpecular = DrawComplexParams[gl_DrawID].BumpMapInfo.y;
+  vParallaxScale = DrawComplexParams[gl_DrawID].HeightMapInfo.z * 0.025;
+  vTimeSeconds = DrawComplexParams[gl_DrawID].HeightMapInfo.w;
+  vGamma = ZAxis.w;
+  vDistanceFogColor = DrawComplexParams[gl_DrawID].DistanceFogColor;
+  vDistanceFogInfo = DrawComplexParams[gl_DrawID].DistanceFogInfo;
+)";
 	}
-#else
+	else
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);"));
-
-		// Point Coords
-		Out.Log(TEXT("vCoords = Coords.xyz;"));
-
-		Out.Log(TEXT("vTexCoords = vec2(0.0, 0.0);"));
-#if BINDLESSTEXTURES
-		//	BaseTexNum = uint(TexNums0.x);
-#endif
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);"));
-		Out.Log(TEXT("}"));
+		Out << "  vec4 XAxis = TexCoords[" << UXOpenGLRenderDevice::DCDD_X_AXIS << "];" END_LINE;
+		Out << "  vec4 YAxis = TexCoords[" << UXOpenGLRenderDevice::DCDD_Y_AXIS << "];" END_LINE;
+		Out << "  vec4 ZAxis = TexCoords[" << UXOpenGLRenderDevice::DCDD_Z_AXIS << "];" END_LINE;
+		Out << "  vec4 DiffuseUV = TexCoords[" << UXOpenGLRenderDevice::DCDD_DIFFUSE_COORDS << "];" END_LINE;
+		Out << "  vec4 LightMapUV = TexCoords[" << UXOpenGLRenderDevice::DCDD_LIGHTMAP_COORDS << "];" END_LINE;
+		Out << "  vec4 FogMapUV = TexCoords[" << UXOpenGLRenderDevice::DCDD_FOGMAP_COORDS << "];" END_LINE;
+		Out << "  vec4 DetailUV = TexCoords[" << UXOpenGLRenderDevice::DCDD_DETAIL_COORDS << "];" END_LINE;
+		Out << "  vec4 MacroUV = TexCoords[" << UXOpenGLRenderDevice::DCDD_MACRO_COORDS << "];" END_LINE;
+		Out << "  vec4 EnviroMapUV = TexCoords[" << UXOpenGLRenderDevice::DCDD_ENVIROMAP_COORDS << "];" END_LINE;
+		Out << "  uint vDrawFlags = DrawFlags[0];" END_LINE;
 	}
+
+	Out << R"(
+  // Point Coords
+  vCoords = Coords.xyz;
+
+  // UDot/VDot calculation.
+  vec3 MapCoordsXAxis = XAxis.xyz;
+  vec3 MapCoordsYAxis = YAxis.xyz;
+)";
+
+#if ENGINE_VERSION!=227
+	if (GIsEditor || GL->BumpMaps)
+#endif
+	{
+		Out << "  vec3 MapCoordsZAxis = ZAxis.xyz;" END_LINE;
+	}
+
+	Out << R"(
+  float UDot = XAxis.w;
+  float VDot = YAxis.w;
+  
+  float MapDotU = dot(MapCoordsXAxis, Coords.xyz) - UDot;
+  float MapDotV = dot(MapCoordsYAxis, Coords.xyz) - VDot;
+  vec2  MapDot = vec2(MapDotU, MapDotV);
+
+  // Texture UV to fragment
+  vec2 TexMapMult = DiffuseUV.xy;
+  vec2 TexMapPan = DiffuseUV.zw;
+  vTexCoords = (MapDot - TexMapPan) * TexMapMult;
+
+  // Texture UV Lightmap to fragment
+  if ((vDrawFlags & )" << DF_LightMap << R"(u) == )" << DF_LightMap << R"(u)
+  {
+    vec2 LightMapMult = LightMapUV.xy;
+    vec2 LightMapPan = LightMapUV.zw;
+    vLightMapCoords = (MapDot - LightMapPan) * LightMapMult;
+  }
+
+  // Texture UV FogMap
+  if ((vDrawFlags & )" << DF_FogMap << R"(u) == )" << DF_FogMap << R"(u)
+  {
+    vec2 FogMapMult = FogMapUV.xy;
+    vec2 FogMapPan = FogMapUV.zw;
+    vFogMapCoords = (MapDot - FogMapPan) * FogMapMult;
+  }
+)";
+	
+	// Texture UV DetailTexture
+	if (GL->DetailTextures)
+	{
+		Out << R"(
+  if ((vDrawFlags & )" << DF_DetailTexture << R"(u) == )" << DF_DetailTexture << R"(u)
+  {
+    vec2 DetailMult = DetailUV.xy;
+    vec2 DetailPan = DetailUV.zw;
+    vDetailTexCoords = (MapDot - DetailPan) * DetailMult;
+  }
+)";
+	}
+
+	// Texture UV Macrotexture
+	if (GL->MacroTextures)
+	{
+		Out << R"(
+  if ((vDrawFlags & )" << DF_MacroTexture << R"(u) == )" << DF_MacroTexture << R"(u)
+  {
+    vec2 MacroMult = MacroUV.xy;
+    vec2 MacroPan = MacroUV.zw;
+    vMacroTexCoords = (MapDot - MacroPan) * MacroMult;
+  }
+)";
+	}
+
+	// Texture UV EnvironmentMap
+#if ENGINE_VERSION==227
+	Out << R"(
+  if ((vDrawFlags & )" << DF_EnvironmentMap << R"(u) == )" << DF_EnvironmentMap << R"(u)
+  {
+    vec2 EnvironmentMapMult = EnviroMapUV.xy;
+    vec2 EnvironmentMapPan = EnviroMapUV.zw;
+    vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;
+  }
+)";
+#endif
+
+#if ENGINE_VERSION!=227
+	if (GL->BumpMaps)
+#endif
+	{
+		Out << R"(
+  vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);
+  vec3 EyeSpacePos = normalize(FrameCoords[0].xyz); // despite pretty perfect results (so far) this still seems somewhat wrong to me.
+  if ((vDrawFlags & )" << static_cast<INT>(DF_MacroTexture | DF_BumpMap) << R"(u) != 0u)
+  {
+    vec3 T = normalize(vec3(MapCoordsXAxis.x, MapCoordsXAxis.y, MapCoordsXAxis.z));
+    vec3 B = normalize(vec3(MapCoordsYAxis.x, MapCoordsYAxis.y, MapCoordsYAxis.z));
+    vec3 N = normalize(vec3(MapCoordsZAxis.x, MapCoordsZAxis.y, MapCoordsZAxis.z)); //SurfNormals.
+
+    // TBN must have right handed coord system.
+    //if (dot(cross(N, T), B) < 0.0)
+    //   T = T * -1.0;
+    vTBNMat = transpose(mat3(T, B, N));
+    
+    vTangentViewPos = vTBNMat * EyeSpacePos.xyz;
+    vTangentFragPos = vTBNMat * Coords.xyz;
+  }
+)";
+		
+	}
+	if (GIsEditor)
+		Out << "  vSurfaceNormal = MapCoordsZAxis;" END_LINE;
+
+	Out << "  gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);" END_LINE;
+
+	if (GL->SupportsClipDistance)
+	{
+		Out << "  uint ClipIndex = uint(ClipParams.x);" END_LINE;
+		Out << "  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords.xyz);" END_LINE;
+	}
+	Out << "}" END_LINE;
+	
+#else
+
+	Out << R"(
+void main(void)
+{
+  vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);"));
+
+  // Point Coords
+  vCoords = Coords.xyz;
+  vTexCoords = vec2(0.0, 0.0);
+#if BINDLESSTEXTURES
+  // BaseTexNum = uint(TexNums0.x);
+#endif
+  gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);
+}
+)";
+	
 #endif
 }
 
 // Fragmentshader for DrawGouraudPolygon, in 227 also DrawGouraudPolygonList.
-static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("uniform sampler2D Texture0;")); // Base Texture
-	Out.Log(TEXT("uniform sampler2D Texture1;")); // DetailTexture
-	Out.Log(TEXT("uniform sampler2D Texture2;")); // BumpMap
-	Out.Log(TEXT("uniform sampler2D Texture3;")); // MacroTex
+	Out << R"(
+uniform sampler2D Texture0; // Base Texture
+uniform sampler2D Texture1; // DetailTexture
+uniform sampler2D Texture2; // BumpMap
+uniform sampler2D Texture3; // MacroTex
 
-	Out.Log(TEXT("in vec3 gCoords;"));
-	Out.Log(TEXT("in vec2 gTexCoords;")); // TexCoords
-	Out.Log(TEXT("in vec2 gDetailTexCoords;"));
-	Out.Log(TEXT("in vec2 gMacroTexCoords;"));
-	Out.Log(TEXT("in vec4 gNormals;"));
-	Out.Log(TEXT("in vec4 gEyeSpacePos;"));
-	Out.Log(TEXT("in vec4 gLightColor;"));
-	Out.Log(TEXT("in vec4 gFogColor;")); //VertexFog
+in vec3 gCoords;
+in vec2 gTexCoords; // TexCoords
+in vec2 gDetailTexCoords;
+in vec2 gMacroTexCoords;
+in vec4 gNormals;
+in vec4 gEyeSpacePos;
+in vec4 gLightColor;
+in vec4 gFogColor; //VertexFog
 
-	Out.Log(TEXT("flat in vec3 gTextureInfo;")); // diffuse, alpha, bumpmap specular
-	Out.Log(TEXT("flat in uint gTexNum;"));
-	Out.Log(TEXT("flat in uint gDetailTexNum;"));
-	Out.Log(TEXT("flat in uint gBumpTexNum;"));
-	Out.Log(TEXT("flat in uint gMacroTexNum;"));
-	Out.Log(TEXT("flat in uint gDrawFlags;"));
-	Out.Log(TEXT("flat in uint gTextureFormat;"));
-	Out.Log(TEXT("flat in uint gPolyFlags;"));
-	Out.Log(TEXT("flat in float gGamma;"));
-	Out.Log(TEXT("flat in vec4 gDistanceFogColor;"));
-	Out.Log(TEXT("flat in vec4 gDistanceFogInfo;"));
-	Out.Log(TEXT("in vec3 gTangentViewPos;"));
-	Out.Log(TEXT("in vec3 gTangentFragPos;"));
-	Out.Log(TEXT("in mat3 gTBNMat;"));
+flat in vec3 gTextureInfo; // diffuse, alpha, bumpmap specular
+flat in uint gTexNum;
+flat in uint gDetailTexNum;
+flat in uint gBumpTexNum;
+flat in uint gMacroTexNum;
+flat in uint gDrawFlags;
+flat in uint gTextureFormat;
+flat in uint gPolyFlags;
+flat in float gGamma;
+flat in vec4 gDistanceFogColor;
+flat in vec4 gDistanceFogInfo;
+in vec3 gTangentViewPos;
+in vec3 gTangentFragPos;
+in mat3 gTBNMat;
+)";
 
 	if (GIsEditor)
 	{
-		Out.Log(TEXT("flat in vec4 gDrawColor;"));
-		Out.Log(TEXT("flat in uint gRendMap;"));
-		Out.Log(TEXT("flat in uint gHitTesting;"));
+		Out << R"(
+flat in vec4 gDrawColor;
+flat in uint gRendMap;
+flat in uint gHitTesting;
+)";
 	}
 	if (GL->OpenGLVersion == GL_ES)
 	{
-		Out.Log(TEXT("layout(location = 0) out vec4 FragColor;"));
+		Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 1) out vec4 FragColor1;"));
+			Out << "layout(location = 1) out vec4 FragColor1;" END_LINE;
 	}
 	else
 	{
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 0, index = 1) out vec4 FragColor1;"));
-		Out.Log(TEXT("layout(location = 0, index = 0) out vec4 FragColor;"));
+			Out << "layout(location = 0, index = 1) out vec4 FragColor1;" END_LINE;
+		Out << "layout(location = 0, index = 0) out vec4 FragColor;" END_LINE;
 	}
 
-	{
-		Out.Log(TEXT("vec3 rgb2hsv(vec3 c)"));
-		Out.Log(TEXT("{"));
-		// some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
-		Out.Log(TEXT("vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);"));
-		Out.Log(TEXT("vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);"));
-		Out.Log(TEXT("vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);"));
+	Out << R"(
+vec3 rgb2hsv(vec3 c)
+{
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0); // some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
+  vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);
+  vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
 
-		Out.Log(TEXT("float d = q.x - min(q.w, q.y);"));
-		Out.Log(TEXT("float e = 1.0e-10;"));
-		Out.Log(TEXT("return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);"));
-		Out.Log(TEXT("}"));
+vec3 hsv2rgb(vec3 c)
+{
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+)";
+
+	Out << R"(
+void main(void)
+{
+  mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
+  mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
+  vec4 TotalColor = vec4(0.0, 0.0, 0.0, 0.0);
+
+  int NumLights = int(LightData4[0].y);
+  vec4 Color = GetTexel(uint(gTexNum), Texture0, gTexCoords);
+
+  if (gTextureInfo.x > 0.0)
+    Color *= gTextureInfo.x; // Diffuse factor.
+  if (gTextureInfo.y > 0.0)
+    Color.a *= gTextureInfo.y; // Alpha.
+  if (gTextureFormat == )" << TEXF_BC5 << R"(u) // BC5 (GL_COMPRESSED_RG_RGTC2) compression
+    Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);
+
+  if ((gPolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u)
+  {
+    Color.a *= gLightColor.a; // Alpha.
+    if (Color.a < 0.01)
+      discard;
+  }
+  // Handle PF_Masked.
+  else if ((gPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
+  {
+    if (Color.a < 0.5)
+      discard;
+    else Color.rgb /= Color.a;
+  }
+
+  vec4 LightColor;
+)";
+
+	if (GL->UseHWLighting)
+	{
+		constexpr FLOAT MinLight = 0.025;
+		Out << R"(
+  float LightAdd = 0.0f;
+  vec4 TotalAdd = vec4(0.0, 0.0, 0.0, 0.0);
+
+  for (int i = 0; i < NumLights; i++)
+  {
+    float WorldLightRadius = LightData4[i].x;
+    float LightRadius = LightData2[i].w;
+    float RWorldLightRadius = WorldLightRadius * WorldLightRadius;
+
+    vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords); // Frame->Coords.
+    float dist = distance(gCoords, InLightPos);
+
+    if (dist < RWorldLightRadius)
+    {
+      // Light color
+      vec3 RGBColor = vec3(LightData1[i].x, LightData1[i].y, LightData1[i].z);
+      float b = WorldLightRadius / (RWorldLightRadius * )" << MinLight << R"();
+      float attenuation = WorldLightRadius / (dist + b * dist * dist);
+      //float attenuation = 0.82*(1.0-smoothstep(LightRadius,24.0*LightRadius+0.50,dist));
+      TotalAdd += (vec4(RGBColor, 1.0) * attenuation);
+    }
+  }
+  LightColor = TotalAdd;
+)";
 	}
-	{
-		Out.Log(TEXT("vec3 hsv2rgb(vec3 c)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);"));
-		Out.Log(TEXT("vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);"));
-		Out.Log(TEXT("return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);"));
-		Out.Log(TEXT("}"));
+	else Out << "  LightColor = gLightColor;" END_LINE;
+
+	Out << R"(
+  // Handle PF_RenderFog.
+  if ((gPolyFlags & )" << PF_RenderFog << R"(u) == )" << PF_RenderFog << R"(u)
+  {
+    // Handle PF_RenderFog|PF_Modulated.
+    if ((gPolyFlags & )" << PF_Modulated << R"(u) == )" << PF_Modulated << R"(u)
+    {
+      // Compute delta to modulation identity.
+      vec3 Delta = vec3(0.5) - Color.xyz;
+      // Reduce delta by (squared) fog intensity.
+      //Delta *= 1.0 - sqrt(gFogColor.a);
+      Delta *= 1.0 - gFogColor.a;
+      Delta *= vec3(1.0) - gFogColor.rgb;
+
+      TotalColor = vec4(vec3(0.5) - Delta, Color.a);
+    }
+    else // Normal.
+    {
+      Color *= LightColor;
+      //TotalColor=mix(Color, vec4(gFogColor.xyz,1.0), gFogColor.w);
+      TotalColor.rgb = Color.rgb * (1.0 - gFogColor.a) + gFogColor.rgb;
+      TotalColor.a = Color.a;
 	}
+  }
+  else if ((gPolyFlags & )" << PF_Modulated << R"(u) == )" << PF_Modulated << R"(u) // No Fog.
+  {
+    TotalColor = Color;
+  }
+  else
+  {
+    TotalColor = Color * vec4(LightColor.rgb, 1.0);
+  }
+)";
+
+	if (GL->DetailTextures)
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz);")); // TransformPointBy...
-		Out.Log(TEXT("mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);"));
-		Out.Log(TEXT("vec4 TotalColor = vec4(0.0, 0.0, 0.0, 0.0);"));
+		Out << R"(
+  if ((gDrawFlags & )" << DF_DetailTexture << R"(u) == )" << DF_DetailTexture << R"(u)
+  {
+    float NearZ = gCoords.z / 512.0;
+    float DetailScale = 1.0;
+    float bNear;
+    vec4 DetailTexColor;
+    vec3 hsvDetailTex;
 
-		Out.Log(TEXT("int NumLights = int(LightData4[0].y);"));
-		Out.Log(TEXT("vec4 Color = GetTexel(uint(gTexNum), Texture0, gTexCoords);"));
+    for (int i = 0; i < )" << GL->DetailMax << R"(; ++i)
+    {
+      if (i > 0)
+      {
+        NearZ *= 4.223f;
+        DetailScale *= 4.223f;
+      }
+      bNear = clamp(0.65 - NearZ, 0.0, 1.0);
+      if (bNear > 0.0)
+      {
+        DetailTexColor = GetTexel(gDetailTexNum, Texture1, gDetailTexCoords * DetailScale);
 
-		Out.Log(TEXT("if (gTextureInfo.x > 0.0)"));
-		Out.Log(TEXT("Color *= gTextureInfo.x;")); // Diffuse factor.
-		Out.Log(TEXT("if (gTextureInfo.y > 0.0)"));
-		Out.Log(TEXT("Color.a *= gTextureInfo.y;")); // Alpha.
-		Out.Logf(TEXT("if (gTextureFormat == %uu)"), TEXF_BC5); // BC5 (GL_COMPRESSED_RG_RGTC2) compression
-		Out.Log(TEXT("Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);"));
-
-		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_AlphaBlend, PF_AlphaBlend);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("Color.a *= gLightColor.a;")); // Alpha.
-		Out.Log(TEXT("if (Color.a < 0.01)"));
-		Out.Log(TEXT("discard;"));
-		Out.Log(TEXT("}"));
-
-		// Handle PF_Masked.
-		Out.Logf(TEXT("else if ((gPolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if (Color.a < 0.5)"));
-		Out.Log(TEXT("discard;"));
-		Out.Log(TEXT("else Color.rgb /= Color.a;"));
-		Out.Log(TEXT("}"));
-
-		Out.Log(TEXT("vec4 LightColor;"));
-
-		if (GL->UseHWLighting)
-		{
-			Out.Log(TEXT("float LightAdd = 0.0f;"));
-			Out.Log(TEXT("vec4 TotalAdd = vec4(0.0, 0.0, 0.0, 0.0);"));
-
-			Out.Log(TEXT("for (int i = 0; i < NumLights; i++)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("float WorldLightRadius = LightData4[i].x;"));
-			Out.Log(TEXT("float LightRadius = LightData2[i].w;"));
-			Out.Log(TEXT("float RWorldLightRadius = WorldLightRadius * WorldLightRadius;"));
-
-			Out.Log(TEXT("vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords);")); // Frame->Coords.
-			Out.Log(TEXT("float dist = distance(gCoords, InLightPos);"));
-
-			Out.Log(TEXT("if (dist < RWorldLightRadius)"));
-			Out.Log(TEXT("{"));
-			// Light color
-			Out.Log(TEXT("vec3 RGBColor = vec3(LightData1[i].x, LightData1[i].y, LightData1[i].z);"));
-			constexpr FLOAT MinLight = 0.025;
-			Out.Logf(TEXT("float b = WorldLightRadius / (RWorldLightRadius * %f);"), MinLight);
-			Out.Log(TEXT("float attenuation = WorldLightRadius / (dist + b * dist * dist);"));
-			//float attenuation = 0.82*(1.0-smoothstep(LightRadius,24.0*LightRadius+0.50,dist));
-			Out.Log(TEXT("TotalAdd += (vec4(RGBColor, 1.0) * attenuation);"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("LightColor = TotalAdd;"));
-		}
-		else Out.Log(TEXT("LightColor = gLightColor;"));
-
-		// Handle PF_RenderFog.
-		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_RenderFog, PF_RenderFog);
-		Out.Log(TEXT("{"));
-		// Handle PF_RenderFog|PF_Modulated.
-		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("{"));
-		// Compute delta to modulation identity.
-		Out.Log(TEXT("vec3 Delta = vec3(0.5) - Color.xyz;"));
-		// Reduce delta by (squared) fog intensity.
-		//Delta *= 1.0 - sqrt(gFogColor.a);
-		Out.Log(TEXT("Delta *= 1.0 - gFogColor.a;"));
-		Out.Log(TEXT("Delta *= vec3(1.0) - gFogColor.rgb;"));
-
-		Out.Log(TEXT("TotalColor = vec4(vec3(0.5) - Delta, Color.a);"));
-		Out.Log(TEXT("}"));
-		Out.Log(TEXT("else")); // Normal.
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("Color *= LightColor;"));
-		//TotalColor=mix(Color, vec4(gFogColor.xyz,1.0), gFogColor.w);
-		Out.Log(TEXT("TotalColor.rgb = Color.rgb * (1.0 - gFogColor.a) + gFogColor.rgb;"));
-		Out.Log(TEXT("TotalColor.a = Color.a;"));
-		Out.Log(TEXT("}"));
-		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((gPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated); // No Fog.
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("TotalColor = Color;"));
-		Out.Log(TEXT("}"));
-		Out.Log(TEXT("else"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("TotalColor = Color * vec4(LightColor.rgb, 1.0);"));
-		Out.Log(TEXT("}"));
-
-		if (GL->DetailTextures)
-		{
-			Out.Logf(TEXT("if (((gDrawFlags & %uu) == %uu))"), DF_DetailTexture, DF_DetailTexture);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("float NearZ = gCoords.z / 512.0;"));
-			Out.Log(TEXT("float DetailScale = 1.0;"));
-			Out.Log(TEXT("float bNear;"));
-			Out.Log(TEXT("vec4 DetailTexColor;"));
-			Out.Log(TEXT("vec3 hsvDetailTex;"));
-
-			Out.Logf(TEXT("for (int i = 0; i < %i; ++i)"), GL->DetailMax);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("if (i > 0)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("NearZ *= 4.223f;"));
-			Out.Log(TEXT("DetailScale *= 4.223f;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("bNear = clamp(0.65 - NearZ, 0.0, 1.0);"));
-			Out.Log(TEXT("if (bNear > 0.0)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("DetailTexColor = GetTexel(gDetailTexNum, Texture1, gDetailTexCoords * DetailScale);"));
-
-			Out.Log(TEXT("vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb);")); // cool idea Han :)
-			Out.Log(TEXT("hsvDetailTex.b += (DetailTexColor.r - 0.1);"));
-			Out.Log(TEXT("hsvDetailTex = hsv2rgb(hsvDetailTex);"));
-			Out.Log(TEXT("DetailTexColor = vec4(hsvDetailTex, 0.0);"));
-			Out.Log(TEXT("DetailTexColor = mix(vec4(1.0, 1.0, 1.0, 1.0), DetailTexColor, bNear);")); //fading out.
-			Out.Log(TEXT("TotalColor.rgb *= DetailTexColor.rgb;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-		}
-		if (GL->MacroTextures)
-		{
-			Out.Logf(TEXT("if ((gDrawFlags & %uu) == %uu && (gDrawFlags & %uu) != %uu)"), DF_MacroTexture, DF_MacroTexture, DF_BumpMap, DF_BumpMap);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec4 MacroTexColor = GetTexel(gMacroTexNum, Texture3, gMacroTexCoords);"));
-			Out.Log(TEXT("vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);"));
-			Out.Log(TEXT("hsvMacroTex.b += (MacroTexColor.r - 0.1);"));
-			Out.Log(TEXT("hsvMacroTex = hsv2rgb(hsvMacroTex);"));
-			Out.Log(TEXT("MacroTexColor = vec4(hsvMacroTex, 1.0);"));
-			Out.Log(TEXT("TotalColor *= MacroTexColor;"));
-			Out.Log(TEXT("}"));
-		}
-		if (GL->BumpMaps)
-		{
-			// BumpMap
-			Out.Logf(TEXT("if ((gDrawFlags & %uu) == %uu)"), DF_BumpMap, DF_BumpMap);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec3 TangentViewDir = normalize(gTangentViewPos - gTangentFragPos);"));
-			//normal from normal map
-			Out.Log(TEXT("vec3 TextureNormal = GetTexel(gBumpTexNum, Texture2, gTexCoords).rgb * 2.0 - 1.0;"));
-			Out.Log(TEXT("vec3 BumpColor;"));
-			Out.Log(TEXT("vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);"));
-
-			Out.Log(TEXT("for (int i = 0; i < NumLights; ++i)"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec3 CurrentLightColor = vec3(LightData1[i].x, LightData1[i].y, LightData1[i].z);"));
-
-			Out.Log(TEXT("float NormalLightRadius = LightData5[i].x;"));
-			Out.Log(TEXT("bool bZoneNormalLight = bool(LightData5[i].y);"));
-			Out.Log(TEXT("float LightBrightness = LightData5[i].z / 255.0;"));
-			Out.Log(TEXT("if (NormalLightRadius == 0.0)"));
-			Out.Log(TEXT("NormalLightRadius = LightData2[i].w * 64.0;"));
-#if ENGINE_VERSION==227
-			Out.Logf(TEXT("bool bSunlight = (uint(LightData2[i].x) == %uu);"), LE_Sunlight);
+		vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
+        hsvDetailTex.b += (DetailTexColor.r - 0.1);
+        hsvDetailTex = hsv2rgb(hsvDetailTex);
+        DetailTexColor = vec4(hsvDetailTex, 0.0);
+        DetailTexColor = mix(vec4(1.0, 1.0, 1.0, 1.0), DetailTexColor, bNear); //fading out.
+        TotalColor.rgb *= DetailTexColor.rgb;
+      }
+    }
+  }     
+)";
+	}
+	
+	if (GL->MacroTextures)
+	{
+		Out << R"(
+  if ((gDrawFlags & )" << DF_MacroTexture << R"(u) == )" << DF_MacroTexture << R"(u && (gDrawFlags & )" << DF_BumpMap << R"(u) != )" << DF_BumpMap << R"(u)
+  {
+    vec4 MacroTexColor = GetTexel(gMacroTexNum, Texture3, gMacroTexCoords);
+    vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);
+    hsvMacroTex.b += (MacroTexColor.r - 0.1);
+    hsvMacroTex = hsv2rgb(hsvMacroTex);
+    MacroTexColor = vec4(hsvMacroTex, 1.0);
+    TotalColor *= MacroTexColor;
+  }
+)";
+	}
+	
+	if (GL->BumpMaps)
+	{
+		constexpr FLOAT MinLight = 0.05;
+#if ENGINE_VERSION == 227
+		FString Sunlight = FString::Printf(TEXT("bool bSunlight = (uint(LightData2[i].x == %du));"), LE_Sunlight);
 #else
-			Out.Log(TEXT("bool bSunlight = false;"));
-#endif
-			Out.Log(TEXT("vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords);")); // Frame->Coords.
-			Out.Log(TEXT("float dist = distance(gCoords, InLightPos);"));
-
-			constexpr FLOAT MinLight = 0.05;
-			Out.Logf(TEXT("float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * %f);"), MinLight);
-			Out.Log(TEXT("float attenuation = NormalLightRadius / (dist + b * dist * dist);"));
-			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Unlit, PF_Unlit);
-			Out.Log(TEXT("InLightPos = vec3(1.0, 1.0, 1.0);")); // no idea whats best here. Arbitrary value based on some tests.
-
-			Out.Log(TEXT("if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight)")); // Do not consider if not in range or in a different zone.
-			Out.Log(TEXT("continue;"));
-
-			Out.Log(TEXT("vec3 TangentLightPos = gTBNMat * InLightPos;"));
-			Out.Log(TEXT("vec3 TangentlightDir = normalize(TangentLightPos - gTangentFragPos);"));
-			// ambient
-			Out.Log(TEXT("vec3 ambient = 0.1 * TotalColor.xyz;"));
-			// diffuse
-			Out.Log(TEXT("float diff = max(dot(TangentlightDir, TextureNormal), 0.0);"));
-			Out.Log(TEXT("vec3 diffuse = diff * TotalColor.xyz;"));
-			// specular
-			Out.Log(TEXT("vec3 halfwayDir = normalize(TangentlightDir + TangentViewDir);"));
-			Out.Log(TEXT("float spec = pow(max(dot(TextureNormal, halfwayDir), 0.0), 8.0);"));
-			Out.Log(TEXT("vec3 specular = vec3(0.01) * spec * CurrentLightColor * LightBrightness;"));
-			Out.Log(TEXT("TotalBumpColor += (ambient + diffuse + specular) * attenuation;"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);"));
-			Out.Log(TEXT("}"));
-		}
-		Out.Logf(TEXT("if ((gPolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("{"));
-		// Gamma
-		Out.Logf(TEXT("float InGamma = 1.0 / (gGamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier);
-		Out.Log(TEXT("TotalColor.r = pow(TotalColor.r, InGamma);"));
-		Out.Log(TEXT("TotalColor.g = pow(TotalColor.g, InGamma);"));
-		Out.Log(TEXT("TotalColor.b = pow(TotalColor.b, InGamma);"));
-		Out.Log(TEXT("}"));
-
-#if ENGINE_VERSION==227
-		// Add DistanceFog
-		Out.Log(TEXT("if (gDistanceFogInfo.w >= 0.0)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("FogParameters DistanceFogParams;"));
-		Out.Log(TEXT("DistanceFogParams.FogStart = gDistanceFogInfo.x;"));
-		Out.Log(TEXT("DistanceFogParams.FogEnd = gDistanceFogInfo.y;"));
-		Out.Log(TEXT("DistanceFogParams.FogDensity = gDistanceFogInfo.z;"));
-		Out.Log(TEXT("DistanceFogParams.FogMode = int(gDistanceFogInfo.w);"));
-
-		Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);"));
-		Out.Logf(TEXT("else if ((gPolyFlags & %uu) == %uu && (gPolyFlags & %uu) != %uu)"), PF_Translucent, PF_Translucent, PF_Environment, PF_Environment);
-		Out.Log(TEXT("DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);"));
-		Out.Log(TEXT("else DistanceFogParams.FogColor = gDistanceFogColor;"));
-
-		Out.Log(TEXT("DistanceFogParams.FogCoord = abs(gEyeSpacePos.z / gEyeSpacePos.w);"));
-		Out.Log(TEXT("TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));"));
-		Out.Log(TEXT("}"));
+		FString Sunlight = TEXT("bool bSunlight = false;");
 #endif
 
-		if (GIsEditor)
-		{
-			// Editor support.
-			Out.Logf(TEXT("if (gRendMap == %uu || gRendMap == %uu || gRendMap == %uu)"), REN_Zones, REN_PolyCuts, REN_Polys);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor += 0.5;"));
-			Out.Log(TEXT("TotalColor *= gDrawColor;"));
-			Out.Log(TEXT("}"));
-#if ENGINE_VERSION==227
-			Out.Logf(TEXT("else if (gRendMap == %uu)"), REN_Normals);
-			Out.Log(TEXT("{"));
-			// Dot.
-			Out.Log(TEXT("float T = 0.5 * dot(normalize(gCoords), gNormals.xyz);"));
-			// Selected.
-			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor = vec4(0.0, 0.0, abs(T), 1.0);"));
-			Out.Log(TEXT("}"));
-			// Normal.
-			Out.Log(TEXT("else"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);"));
-			Out.Log(TEXT("}"));
-			Out.Log(TEXT("}"));
-#endif
-			Out.Logf(TEXT("else if (gRendMap == %uu)"), REN_PlainTex);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor = Color;"));
-			Out.Log(TEXT("}"));
+		Out << R"(
+  if ((gDrawFlags & )" << DF_BumpMap << R"(u) == )" << DF_BumpMap << R"(u)
+  {
+    vec3 TangentViewDir = normalize(gTangentViewPos - gTangentFragPos);
+    //normal from normal map
+    vec3 TextureNormal = GetTexel(gBumpTexNum, Texture2, gTexCoords).rgb * 2.0 - 1.0;
+    vec3 BumpColor;
+    vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 
-#if ENGINE_VERSION==227
-			Out.Logf(TEXT("if ((gRendMap != %uu) && ((gPolyFlags & %uu) == %uu))"), REN_Normals, PF_Selected, PF_Selected);
-#else
-			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
-#endif
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor.r = (TotalColor.r * 0.75);"));
-			Out.Log(TEXT("TotalColor.g = (TotalColor.g * 0.75);"));
-			Out.Log(TEXT("TotalColor.b = (TotalColor.b * 0.75) + 0.1;"));
-			Out.Log(TEXT("TotalColor = clamp(TotalColor, 0.0, 1.0);"));
-			Out.Log(TEXT("if (TotalColor.a < 0.5)"));
-			Out.Log(TEXT("TotalColor.a = 0.51;"));
-			Out.Log(TEXT("}"));
-			// HitSelection, Zoneview etc.
-			Out.Log(TEXT("if (bool(gHitTesting))"));
-			Out.Log(TEXT("TotalColor = gDrawColor;")); // Use DrawColor.
+    for (int i = 0; i < NumLights; ++i)
+    {
+      vec3 CurrentLightColor = vec3(LightData1[i].x, LightData1[i].y, LightData1[i].z);
 
-			Out.Logf(TEXT("if ((gPolyFlags & %uu) == %uu && gDrawColor.a > 0.0)"), PF_AlphaBlend, PF_AlphaBlend);
-			Out.Log(TEXT("TotalColor.a *= gDrawColor.a;"));
-		}
-		if (GL->SimulateMultiPass)
-		{
-			Out.Log(TEXT("FragColor = TotalColor;"));
-			Out.Log(TEXT("FragColor1 = ((vec4(1.0) - TotalColor * LightColor));")); //no, this is not entirely right, TotalColor has already LightColor applied. But will blow any fog/transparency otherwise. However should not make any (visual) difference here for this equation. Any better idea?
-		}
-		else Out.Log(TEXT("FragColor = TotalColor;"));
-		Out.Log(TEXT("}"));
+      float NormalLightRadius = LightData5[i].x;
+      bool bZoneNormalLight = bool(LightData5[i].y);
+      float LightBrightness = LightData5[i].z / 255.0;
+      if (NormalLightRadius == 0.0)
+        NormalLightRadius = LightData2[i].w * 64.0;
+
+      )" << appToAnsi(*Sunlight) << R"(
+			
+      vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords); // Frame->Coords.
+      float dist = distance(gCoords, InLightPos);
+      float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * )" << MinLight << R"();
+      float attenuation = NormalLightRadius / (dist + b * dist * dist);
+      
+      if ((gPolyFlags & )" << PF_Unlit << R"(u) == )" << PF_Unlit << R"(u)
+        InLightPos = vec3(1.0, 1.0, 1.0); // no idea whats best here. Arbitrary value based on some tests.
+
+      if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight) // Do not consider if not in range or in a different zone.
+        continue;
+
+      vec3 TangentLightPos = gTBNMat * InLightPos;
+      vec3 TangentlightDir = normalize(TangentLightPos - gTangentFragPos);
+      // ambient
+      vec3 ambient = 0.1 * TotalColor.xyz;
+      // diffuse
+      float diff = max(dot(TangentlightDir, TextureNormal), 0.0);
+      vec3 diffuse = diff * TotalColor.xyz;
+      // specular
+      vec3 halfwayDir = normalize(TangentlightDir + TangentViewDir);
+      float spec = pow(max(dot(TextureNormal, halfwayDir), 0.0), 8.0);
+      vec3 specular = vec3(0.01) * spec * CurrentLightColor * LightBrightness;
+      TotalBumpColor += (ambient + diffuse + specular) * attenuation;
+    }
+    TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);
+  }
+)";
 	}
+	
+	Out << R"(
+  if ((gPolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+  {
+    // Gamma
+    float InGamma = 1.0 / (gGamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
+    TotalColor.r = pow(TotalColor.r, InGamma);
+    TotalColor.g = pow(TotalColor.g, InGamma);
+    TotalColor.b = pow(TotalColor.b, InGamma);
+  }
+)";
+
+#if ENGINE_VERSION==227
+	// Add DistanceFog
+	Out << R"(
+  if (gDistanceFogInfo.w >= 0.0)
+  {
+    FogParameters DistanceFogParams;
+    DistanceFogParams.FogStart = gDistanceFogInfo.x;
+    DistanceFogParams.FogEnd = gDistanceFogInfo.y;
+    DistanceFogParams.FogDensity = gDistanceFogInfo.z;
+    DistanceFogParams.FogMode = int(gDistanceFogInfo.w);
+
+    if ((gPolyFlags & )" << PF_Modulated << R"(u) == )" << PF_Modulated << R"(u)
+      DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);
+	else if ((gPolyFlags & )" << PF_Translucent << R"(u) == )" << PF_Translucent << R"(u && (gPolyFlags & )" << PF_Environment << R"(u) != )" << PF_Environment << R"(u)
+      DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);
+    else DistanceFogParams.FogColor = gDistanceFogColor;
+
+    DistanceFogParams.FogCoord = abs(gEyeSpacePos.z / gEyeSpacePos.w);
+    TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));
+  }
+)";
+#endif
+
+	if (GIsEditor)
+	{
+		// Editor support.
+		Out << R"(
+  if (gRendMap == )" << REN_Zones << R"(u || gRendMap == )" << REN_PolyCuts << R"(u || gRendMap == )" << REN_Polys << R"(u)
+  {
+    TotalColor += 0.5;
+    TotalColor *= gDrawColor;
+  }
+)";		
+#if ENGINE_VERSION==227
+		Out << R"(
+  else if (gRendMap == )" << REN_Normals << R"(u)
+  {
+    // Dot.
+    float T = 0.5 * dot(normalize(gCoords), gNormals.xyz);
+    // Selected.
+    if ((gPolyFlags & )" << PF_Selected << R"(u) == )" << PF_Selected << R"(u)
+    {
+      TotalColor = vec4(0.0, 0.0, abs(T), 1.0);
+    }
+    // Normal.
+    else
+    {
+      TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);
+    }
+  }
+)";
+#endif
+		Out << R"(
+  else if (gRendMap == )" << REN_PlainTex << R"(u)
+  {
+    TotalColor = Color;
+  }
+)";
+
+#if ENGINE_VERSION==227
+		Out << "  if ((gRendMap != " << REN_Normals << "u) && ((gPolyFlags & " << PF_Selected << "u) == " << PF_Selected << "u))" END_LINE;
+#else
+		Out << "  if ((gPolyFlags & " << PF_Selected << "u) == " << PF_Selected << "u)" END_LINE;
+#endif
+		Out << R"(
+  {
+    TotalColor.r = (TotalColor.r * 0.75);
+    TotalColor.g = (TotalColor.g * 0.75);
+    TotalColor.b = (TotalColor.b * 0.75) + 0.1;
+    TotalColor = clamp(TotalColor, 0.0, 1.0);
+    if (TotalColor.a < 0.5)
+      TotalColor.a = 0.51;
+  }
+
+  // HitSelection, Zoneview etc.
+  if (bool(gHitTesting))
+    TotalColor = gDrawColor; // Use DrawColor.
+
+  if ((gPolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && gDrawColor.a > 0.0)
+    TotalColor.a *= gDrawColor.a;
+)";
+	}
+	if (GL->SimulateMultiPass)
+	{
+		Out << R"(
+  FragColor = TotalColor;
+  FragColor1 = ((vec4(1.0) - TotalColor * LightColor)); //no, this is not entirely right, TotalColor has already LightColor applied. But will blow any fog/transparency otherwise. However should not make any (visual) difference here for this equation. Any better idea?
+)";
+	}
+	else Out << "FragColor = TotalColor;" END_LINE;
+    Out << "}" END_LINE;
 
 	// Blending translation table
 	/*
@@ -1669,667 +1930,709 @@ static void Create_DrawGouraud_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out
 }
 
 // Vertexshader for DrawGouraudPolygon, in 227 also DrawGouraudPolygonList.
-static void Create_DrawGouraud_Vert(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawGouraud_Vert(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(location = 0) in vec3 Coords;")); // == gl_Vertex
-	Out.Log(TEXT("layout(location = 1) in vec3 Normals;")); // Normals
-	Out.Log(TEXT("layout(location = 2) in vec2 TexCoords;")); // TexCoords
-	Out.Log(TEXT("layout(location = 3) in vec4 LightColor;"));
-	Out.Log(TEXT("layout(location = 4) in vec4 FogColor;"));
+	Out << R"(
+layout(location = 0) in vec3 Coords; // == gl_Vertex
+layout(location = 1) in vec3 Normals; // Normals
+layout(location = 2) in vec2 TexCoords; // TexCoords
+layout(location = 3) in vec4 LightColor;
+layout(location = 4) in vec4 FogColor;
+)";
 
 	if (GL->OpenGLVersion == GL_ES)
 	{
 		// No geometry shader in GL_ES.
-		Out.Log(TEXT("flat out uint gTexNum;"));
-		Out.Log(TEXT("flat out uint gDetailTexNum;"));
-		Out.Log(TEXT("flat out uint gBumpTexNum;"));
-		Out.Log(TEXT("flat out uint gMacroTexNum;"));
-		Out.Log(TEXT("flat out uint gDrawFlags;"));
-		Out.Log(TEXT("flat out uint gTextureFormat;"));
-		Out.Log(TEXT("flat out uint gPolyFlags;"));
-		Out.Log(TEXT("flat out float gGamma;"));
+		Out << R"(
+flat out uint gTexNum;
+flat out uint gDetailTexNum;
+flat out uint gBumpTexNum;
+flat out uint gMacroTexNum;
+flat out uint gDrawFlags;
+flat out uint gTextureFormat;
+flat out uint gPolyFlags;
+flat out float gGamma;
+flat out vec3 gTextureInfo; // diffuse, alpha, bumpmap specular
+flat out vec4 gDistanceFogColor;
+flat out vec4 gDistanceFogInfo;
 
-		Out.Log(TEXT("flat out vec3 gTextureInfo;")); // diffuse, alpha, bumpmap specular
-		Out.Log(TEXT("flat out vec4 gDistanceFogColor;"));
-		Out.Log(TEXT("flat out vec4 gDistanceFogInfo;"));
-
-		Out.Log(TEXT("out vec3 gCoords;"));
-		Out.Log(TEXT("out vec4 gNormals;"));
-		Out.Log(TEXT("out vec2 gTexCoords;"));
-		Out.Log(TEXT("out vec2 gDetailTexCoords;"));
-		Out.Log(TEXT("out vec2 gMacroTexCoords;"));
-		Out.Log(TEXT("out vec4 gEyeSpacePos;"));
-		Out.Log(TEXT("out vec4 gLightColor;"));
-		Out.Log(TEXT("out vec4 gFogColor;"));
-		Out.Log(TEXT("out mat3 gTBNMat;"));
-		Out.Log(TEXT("out vec3 gTangentViewPos;"));
-		Out.Log(TEXT("out vec3 gTangentFragPos;"));
+out vec3 gCoords;
+out vec4 gNormals;
+out vec2 gTexCoords;
+out vec2 gDetailTexCoords;
+out vec2 gMacroTexCoords;
+out vec4 gEyeSpacePos;
+out vec4 gLightColor;
+out vec4 gFogColor;
+out mat3 gTBNMat;
+out vec3 gTangentViewPos;
+out vec3 gTangentFragPos;
+)";
 
 		if (GIsEditor)
 		{
-			Out.Log(TEXT("flat out vec4 gDrawColor;"));
-			Out.Log(TEXT("flat out uint gRendMap;"));
-			Out.Log(TEXT("flat out uint gHitTesting;"));
+			Out << R"(
+flat out vec4 gDrawColor;
+flat out uint gRendMap;
+flat out uint gHitTesting;
+)";
 		}
-		Out.Log(TEXT("uniform vec4 DrawData[6];"));
-		Out.Log(TEXT("uniform uint TexNum[4];"));
-		Out.Log(TEXT("uniform uint DrawFlags[4];"));
+		Out << R"(
+uniform vec4 DrawData[6];
+uniform uint TexNum[4];
+uniform uint DrawFlags[4];
+)";
 	}
 	else
 	{
 		if (GL->UsingShaderDrawParameters)
 		{
-			Out.Log(TEXT("struct DrawGouraudShaderDrawParams"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("vec4 DiffuseInfo;"));		// 0
-			Out.Log(TEXT("vec4 DetailMacroInfo;"));	// 1
-			Out.Log(TEXT("vec4 MiscInfo;"));		// 2
-			Out.Log(TEXT("vec4 DrawColor;"));		// 3
-			Out.Log(TEXT("vec4 DistanceFogColor;"));// 4
-			Out.Log(TEXT("vec4 DistanceFogInfo;"));	// 5
-			Out.Log(TEXT("uvec4 TexNum;"));
-			Out.Log(TEXT("uvec4 DrawFlags;"));
-			Out.Log(TEXT("};"));
+			Out << R"(
+struct DrawGouraudShaderDrawParams
+{
+  vec4 DiffuseInfo;      // 0
+  vec4 DetailMacroInfo;  // 1
+  vec4 MiscInfo;         // 2
+  vec4 DrawColor;        // 3
+  vec4 DistanceFogColor; // 4
+  vec4 DistanceFogInfo;  // 5
+  uvec4 TexNum;
+  uvec4 DrawFlags;
+};
 
-			Out.Log(TEXT("layout(std430, binding = 7) buffer AllDrawGouraudShaderDrawParams"));
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("DrawGouraudShaderDrawParams DrawGouraudParams[];"));
-			Out.Log(TEXT("};"));
+layout(std430, binding = 7) buffer AllDrawGouraudShaderDrawParams
+{
+  DrawGouraudShaderDrawParams DrawGouraudParams[];
+};
+)";
 		}
 		else
 		{
-			Out.Log(TEXT("uniform vec4 DrawData[6];"));
-			Out.Log(TEXT("uniform uint TexNum[4];"));
-			Out.Log(TEXT("uniform uint DrawFlags[4];"));
+			Out << R"(
+uniform vec4 DrawData[6];
+uniform uint TexNum[4];
+uniform uint DrawFlags[4];
+)";
 		}
-		Out.Log(TEXT("flat out uint vTexNum;"));
-		Out.Log(TEXT("flat out uint vDetailTexNum;"));
-		Out.Log(TEXT("flat out uint vBumpTexNum;"));
-		Out.Log(TEXT("flat out uint vMacroTexNum;"));
-		Out.Log(TEXT("flat out uint vDrawFlags;"));
-		Out.Log(TEXT("flat out uint vTextureFormat;"));
-		Out.Log(TEXT("flat out uint vPolyFlags;"));
-		Out.Log(TEXT("flat out float vGamma;"));
+		Out << R"(
+flat out uint vTexNum;
+flat out uint vDetailTexNum;
+flat out uint vBumpTexNum;
+flat out uint vMacroTexNum;
+flat out uint vDrawFlags;
+flat out uint vTextureFormat;
+flat out uint vPolyFlags;
+flat out float vGamma;
 
-		Out.Log(TEXT("flat out vec3 vTextureInfo;")); // diffuse, alpha, bumpmap specular
-		Out.Log(TEXT("flat out vec4 vDistanceFogColor;"));
-		Out.Log(TEXT("flat out vec4 vDistanceFogInfo;"));
+flat out vec3 vTextureInfo; // diffuse, alpha, bumpmap specular
+flat out vec4 vDistanceFogColor;
+flat out vec4 vDistanceFogInfo;
 
-		Out.Log(TEXT("out vec3 vCoords;"));
-		Out.Log(TEXT("out vec4 vNormals;"));
-		Out.Log(TEXT("out vec2 vTexCoords;"));
-		Out.Log(TEXT("out vec2 vDetailTexCoords;"));
-		Out.Log(TEXT("out vec2 vMacroTexCoords;"));
-		Out.Log(TEXT("out vec4 vEyeSpacePos;"));
-		Out.Log(TEXT("out vec4 vLightColor;"));
-		Out.Log(TEXT("out vec4 vFogColor;"));
+out vec3 vCoords;
+out vec4 vNormals;
+out vec2 vTexCoords;
+out vec2 vDetailTexCoords;
+out vec2 vMacroTexCoords;
+out vec4 vEyeSpacePos;
+out vec4 vLightColor;
+out vec4 vFogColor;
+)";
 
 		if (GIsEditor)
 		{
-			Out.Log(TEXT("flat out vec4 vDrawColor;"));
-			Out.Log(TEXT("flat out uint vRendMap;"));
-			Out.Log(TEXT("flat out uint vHitTesting;"));
+			Out << R"(
+flat out vec4 vDrawColor;
+flat out uint vRendMap;
+flat out uint vHitTesting;
+)";
 		}
 	}
 
+	Out << R"(
+void main(void)
+{
+)";
+	if (GL->OpenGLVersion == GL_ES)
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		if (GL->OpenGLVersion == GL_ES)
+		Out << R"(
+  gEyeSpacePos = modelviewMat * vec4(Coords, 1.0);
+  gCoords = Coords;
+  gNormals = vec4(Normals.xyz, 0);
+  gTexCoords = TexCoords * DrawData[)" << UXOpenGLRenderDevice::DGDD_DIFFUSE_INFO << R"(].xy; // TODO - REVIEW THESE INDICES!!!
+  gDetailTexCoords = TexCoords * DrawData[)" << UXOpenGLRenderDevice::DGDD_DETAIL_MACRO_INFO << R"(%u].xy;
+  gMacroTexCoords = TexCoords * DrawData[)" << UXOpenGLRenderDevice::DGDD_DETAIL_MACRO_INFO << R"(].zw;
+  gLightColor = LightColor;
+  gFogColor = FogColor;
+
+  gTexNum = TexNum[0];
+  gDetailTexNum = TexNum[1];
+  gBumpTexNum = TexNum[2];
+  gMacroTexNum = TexNum[3];
+
+  gDrawFlags = DrawFlags[0];
+  gTextureFormat = uint(DrawData[)" << UXOpenGLRenderDevice::DGDD_MISC_INFO << R"(].w);
+  gPolyFlags = DrawFlags[2];
+  gGamma = DrawData[)" << UXOpenGLRenderDevice::DGDD_MISC_INFO << R"(].y;
+
+  gTextureInfo = vec3(DrawData[)" << UXOpenGLRenderDevice::DGDD_DIFFUSE_INFO << R"(].zw, DrawData[)" << UXOpenGLRenderDevice::DGDD_MISC_INFO << R"(].x);
+  gDistanceFogColor = DrawData[)" << UXOpenGLRenderDevice::DGDD_DISTANCE_FOG_COLOR << R"(];
+  gDistanceFogInfo = DrawData[)" << UXOpenGLRenderDevice::DGDD_DISTANCE_FOG_INFO << R"(];
+)";
+		
+		if (GIsEditor)
 		{
-			Out.Log(TEXT("gEyeSpacePos = modelviewMat * vec4(Coords, 1.0);"));
-			Out.Log(TEXT("gCoords = Coords;"));
-			Out.Log(TEXT("gNormals = vec4(Normals.xyz, 0);"));
-			Out.Logf(TEXT("gTexCoords = TexCoords * DrawData[%u].xy;"), DGTI_DIFFUSE_INFO); // TODO - REVIEW THESE INDICES!!!
-			Out.Logf(TEXT("gDetailTexCoords = TexCoords * DrawData[%u].xy;"), DGTI_DETAIL_MACRO_INFO);
-			Out.Logf(TEXT("gMacroTexCoords = TexCoords * DrawData[%u].zw;"), DGTI_DETAIL_MACRO_INFO);
-			Out.Log(TEXT("gLightColor = LightColor;"));
-			Out.Log(TEXT("gFogColor = FogColor;"));
+			Out << R"(
+  gHitTesting = DrawFlags[1];
+  gRendMap = DrawFlags[3];
+  gDrawColor = DrawData[)" << UXOpenGLRenderDevice::DGDD_EDITOR_DRAWCOLOR << R"(];
+)";
+		}
 
-			Out.Log(TEXT("gTexNum = TexNum[0];"));
-			Out.Log(TEXT("gDetailTexNum = TexNum[1];"));
-			Out.Log(TEXT("gBumpTexNum = TexNum[2];"));
-			Out.Log(TEXT("gMacroTexNum = TexNum[3];"));
+		Out << R"(
+  vec3 T = vec3(1.0, 1.0, 1.0); // Arbitrary.
+  vec3 B = vec3(1.0, 1.0, 1.0); // Replace with actual values extracted from mesh generation some day.
+  vec3 N = normalize(Normals.xyz); // Normals.
 
-			Out.Log(TEXT("gDrawFlags = DrawFlags[0];"));
-			Out.Logf(TEXT("gTextureFormat = uint(DrawData[%u].w);"), DGTI_MISC_INFO);
-			Out.Log(TEXT("gPolyFlags = DrawFlags[2];"));
-			Out.Logf(TEXT("gGamma = DrawData[%u].y;"), DGTI_MISC_INFO);
+  // TBN must have right handed coord system.
+  //if (dot(cross(N, T), B) < 0.0)
+  // T = T * -1.0;
 
-			Out.Logf(TEXT("gTextureInfo = vec3(DrawData[%u].zw, DrawData[%u].x);"), DGTI_DIFFUSE_INFO, DGTI_MISC_INFO);
-			Out.Logf(TEXT("gDistanceFogColor = DrawData[%u];"), DGTI_DISTANCE_FOG_COLOR);
-			Out.Logf(TEXT("gDistanceFogInfo = DrawData[%u];"), DGTI_DISTANCE_FOG_INFO);
+  gTBNMat = transpose(mat3(T, B, N));
+  gTangentViewPos = gTBNMat * normalize(FrameCoords[0].xyz);
+  gTangentFragPos = gTBNMat * gCoords.xyz;
+
+  gl_Position = modelviewprojMat * vec4(Coords, 1.0);
+)";
+		
+		if (GL->SupportsClipDistance)
+		{
+			Out << R"(
+  uint ClipIndex = uint(ClipParams.x);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, gEyeSpacePos.xyz);
+)";
+		}
+	}
+	else
+	{
+		Out << R"(
+  vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);
+
+  vCoords = Coords;
+  vNormals = vec4(Normals.xyz, 0);
+  vLightColor = LightColor;
+  vFogColor = FogColor;
+)";
+
+		if (GL->UsingShaderDrawParameters)
+		{
+			Out << R"(
+  vTexCoords = TexCoords * DrawGouraudParams[gl_DrawID].DiffuseInfo.xy;
+  vDetailTexCoords = TexCoords * DrawGouraudParams[gl_DrawID].DetailMacroInfo.xy;
+  vMacroTexCoords = TexCoords * DrawGouraudParams[gl_DrawID].DetailMacroInfo.zw;
+
+  vTexNum = DrawGouraudParams[gl_DrawID].TexNum[0];
+  vDetailTexNum = DrawGouraudParams[gl_DrawID].TexNum[1];
+  vBumpTexNum = DrawGouraudParams[gl_DrawID].TexNum[2];
+  vMacroTexNum = DrawGouraudParams[gl_DrawID].TexNum[3];
+
+  vDrawFlags = DrawGouraudParams[gl_DrawID].DrawFlags[0];
+  vTextureFormat = uint(DrawGouraudParams[gl_DrawID].MiscInfo.z);
+  vPolyFlags = DrawGouraudParams[gl_DrawID].DrawFlags[2];
+  vGamma = DrawGouraudParams[gl_DrawID].MiscInfo.y;
+
+  vTextureInfo = vec3(DrawGouraudParams[gl_DrawID].DiffuseInfo.zw, DrawGouraudParams[gl_DrawID].MiscInfo.x);
+  vDistanceFogColor = DrawGouraudParams[gl_DrawID].DistanceFogColor;
+  vDistanceFogInfo = DrawGouraudParams[gl_DrawID].DistanceFogInfo;
+)";
 
 			if (GIsEditor)
 			{
-				Out.Log(TEXT("gHitTesting = DrawFlags[1];"));
-				Out.Log(TEXT("gRendMap = DrawFlags[3];"));
-				Out.Logf(TEXT("gDrawColor = DrawData[%u];"), DGTI_EDITOR_DRAWCOLOR);
-			}
-
-			Out.Log(TEXT("vec3 T = vec3(1.0, 1.0, 1.0);")); // Arbitrary.
-			Out.Log(TEXT("vec3 B = vec3(1.0, 1.0, 1.0);")); // Replace with actual values extracted from mesh generation some day.
-			Out.Log(TEXT("vec3 N = normalize(Normals.xyz);")); // Normals.
-
-			// TBN must have right handed coord system.
-			//if (dot(cross(N, T), B) < 0.0)
-			//	T = T * -1.0;
-
-			Out.Log(TEXT("gTBNMat = transpose(mat3(T, B, N));"));
-			Out.Log(TEXT("gTangentViewPos = gTBNMat * normalize(FrameCoords[0].xyz);"));
-			Out.Log(TEXT("gTangentFragPos = gTBNMat * gCoords.xyz;"));
-
-			Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Coords, 1.0);"));
-			Out.Log(TEXT(""));
-
-			if (GL->SupportsClipDistance)
-			{
-				Out.Log(TEXT("uint ClipIndex = uint(ClipParams.x);"));
-				Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, gEyeSpacePos.xyz);"));
+				Out << R"(
+  vHitTesting = DrawGouraudParams[gl_DrawID].DrawFlags[1];
+  vRendMap = DrawGouraudParams[gl_DrawID].DrawFlags[3];
+  vDrawColor = DrawGouraudParams[gl_DrawID].DrawColor;
+)";
 			}
 		}
 		else
 		{
-			Out.Log(TEXT("vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);"));
+			Out << R"(
+  vTexCoords = TexCoords * DrawData[)" << UXOpenGLRenderDevice::DGDD_DIFFUSE_INFO << R"(].xy;
+  vDetailTexCoords = TexCoords * DrawData[)" << UXOpenGLRenderDevice::DGDD_DETAIL_MACRO_INFO << R"(].xy;
+  vMacroTexCoords = TexCoords * DrawData[)" << UXOpenGLRenderDevice::DGDD_DETAIL_MACRO_INFO << R"(].zw;
 
-			Out.Log(TEXT("vCoords = Coords;"));
-			Out.Log(TEXT("vNormals = vec4(Normals.xyz, 0);"));
-			Out.Log(TEXT("vLightColor = LightColor;"));
-			Out.Log(TEXT("vFogColor = FogColor;"));
+  vTexNum = TexNum[0];
+  vDetailTexNum = TexNum[1];
+  vBumpTexNum = TexNum[2];
+  vMacroTexNum = TexNum[3];
 
-			if (GL->UsingShaderDrawParameters)
+  vDrawFlags = DrawFlags[0];
+  vTextureFormat = uint(DrawData[)" << UXOpenGLRenderDevice::DGDD_MISC_INFO << R"(].z);
+  vPolyFlags = DrawFlags[2];
+  vGamma = DrawData[)" << UXOpenGLRenderDevice::DGDD_MISC_INFO << R"(].y;
+
+  vTextureInfo = vec3(DrawData[)" << UXOpenGLRenderDevice::DGDD_DIFFUSE_INFO << R"(].zw, DrawData[)" << UXOpenGLRenderDevice::DGDD_MISC_INFO << R"(].x);
+  vDistanceFogColor = DrawData[)" << UXOpenGLRenderDevice::DGDD_DISTANCE_FOG_COLOR << R"(];
+  vDistanceFogInfo = DrawData[)" << UXOpenGLRenderDevice::DGDD_DISTANCE_FOG_INFO << R"(];
+)";
+			
+			if (GIsEditor)
 			{
-				Out.Log(TEXT("vTexCoords = TexCoords * DrawGouraudParams[gl_DrawID].DiffuseInfo.xy;"));
-				Out.Log(TEXT("vDetailTexCoords = TexCoords * DrawGouraudParams[gl_DrawID].DetailMacroInfo.xy;"));
-				Out.Log(TEXT("vMacroTexCoords = TexCoords * DrawGouraudParams[gl_DrawID].DetailMacroInfo.zw;"));
-
-				Out.Log(TEXT("vTexNum = DrawGouraudParams[gl_DrawID].TexNum[0];"));
-				Out.Log(TEXT("vDetailTexNum = DrawGouraudParams[gl_DrawID].TexNum[1];"));
-				Out.Log(TEXT("vBumpTexNum = DrawGouraudParams[gl_DrawID].TexNum[2];"));
-				Out.Log(TEXT("vMacroTexNum = DrawGouraudParams[gl_DrawID].TexNum[3];"));
-
-				Out.Log(TEXT("vDrawFlags = DrawGouraudParams[gl_DrawID].DrawFlags[0];"));
-				Out.Log(TEXT("vTextureFormat = uint(DrawGouraudParams[gl_DrawID].MiscInfo.z);"));
-				Out.Log(TEXT("vPolyFlags = DrawGouraudParams[gl_DrawID].DrawFlags[2];"));
-				Out.Log(TEXT("vGamma = DrawGouraudParams[gl_DrawID].MiscInfo.y;"));
-
-				Out.Log(TEXT("vTextureInfo = vec3(DrawGouraudParams[gl_DrawID].DiffuseInfo.zw, DrawGouraudParams[gl_DrawID].MiscInfo.x);"));
-				Out.Log(TEXT("vDistanceFogColor = DrawGouraudParams[gl_DrawID].DistanceFogColor;"));
-				Out.Log(TEXT("vDistanceFogInfo = DrawGouraudParams[gl_DrawID].DistanceFogInfo;"));
-
-				if (GIsEditor)
-				{
-					Out.Log(TEXT("vHitTesting = DrawGouraudParams[gl_DrawID].DrawFlags[1];"));
-					Out.Log(TEXT("vRendMap = DrawGouraudParams[gl_DrawID].DrawFlags[3];"));
-					Out.Log(TEXT("vDrawColor = DrawGouraudParams[gl_DrawID].DrawColor;"));
-				}
-			}
-			else
-			{
-				Out.Logf(TEXT("vTexCoords = TexCoords * DrawData[%u].xy;"), DGTI_DIFFUSE_INFO);
-				Out.Logf(TEXT("vDetailTexCoords = TexCoords * DrawData[%u].xy;"), DGTI_DETAIL_MACRO_INFO);
-				Out.Logf(TEXT("vMacroTexCoords = TexCoords * DrawData[%u].zw;"), DGTI_DETAIL_MACRO_INFO);
-
-				Out.Log(TEXT("vTexNum = TexNum[0];"));
-				Out.Log(TEXT("vDetailTexNum = TexNum[1];"));
-				Out.Log(TEXT("vBumpTexNum = TexNum[2];"));
-				Out.Log(TEXT("vMacroTexNum = TexNum[3];"));
-
-				Out.Log(TEXT("vDrawFlags = DrawFlags[0];"));
-				Out.Logf(TEXT("vTextureFormat = uint(DrawData[%u].z);"), DGTI_MISC_INFO);
-				Out.Log(TEXT("vPolyFlags = DrawFlags[2];"));
-				Out.Logf(TEXT("vGamma = DrawData[%u].y;"), DGTI_MISC_INFO);
-
-				Out.Logf(TEXT("vTextureInfo = vec3(DrawData[%u].zw, DrawData[%u].x);"), DGTI_DIFFUSE_INFO, DGTI_MISC_INFO);
-				Out.Logf(TEXT("vDistanceFogColor = DrawData[%u];"), DGTI_DISTANCE_FOG_COLOR);
-				Out.Logf(TEXT("vDistanceFogInfo = DrawData[%u];"), DGTI_DISTANCE_FOG_INFO);
-
-				if (GIsEditor)
-				{
-					Out.Log(TEXT("vHitTesting = DrawFlags[1];"));
-					Out.Log(TEXT("vRendMap = DrawFlags[3];"));
-					Out.Logf(TEXT("vDrawColor = DrawData[%u];"), DGTI_EDITOR_DRAWCOLOR);
-				}
+				Out << R"(
+  vHitTesting = DrawFlags[1];
+  vRendMap = DrawFlags[3];
+  vDrawColor = DrawData[)" << UXOpenGLRenderDevice::DGDD_EDITOR_DRAWCOLOR << R"(];
+)";
 			}
 		}
-		Out.Log(TEXT("gl_Position = vec4(Coords, 1.0);"));
-		Out.Log(TEXT("}"));
 	}
+
+	Out << R"(
+  gl_Position = vec4(Coords, 1.0);
+}
+)";
 }
 
 // Geometryshader for DrawGouraud.
-static void Create_DrawGouraud_Geo(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawGouraud_Geo(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(triangles) in;"));
-	Out.Log(TEXT("layout(triangle_strip, max_vertices = 3) out;"));
+	Out << R"(
+layout(triangles) in;
+layout(triangle_strip, max_vertices = 3) out;
 
-	Out.Log(TEXT("flat in uint vTexNum[];"));
-	Out.Log(TEXT("flat in uint vDetailTexNum[];"));
-	Out.Log(TEXT("flat in uint vBumpTexNum[];"));
-	Out.Log(TEXT("flat in uint vMacroTexNum[];"));
-	Out.Log(TEXT("flat in uint vDrawFlags[];"));
-	Out.Log(TEXT("flat in uint vTextureFormat[];"));
-	Out.Log(TEXT("flat in uint vPolyFlags[];"));
-	Out.Log(TEXT("flat in float vGamma[];"));
+flat in uint vTexNum[];
+flat in uint vDetailTexNum[];
+flat in uint vBumpTexNum[];
+flat in uint vMacroTexNum[];
+flat in uint vDrawFlags[];
+flat in uint vTextureFormat[];
+flat in uint vPolyFlags[];
+flat in float vGamma[];
 
-	Out.Log(TEXT("flat in vec3 vTextureInfo[];")); // diffuse, alpha, bumpmap specular
-	Out.Log(TEXT("flat in vec4 vDistanceFogColor[];"));
-	Out.Log(TEXT("flat in vec4 vDistanceFogInfo[];"));
-
-	if (GIsEditor)
-	{
-		Out.Log(TEXT("flat in vec4 vDrawColor[];"));
-		Out.Log(TEXT("flat in uint vRendMap[];"));
-		Out.Log(TEXT("flat in uint vHitTesting[];"));
-	}
-	Out.Log(TEXT("in vec3 vCoords[];"));
-	Out.Log(TEXT("in vec4 vNormals[];"));
-	Out.Log(TEXT("in vec2 vTexCoords[];"));
-	Out.Log(TEXT("in vec2 vDetailTexCoords[];"));
-	Out.Log(TEXT("in vec2 vMacroTexCoords[];"));
-	Out.Log(TEXT("in vec4 vEyeSpacePos[];"));
-	Out.Log(TEXT("in vec4 vLightColor[];"));
-	Out.Log(TEXT("in vec4 vFogColor[];"));
-
-	Out.Log(TEXT("flat out uint gTexNum;"));
-	Out.Log(TEXT("flat out uint gDetailTexNum;"));
-	Out.Log(TEXT("flat out uint gBumpTexNum;"));
-	Out.Log(TEXT("flat out uint gMacroTexNum;"));
-	Out.Log(TEXT("flat out uint gDrawFlags;"));
-	Out.Log(TEXT("flat out uint gTextureFormat;"));
-	Out.Log(TEXT("flat out uint gPolyFlags;"));
-	Out.Log(TEXT("flat out float gGamma;"));
-
-	Out.Log(TEXT("out vec3 gCoords;"));
-	Out.Log(TEXT("out vec4 gNormals;"));
-	Out.Log(TEXT("out vec2 gTexCoords;"));
-	Out.Log(TEXT("out vec2 gDetailTexCoords;"));
-	Out.Log(TEXT("out vec2 gMacroTexCoords;"));
-	Out.Log(TEXT("out vec4 gEyeSpacePos;"));
-	Out.Log(TEXT("out vec4 gLightColor;"));
-	Out.Log(TEXT("out vec4 gFogColor;"));
-
-	Out.Log(TEXT("out mat3 gTBNMat;"));
-	Out.Log(TEXT("out vec3 gTangentViewPos;"));
-	Out.Log(TEXT("out vec3 gTangentFragPos;"));
-
-	Out.Log(TEXT("flat out vec3 gTextureInfo;"));
-	Out.Log(TEXT("flat out vec4 gDistanceFogColor;"));
-	Out.Log(TEXT("flat out vec4 gDistanceFogInfo;"));
+flat in vec3 vTextureInfo[]; // diffuse, alpha, bumpmap specular
+flat in vec4 vDistanceFogColor[];
+flat in vec4 vDistanceFogInfo[];
+)";
 
 	if (GIsEditor)
 	{
-		Out.Log(TEXT("flat out vec4 gDrawColor;"));
-		Out.Log(TEXT("flat out uint gRendMap;"));
-		Out.Log(TEXT("flat out uint gHitTesting;"));
+		Out << R"(
+flat in vec4 vDrawColor[];
+flat in uint vRendMap[];
+flat in uint vHitTesting[];
+)";
 	}
-	Out.Logf(TEXT("out float gl_ClipDistance[%i];"), GL->MaxClippingPlanes);
 
+	Out << R"(
+in vec3 vCoords[];
+in vec4 vNormals[];
+in vec2 vTexCoords[];
+in vec2 vDetailTexCoords[];
+in vec2 vMacroTexCoords[];
+in vec4 vEyeSpacePos[];
+in vec4 vLightColor[];
+in vec4 vFogColor[];
+
+flat out uint gTexNum;
+flat out uint gDetailTexNum;
+flat out uint gBumpTexNum;
+flat out uint gMacroTexNum;
+flat out uint gDrawFlags;
+flat out uint gTextureFormat;
+flat out uint gPolyFlags;
+flat out float gGamma;
+
+out vec3 gCoords;
+out vec4 gNormals;
+out vec2 gTexCoords;
+out vec2 gDetailTexCoords;
+out vec2 gMacroTexCoords;
+out vec4 gEyeSpacePos;
+out vec4 gLightColor;
+out vec4 gFogColor;
+
+out mat3 gTBNMat;
+out vec3 gTangentViewPos;
+out vec3 gTangentFragPos;
+
+flat out vec3 gTextureInfo;
+flat out vec4 gDistanceFogColor;
+flat out vec4 gDistanceFogInfo;
+)";
+	
+	if (GIsEditor)
 	{
-		Out.Log(TEXT("vec3 GetTangent(vec3 A, vec3 B, vec3 C, vec2 Auv, vec2 Buv, vec2 Cuv)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("float Bv_Cv = Buv.y - Cuv.y;"));
-		Out.Log(TEXT("if (Bv_Cv == 0.0)"));
-		Out.Log(TEXT("return (B - C) / (Buv.x - Cuv.x);"));
-
-		Out.Log(TEXT("float Quotient = (Auv.y - Cuv.y) / (Bv_Cv);"));
-		Out.Log(TEXT("vec3 D = C + (B - C) * Quotient;"));
-		Out.Log(TEXT("vec2 Duv = Cuv + (Buv - Cuv) * Quotient;"));
-		Out.Log(TEXT("return (D - A) / (Duv.x - Auv.x);"));
-		Out.Log(TEXT("}"));
+		Out << R"(
+flat out vec4 gDrawColor;
+flat out uint gRendMap;
+flat out uint gHitTesting;
+)";
 	}
+	
+	Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
+
+	Out << R"(
+vec3 GetTangent(vec3 A, vec3 B, vec3 C, vec2 Auv, vec2 Buv, vec2 Cuv)
+{
+  float Bv_Cv = Buv.y - Cuv.y;
+  if (Bv_Cv == 0.0)
+    return (B - C) / (Buv.x - Cuv.x);
+
+  float Quotient = (Auv.y - Cuv.y) / (Bv_Cv);
+  vec3 D = C + (B - C) * Quotient;
+  vec2 Duv = Cuv + (Buv - Cuv) * Quotient;
+  return (D - A) / (Duv.x - Auv.x);
+}
+
+vec3 GetBitangent(vec3 A, vec3 B, vec3 C, vec2 Auv, vec2 Buv, vec2 Cuv)
+{
+  return GetTangent(A, C, B, Auv.yx, Cuv.yx, Buv.yx);
+}
+
+void main(void)
+{
+  mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
+  mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
+
+  vec3 Tangent = GetTangent(vCoords[0], vCoords[1], vCoords[2], vTexCoords[0], vTexCoords[1], vTexCoords[2]);
+  vec3 Bitangent = GetBitangent(vCoords[0], vCoords[1], vCoords[2], vTexCoords[0], vTexCoords[1], vTexCoords[2]);
+  uint ClipIndex = uint(ClipParams.x);
+
+  for (int i = 0; i < 3; ++i)
+  {
+    vec3 T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));
+    vec3 B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));
+    vec3 N = normalize(vec3(modelMat * vNormals[i]));
+
+    // TBN must have right handed coord system.
+    // if (dot(cross(N, T), B) < 0.0)
+    // T = T * -1.0;
+    gTBNMat = mat3(T, B, N);
+
+    gEyeSpacePos = vEyeSpacePos[i];
+    gLightColor = vLightColor[i];
+    gFogColor = vFogColor[i];
+    gNormals = vNormals[i];
+    gTexCoords = vTexCoords[i];
+    gDetailTexCoords = vDetailTexCoords[i];
+    gMacroTexCoords = vMacroTexCoords[i];
+    gCoords = vCoords[i];
+    gTexNum = vTexNum[i];
+    gDetailTexNum = vDetailTexNum[i];
+    gBumpTexNum = vBumpTexNum[i];
+    gMacroTexNum = vMacroTexNum[i];
+    gTextureInfo = vTextureInfo[i];
+    gDrawFlags = vDrawFlags[i];
+    gPolyFlags = vPolyFlags[i];
+    gGamma = vGamma[i];
+    gTextureFormat = vTextureFormat[i];
+    gDistanceFogColor = vDistanceFogColor[i];
+    gDistanceFogInfo = vDistanceFogInfo[i];
+
+    gTangentViewPos = gTBNMat * normalize(FrameCoords[0].xyz);
+    gTangentFragPos = gTBNMat * gCoords.xyz;
+)";
+	
+	if (GIsEditor)
 	{
-		Out.Log(TEXT("vec3 GetBitangent(vec3 A, vec3 B, vec3 C, vec2 Auv, vec2 Buv, vec2 Cuv)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("return GetTangent(A, C, B, Auv.yx, Cuv.yx, Buv.yx);"));
-		Out.Log(TEXT("}"));
+		Out << R"(
+    gDrawColor = vDrawColor[i];
+    gRendMap = vRendMap[i];
+    gHitTesting = vHitTesting[i];
+)";
 	}
-	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz);")); // TransformPointBy...
-		Out.Log(TEXT("mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);"));
-
-		Out.Log(TEXT("vec3 Tangent = GetTangent(vCoords[0], vCoords[1], vCoords[2], vTexCoords[0], vTexCoords[1], vTexCoords[2]);"));
-		Out.Log(TEXT("vec3 Bitangent = GetBitangent(vCoords[0], vCoords[1], vCoords[2], vTexCoords[0], vTexCoords[1], vTexCoords[2]);"));
-		Out.Log(TEXT("uint ClipIndex = uint(ClipParams.x);"));
-
-		Out.Log(TEXT("for (int i = 0; i < 3; ++i)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec3 T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));"));
-		Out.Log(TEXT("vec3 B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));"));
-		Out.Log(TEXT("vec3 N = normalize(vec3(modelMat * vNormals[i]));"));
-
-		// TBN must have right handed coord system.
-		//if (dot(cross(N, T), B) < 0.0)
-		//		T = T * -1.0;
-		Out.Log(TEXT("gTBNMat = mat3(T, B, N);"));
-
-		Out.Log(TEXT("gEyeSpacePos = vEyeSpacePos[i];"));
-		Out.Log(TEXT("gLightColor = vLightColor[i];"));
-		Out.Log(TEXT("gFogColor = vFogColor[i];"));
-		Out.Log(TEXT("gNormals = vNormals[i];"));
-		Out.Log(TEXT("gTexCoords = vTexCoords[i];"));
-		Out.Log(TEXT("gDetailTexCoords = vDetailTexCoords[i];"));
-		Out.Log(TEXT("gMacroTexCoords = vMacroTexCoords[i];"));
-		Out.Log(TEXT("gCoords = vCoords[i];"));
-		Out.Log(TEXT("gTexNum = vTexNum[i];"));
-		Out.Log(TEXT("gDetailTexNum = vDetailTexNum[i];"));
-		Out.Log(TEXT("gBumpTexNum = vBumpTexNum[i];"));
-		Out.Log(TEXT("gMacroTexNum = vMacroTexNum[i];"));
-		Out.Log(TEXT("gTextureInfo = vTextureInfo[i];"));
-		Out.Log(TEXT("gDrawFlags = vDrawFlags[i];"));
-		Out.Log(TEXT("gPolyFlags = vPolyFlags[i];"));
-		Out.Log(TEXT("gGamma = vGamma[i];"));
-		Out.Log(TEXT("gTextureFormat = vTextureFormat[i];"));
-		Out.Log(TEXT("gDistanceFogColor = vDistanceFogColor[i];"));
-		Out.Log(TEXT("gDistanceFogInfo = vDistanceFogInfo[i];"));
-
-		Out.Log(TEXT("gTangentViewPos = gTBNMat * normalize(FrameCoords[0].xyz);"));
-		Out.Log(TEXT("gTangentFragPos = gTBNMat * gCoords.xyz;"));
-
-		if (GIsEditor)
-		{
-			Out.Log(TEXT("gDrawColor = vDrawColor[i];"));
-			Out.Log(TEXT("gRendMap = vRendMap[i];"));
-			Out.Log(TEXT("gHitTesting = vHitTesting[i];"));
-		}
-		Out.Log(TEXT("gl_Position = modelviewprojMat * gl_in[i].gl_Position;"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[i]);"));
-		Out.Log(TEXT("EmitVertex();"));
-		Out.Log(TEXT("}"));
-		Out.Log(TEXT("}"));
-	}
+	
+	Out << R"(
+    gl_Position = modelviewprojMat * gl_in[i].gl_Position;
+    gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[i]);
+    EmitVertex();
+  }
+}
+)";
 }
 
 // Fragmentshader for DrawTile.
-static void Create_DrawTile_Frag(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawTile_Frag(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("uniform uint PolyFlags;"));
-	Out.Log(TEXT("uniform bool bHitTesting;"));
-	Out.Log(TEXT("uniform float Gamma;"));
-	Out.Log(TEXT("uniform vec4 HitDrawColor;"));
+	Out << R"(
+uniform uint PolyFlags;
+uniform bool bHitTesting;
+uniform float Gamma;
+uniform vec4 HitDrawColor;
 
-	Out.Log(TEXT("in vec2 gTexCoords;"));
-	Out.Log(TEXT("flat in vec4 gDrawColor;"));
-	Out.Log(TEXT("flat in uint gTexNum;"));
+in vec2 gTexCoords;
+flat in vec4 gDrawColor;
+flat in uint gTexNum;
 
-	Out.Log(TEXT("uniform sampler2D Texture0;"));
+uniform sampler2D Texture0;
+uniform uint TexNum;
+)";
 
 	if (GL->OpenGLVersion == GL_ES)
 	{
-		Out.Log(TEXT("layout(location = 0) out vec4 FragColor;"));
+		Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 1) out vec4 FragColor1;"));
+			Out << "layout(location = 1) out vec4 FragColor1;" END_LINE;
 	}
 	else
 	{
 		if (GL->SimulateMultiPass)
-			Out.Log(TEXT("layout(location = 0, index = 1) out vec4 FragColor1;"));
-		Out.Log(TEXT("layout(location = 0, index = 0) out vec4 FragColor;"));
+			Out << "layout(location = 0, index = 1) out vec4 FragColor1;" END_LINE ;
+		Out << "layout(location = 0, index = 0) out vec4 FragColor;" END_LINE;
 	}
+    Out << R"(
+void main(void)
+{
+  vec4 TotalColor;
+  vec4 Color = GetTexel(TexNum, Texture0, gTexCoords);
 
+  // Handle PF_Masked.
+  if ((PolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
+  {
+    if (Color.a < 0.5)
+      discard;
+    else Color.rgb /= Color.a;
+  }
+  else if (((PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u) && Color.a < 0.01)
+    discard;
+
+  TotalColor = Color * gDrawColor; // Add DrawColor.
+
+  if ((PolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+  {
+    float InGamma = 1.0 / (Gamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
+	
+    TotalColor.r = pow(TotalColor.r, InGamma);
+    TotalColor.g = pow(TotalColor.g, InGamma);
+    TotalColor.b = pow(TotalColor.b, InGamma);
+  }
+)";
+
+	if (GIsEditor)
 	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("vec4 TotalColor;"));
-		Out.Log(TEXT("vec4 Color = GetTexel(gTexNum, Texture0, gTexCoords);"));
+		// Editor support.
+		Out << R"(
+  if ((PolyFlags & )" << PF_Selected << R"(u) == )" << PF_Selected << R"(u)
+  {
+    TotalColor.g = TotalColor.g - 0.04;
+    TotalColor = clamp(TotalColor, 0.0, 1.0);
+  }
 
-		// Handle PF_Masked.
-		Out.Logf(TEXT("if ((PolyFlags & %uu) == %uu)"), PF_Masked, PF_Masked);
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("if (Color.a < 0.5)"));
-		Out.Log(TEXT("discard;"));
-		Out.Log(TEXT("else Color.rgb /= Color.a;"));
-		Out.Log(TEXT("}"));
-		Out.Logf(TEXT("else if ((PolyFlags & %uu) == %uu && Color.a < 0.01)"), PF_AlphaBlend, PF_AlphaBlend);
-		Out.Log(TEXT("discard;"));
+  // HitSelection, Zoneview etc.
+  if (bHitTesting)
+    TotalColor = HitDrawColor; // Use HitDrawColor.
 
-		Out.Log(TEXT("TotalColor = Color * gDrawColor;")); // Add DrawColor.
-
-		Out.Logf(TEXT("if ((PolyFlags & %uu) != %uu)"), PF_Modulated, PF_Modulated);
-		Out.Log(TEXT("{"));
-		// Gamma
-		Out.Logf(TEXT("float InGamma = 1.0 / (Gamma * %f);"), GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier);
-		Out.Log(TEXT("TotalColor.r = pow(TotalColor.r, InGamma);"));
-		Out.Log(TEXT("TotalColor.g = pow(TotalColor.g, InGamma);"));
-		Out.Log(TEXT("TotalColor.b = pow(TotalColor.b, InGamma);"));
-		Out.Log(TEXT("}"));
-
-		if (GIsEditor)
-		{
-			// Editor support.
-			Out.Logf(TEXT("if ((PolyFlags & %uu) == %uu)"), PF_Selected, PF_Selected);
-			Out.Log(TEXT("{"));
-			Out.Log(TEXT("TotalColor.g = TotalColor.g - 0.04;"));
-			Out.Log(TEXT("TotalColor = clamp(TotalColor, 0.0, 1.0);"));
-			Out.Log(TEXT("}"));
-
-			// HitSelection, Zoneview etc.
-			Out.Log(TEXT("if (bHitTesting)"));
-			Out.Log(TEXT("TotalColor = HitDrawColor;")); // Use HitDrawColor.
-		}
-
-		if (GL->SimulateMultiPass)
-		{
-			Out.Log(TEXT("FragColor = TotalColor;"));
-			Out.Log(TEXT("FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;"));
-		}
-		else Out.Log(TEXT("FragColor = TotalColor;"));
-		Out.Log(TEXT("}"));
+)";		
 	}
+
+	if (GL->SimulateMultiPass)
+	{
+		Out << R"(
+  FragColor = TotalColor;
+  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;
+)";
+	}
+	else Out << "FragColor = TotalColor;" END_LINE;
+    Out << "}" END_LINE;
 }
 
 // Geoshader for DrawTile.
-static void Create_DrawTile_Geo(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawTile_Geo(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(triangles) in;"));
-	Out.Log(TEXT("layout(triangle_strip, max_vertices = 6) out;"));
+	Out << R"(
+layout(triangles) in;
+layout(triangle_strip, max_vertices = 6) out;
 
-	Out.Log(TEXT("flat in uint vTexNum[];"));
-	Out.Log(TEXT("in vec4 vTexCoords0[];"));
-	Out.Log(TEXT("in vec4 vTexCoords1[];"));
-	Out.Log(TEXT("in vec4 vTexCoords2[];"));
-	Out.Log(TEXT("flat in vec4 vDrawColor[];"));
-	Out.Log(TEXT("in vec4 vEyeSpacePos[];"));
-	Out.Log(TEXT("in vec3 vCoords[];"));
+flat in uint vTexNum[];
+in vec4 vTexCoords0[];
+in vec4 vTexCoords1[];
+in vec4 vTexCoords2[];
+flat in vec4 vDrawColor[];
+in vec4 vEyeSpacePos[];
+in vec3 vCoords[];
 
-	Out.Log(TEXT("out vec2 gTexCoords;"));
-	Out.Log(TEXT("flat out vec4 gDrawColor;"));
-	Out.Log(TEXT("flat out uint gTexNum;"));
-	Out.Logf(TEXT("out float gl_ClipDistance[%i];"), GL->MaxClippingPlanes);
+out vec2 gTexCoords;
+flat out vec4 gDrawColor;
+flat out uint gTexNum;
 
-	{
-		Out.Log(TEXT("void main()"));
-		Out.Log(TEXT("{"));
-		Out.Log(TEXT("uint ClipIndex = uint(ClipParams.x);"));
-		Out.Log(TEXT("gTexNum = vTexNum[0];"));
+out float gl_ClipDistance[)" << GL->MaxClippingPlanes << R"(];
 
-		Out.Log(TEXT("float RFX2 = vTexCoords0[0].x;"));
-		Out.Log(TEXT("float RFY2 = vTexCoords0[0].y;"));
-		Out.Log(TEXT("float FX2 = vTexCoords0[0].z;"));
-		Out.Log(TEXT("float FY2 = vTexCoords0[0].w;"));
+void main()
+{
+  uint ClipIndex = uint(ClipParams.x);
+  gTexNum = vTexNum[0];
 
-		Out.Log(TEXT("float U = vTexCoords1[0].x;"));
-		Out.Log(TEXT("float V = vTexCoords1[0].y;"));
-		Out.Log(TEXT("float UL = vTexCoords1[0].z;"));
-		Out.Log(TEXT("float VL = vTexCoords1[0].w;"));
+  float RFX2 = vTexCoords0[0].x;
+  float RFY2 = vTexCoords0[0].y;
+  float FX2 = vTexCoords0[0].z;
+  float FY2 = vTexCoords0[0].w;
 
-		Out.Log(TEXT("float XL = vTexCoords2[0].x;"));
-		Out.Log(TEXT("float YL = vTexCoords2[0].y;"));
-		Out.Log(TEXT("float UMult = vTexCoords2[0].z;"));
-		Out.Log(TEXT("float VMult = vTexCoords2[0].w;"));
+  float U = vTexCoords1[0].x;
+  float V = vTexCoords1[0].y;
+  float UL = vTexCoords1[0].z;
+  float VL = vTexCoords1[0].w;
 
-		Out.Log(TEXT("float X = gl_in[0].gl_Position.x;"));
-		Out.Log(TEXT("float Y = gl_in[0].gl_Position.y;"));
-		Out.Log(TEXT("float Z = gl_in[0].gl_Position.z;"));
+  float XL = vTexCoords2[0].x;
+  float YL = vTexCoords2[0].y;
+  float UMult = vTexCoords2[0].z;
+  float VMult = vTexCoords2[0].w;
 
-		Out.Log(TEXT("vec3 Position;"));
+  float X = gl_in[0].gl_Position.x;
+  float Y = gl_in[0].gl_Position.y;
+  float Z = gl_in[0].gl_Position.z;
 
-		// 0
-		Out.Log(TEXT("Position.x = RFX2 * Z * (X - FX2);"));
-		Out.Log(TEXT("Position.y = RFY2 * Z * (Y - FY2);"));
-		Out.Log(TEXT("Position.z = Z;"));
-		Out.Log(TEXT("gTexCoords.x = (U)*UMult;"));
-		Out.Log(TEXT("gTexCoords.y = (V)*VMult;"));
+  vec3 Position;
 
-		Out.Log(TEXT("gDrawColor = vDrawColor[0];"));
+  // 0
+  Position.x = RFX2 * Z * (X - FX2);
+  Position.y = RFY2 * Z * (Y - FY2);
+  Position.z = Z;
+  gTexCoords.x = (U)*UMult;
+  gTexCoords.y = (V)*VMult;
+  gDrawColor = vDrawColor[0];
+  gl_Position = modelviewprojMat * vec4(Position, 1.0);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[0]);
+  EmitVertex();
 
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Position, 1.0);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[0]);"));
-		Out.Log(TEXT("EmitVertex();"));
+  // 1
+  Position.x = RFX2 * Z * (X + XL - FX2);
+  Position.y = RFY2 * Z * (Y - FY2);
+  Position.z = Z;
+  gTexCoords.x = (U + UL) * UMult;
+  gTexCoords.y = (V)*VMult;
+  gDrawColor = vDrawColor[0];
+  gl_Position = modelviewprojMat * vec4(Position, 1.0);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[1]);
+  EmitVertex();
 
-		// 1
-		Out.Log(TEXT("Position.x = RFX2 * Z * (X + XL - FX2);"));
-		Out.Log(TEXT("Position.y = RFY2 * Z * (Y - FY2);"));
-		Out.Log(TEXT("Position.z = Z;"));
-		Out.Log(TEXT("gTexCoords.x = (U + UL) * UMult;"));
-		Out.Log(TEXT("gTexCoords.y = (V)*VMult;"));
-		Out.Log(TEXT("gDrawColor = vDrawColor[0];"));
+  // 2
+  Position.x = RFX2 * Z * (X + XL - FX2);
+  Position.y = RFY2 * Z * (Y + YL - FY2);
+  Position.z = Z;
+  gTexCoords.x = (U + UL) * UMult;
+  gTexCoords.y = (V + VL) * VMult;
+  gDrawColor = vDrawColor[0];
+  gl_Position = modelviewprojMat * vec4(Position, 1.0);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[2]);
+  EmitVertex();
+  EndPrimitive();
 
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Position, 1.0);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[1]);"));
-		Out.Log(TEXT("EmitVertex();"));
+  // 0
+  Position.x = RFX2 * Z * (X - FX2);
+  Position.y = RFY2 * Z * (Y - FY2);
+  Position.z = Z;
+  gTexCoords.x = (U)*UMult;
+  gTexCoords.y = (V)*VMult;
+  gDrawColor = vDrawColor[0];
+  gl_Position = modelviewprojMat * vec4(Position, 1.0);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[0]);
+  EmitVertex();
 
-		// 2
-		Out.Log(TEXT("Position.x = RFX2 * Z * (X + XL - FX2);"));
-		Out.Log(TEXT("Position.y = RFY2 * Z * (Y + YL - FY2);"));
-		Out.Log(TEXT("Position.z = Z;"));
-		Out.Log(TEXT("gTexCoords.x = (U + UL) * UMult;"));
-		Out.Log(TEXT("gTexCoords.y = (V + VL) * VMult;"));
-		Out.Log(TEXT("gDrawColor = vDrawColor[0];"));
+  // 2
+  Position.x = RFX2 * Z * (X + XL - FX2);
+  Position.y = RFY2 * Z * (Y + YL - FY2);
+  Position.z = Z;
+  gTexCoords.x = (U + UL) * UMult;
+  gTexCoords.y = (V + VL) * VMult;
+  gDrawColor = vDrawColor[0];
+  gl_Position = modelviewprojMat * vec4(Position, 1.0);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[1]);
+  EmitVertex();
 
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Position, 1.0);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[2]);"));
-		Out.Log(TEXT("EmitVertex();"));
-		Out.Log(TEXT("EndPrimitive();"));
+  // 3
+  Position.x = RFX2 * Z * (X - FX2);
+  Position.y = RFY2 * Z * (Y + YL - FY2);
+  Position.z = Z;
+  gTexCoords.x = (U)*UMult;
+  gTexCoords.y = (V + VL) * VMult;
+  gDrawColor = vDrawColor[0];
+  gl_Position = modelviewprojMat * vec4(Position, 1.0);
+  gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[2]);
+  EmitVertex();
 
-		// 0
-		Out.Log(TEXT("Position.x = RFX2 * Z * (X - FX2);"));
-		Out.Log(TEXT("Position.y = RFY2 * Z * (Y - FY2);"));
-		Out.Log(TEXT("Position.z = Z;"));
-		Out.Log(TEXT("gTexCoords.x = (U)*UMult;"));
-		Out.Log(TEXT("gTexCoords.y = (V)*VMult;"));
-		Out.Log(TEXT("gDrawColor = vDrawColor[0];"));
-
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Position, 1.0);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[0]);"));
-		Out.Log(TEXT("EmitVertex();"));
-
-		// 2
-		Out.Log(TEXT("Position.x = RFX2 * Z * (X + XL - FX2);"));
-		Out.Log(TEXT("Position.y = RFY2 * Z * (Y + YL - FY2);"));
-		Out.Log(TEXT("Position.z = Z;"));
-		Out.Log(TEXT("gTexCoords.x = (U + UL) * UMult;"));
-		Out.Log(TEXT("gTexCoords.y = (V + VL) * VMult;"));
-		Out.Log(TEXT("gDrawColor = vDrawColor[0];"));
-
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Position, 1.0);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[1]);"));
-		Out.Log(TEXT("EmitVertex();"));
-
-		// 3
-		Out.Log(TEXT("Position.x = RFX2 * Z * (X - FX2);"));
-		Out.Log(TEXT("Position.y = RFY2 * Z * (Y + YL - FY2);"));
-		Out.Log(TEXT("Position.z = Z;"));
-		Out.Log(TEXT("gTexCoords.x = (U)*UMult;"));
-		Out.Log(TEXT("gTexCoords.y = (V + VL) * VMult;"));
-		Out.Log(TEXT("gDrawColor = vDrawColor[0];"));
-
-		Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Position, 1.0);"));
-		Out.Log(TEXT("gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[2]);"));
-		Out.Log(TEXT("EmitVertex();"));
-
-		Out.Log(TEXT("EndPrimitive();"));
-		Out.Log(TEXT("}"));
-	}
+  EndPrimitive();
+}
+)";
 }
 
 // Vertexshader for DrawTile.
-static void Create_DrawTile_Vert(UXOpenGLRenderDevice* GL, FOutputDevice& Out)
+static void Create_DrawTile_Vert(UXOpenGLRenderDevice* GL, FShaderOutputDevice& Out)
 {
-	Out.Log(TEXT("layout(location = 0) in vec3 Coords;")); // == gl_Vertex
-	Out.Log(TEXT("layout(location = 7) in vec4 DrawColor;"));
-	Out.Log(TEXT("layout(location = 8) in float TexNum;"));
-
+	Out << R"(
+layout(location = 0) in vec3 Coords; // ==gl_Vertex
+)";
+	
 	if (GL->OpenGLVersion == GL_ES)
 	{
 		//No geometry shader in GL_ES.
-		Out.Log(TEXT("layout(location = 2) in vec2 TexCoords;"));
-
-		Out.Log(TEXT("out vec2 gTexCoords;"));
-		Out.Log(TEXT("flat out vec4 gDrawColor;"));
-		Out.Log(TEXT("flat out uint gTexNum;"));
+		Out << R"(
+layout(location = 1) in vec2 TexCoords;
+layout(location = 2) in vec4 DrawColor;
+out vec2 gTexCoords;
+flat out vec4 gDrawColor;
+flat out uint gTexNum;
+)";
 	}
 	else
 	{
-		Out.Log(TEXT("layout(location = 2) in vec4 TexCoords0;"));
-		Out.Log(TEXT("layout(location = 9) in vec4 TexCoords1;"));
-		Out.Log(TEXT("layout(location = 10) in vec4 TexCoords2;"));
+		Out << R"(
+layout(location = 1) in vec4 TexCoords0;
+layout(location = 2) in vec4 TexCoords1;
+layout(location = 3) in vec4 TexCoords2;
+layout(location = 4) in vec4 DrawColor;
 
-		Out.Log(TEXT("out vec3 vCoords;"));
-		Out.Log(TEXT("out vec4 vTexCoords0;"));
-		Out.Log(TEXT("out vec4 vTexCoords1;"));
-		Out.Log(TEXT("out vec4 vTexCoords2;"));
+out vec3 vCoords;
+out vec4 vTexCoords0;
+out vec4 vTexCoords1;
+out vec4 vTexCoords2;
 
-		Out.Log(TEXT("flat out vec4 vDrawColor;"));
-		Out.Log(TEXT("flat out uint vTexNum;"));
-		Out.Log(TEXT("out vec4 vEyeSpacePos;"));
+flat out vec4 vDrawColor;
+flat out uint vTexNum;
+out vec4 vEyeSpacePos;
+)";
 	}
 
-	/*
-	#if SHADERDRAWPARAMETERS
-	struct DrawTileShaderDrawParams
+	Out << R"(
+// we need to pass the bindless handle in a UBO because it 
+// needs to be a dynamically uniform expression on GPUs 
+// that do not support NV_gpu_shader5
+uniform uint TexNum;
+)";
+
+
+	if (GL->OpenGLVersion == GL_ES)
 	{
-		vec4 FrameCoords;  // (RFX2, RFY2, FX2, FY2)
-		vec4 TextureInfo;  // (UMult, VMult, TexNum, Gamma)
-		vec4 DrawColor;    // Color for the tile
-		vec4 HitDrawColor; // Selection color for UEd
-		uvec4 DrawParams;  // (PolyFlags, bHitTesting, unused, unused)
-	};
+		Out << R"(
+void main(void)
+{
+  vec4 gEyeSpacePos = modelviewMat * vec4(Coords, 1.0);
 
-	layout(std430, binding = 6) buffer AllDrawTileShaderDrawParams
+  gTexNum = TexNum;
+  gTexCoords = TexCoords;
+  gDrawColor = DrawColor;
+
+  gl_Position = modelviewprojMat * vec4(Coords, 1.0);
+}
+)";
+	}
+	else
 	{
-		DrawTileShaderDrawParams DrawTileParams[];
-	};
+		Out << R"(
+void main(void)
+{
+  vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);
 
-	flat out uint vTexNum;
-	flat out uint vPolyFlags;
-	flat out float vGamma;
-	# if EDITOR
-	flat out bool vHitTesting;
-	flat out vec4 vHitDrawColor;
-	# endif
-	#endif
-	*/
+  vCoords = Coords;
+  vTexNum = TexNum;
 
-	{
-		Out.Log(TEXT("void main(void)"));
-		Out.Log(TEXT("{"));
-		if (GL->OpenGLVersion == GL_ES)
-		{
-			Out.Log(TEXT("vec4 gEyeSpacePos = modelviewMat * vec4(Coords, 1.0);"));
+  vTexCoords0 = TexCoords0;
+  vTexCoords1 = TexCoords1;
+  vTexCoords2 = TexCoords2;
+  vDrawColor = DrawColor;
 
-			Out.Log(TEXT("gTexNum = uint(TexNum);"));
-			Out.Log(TEXT("gTexCoords = TexCoords;"));
-			Out.Log(TEXT("gDrawColor = DrawColor;"));
-
-			Out.Log(TEXT("gl_Position = modelviewprojMat * vec4(Coords, 1.0);"));
-		}
-		else
-		{
-			Out.Log(TEXT("vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);"));
-			Out.Log(TEXT("vCoords = Coords;"));
-
-			Out.Log(TEXT("vTexNum = uint(TexNum);"));
-			Out.Log(TEXT("vTexCoords0 = TexCoords0;"));
-			Out.Log(TEXT("vTexCoords1 = TexCoords1;"));
-			Out.Log(TEXT("vTexCoords2 = TexCoords2;"));
-			Out.Log(TEXT("vDrawColor = DrawColor;"));
-
-			Out.Log(TEXT("gl_Position = vec4(Coords, 1.0);"));
-		}
-		Out.Log(TEXT("}"));
+  gl_Position = vec4(Coords, 1.0);
+}
+)";
 	}
 }
 
@@ -2362,20 +2665,24 @@ static void BuildShader(const TCHAR* ShaderProgName, GLuint& ShaderProg, UXOpenG
 {
 	guard(BuildShader);
 	FShaderOutputDevice ShOut(ShaderProgName);
-	Implement_Extension(GL, ShOut);
+	Emit_Globals(GL, ShOut);
 	(*Func)(GL, ShOut);
 
 	GLint blen = 0;
 	GLsizei slen = 0;
 	GLint IsCompiled = 0;
-	const GLchar* Shader = TCHAR_TO_ANSI(*ShOut);
-	GLint length = ShOut.Len();
+	const GLchar* Shader = *ShOut;
+	GLint length = ShOut.Length();
 	glShaderSource(ShaderProg, 1, &Shader, &length);
 	glCompileShader(ShaderProg);
 
 	glGetShaderiv(ShaderProg, GL_COMPILE_STATUS, &IsCompiled);
 	if (!IsCompiled)
+	{		
 		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls"), ShaderProgName);
+		FString ShaderSource(*ShOut);
+		debugf(TEXT("XOpenGL: Shader Source: %ls"), *ShaderSource);
+	}
 
 	glGetShaderiv(ShaderProg, GL_INFO_LOG_LENGTH, &blen);
 	if (blen > 1)

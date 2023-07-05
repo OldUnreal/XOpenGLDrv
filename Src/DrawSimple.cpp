@@ -270,8 +270,9 @@ void UXOpenGLRenderDevice::DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLui
             glBufferData(GL_ARRAY_BUFFER, sizeof(float) * Size, EndFlashVertsBuf, GL_DYNAMIC_DRAW);
             break;
 	}
-	glEnableVertexAttribArray(VERTEX_COORD_ATTRIB);
-	glVertexAttribPointer(VERTEX_COORD_ATTRIB,3,GL_FLOAT, GL_FALSE, sizeof(float) * FloatsPerVertex, 0);
+	const INT FloatsPerVertex = 3;
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(float) * FloatsPerVertex, 0);
 	CHECK_GL_ERROR();
 
 	if (HitTesting()) // UED selecting support.
@@ -299,7 +300,7 @@ void UXOpenGLRenderDevice::DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLui
 	CHECK_GL_ERROR();
 
 	// Clean up
-	glDisableVertexAttribArray(VERTEX_COORD_ATTRIB);
+	glDisableVertexAttribArray(0);
 	CHECK_GL_ERROR();
 
 	if (BufferedDraw)

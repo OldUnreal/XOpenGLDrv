@@ -163,7 +163,7 @@ void UXOpenGLRenderDevice::MapBuffers()
         // DrawComplexSurface
         debugf(NAME_DevGraphics, TEXT("Mapping persistent DrawTileBuffer"));
 
-        GLsizeiptr DrawTileBufferSize=(NUMBUFFERS * DRAWTILE_SIZE * sizeof(float));
+        GLsizeiptr DrawTileBufferSize = (NUMBUFFERS * DRAWTILE_SIZE * sizeof(float));
 
         glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
         glBufferStorage(GL_ARRAY_BUFFER, DrawTileBufferSize, 0, PersistentBufferFlags);

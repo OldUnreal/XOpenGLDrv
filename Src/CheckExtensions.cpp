@@ -123,6 +123,8 @@ void UXOpenGLRenderDevice::CheckExtensions()
             UseBindlessTextures = false;
             UseBindlessLightmaps = false;
         }
+
+		NeedDynamicallyUniformBindlessHandles = !GLExtensionSupported(TEXT("NV_gpu_shader5"));
     }
 
     if (GLExtensionSupported(TEXT("GL_ARB_shader_storage_buffer_object")))

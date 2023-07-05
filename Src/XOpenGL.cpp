@@ -607,10 +607,22 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 }
 
 #ifdef SDL2BUILD
-UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
+UBOOL UXOpenGLRenderDevice::SetSDLAttributes(INT NewColorBytes)
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
     INT SDLError = 0;
+
+	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
+#if __APPLE__
+	DesiredStencilBits = 0;
+	DesiredDepthBits = 32;
+#else
+	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
+	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
+#endif
+
+	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
+
 
 	SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
@@ -621,6 +633,7 @@ UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
         SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
     }
 	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
+	debugf(TEXT("Set GL Depth %d => %d"), DesiredDepthBits, SDLError);
 
     SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
 
@@ -656,19 +669,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 
 	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: Creating new OpenGL context."));
 
-	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
-#if __APPLE__
-	DesiredStencilBits = 0;
-	DesiredDepthBits = 32;
-#else
-	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
-	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
-#endif
-
-	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
-
-	INT MajorVersion = 3;
-	INT MinorVersion = 3;
+	INT MajorVersion = 4;
+	INT MinorVersion = 5;
 
 	if (OpenGLVersion == GL_ES)
 	{
@@ -1289,7 +1291,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 #else
 
     if (!Window)
-        SetSDLAttributes(); // Those have to been set BEFORE window creation in SDL2Drv.
+        SetSDLAttributes(NewColorBytes); // Those have to been set BEFORE window creation in SDL2Drv.
 
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)

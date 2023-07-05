@@ -143,23 +143,6 @@
     #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #endif
 
-//these values have to match the corresponding location in shader (such as "layout (location = 0) in vec3 v_coord;")
-enum AttribType
-{
-	VERTEX_COORD_ATTRIB,
-	NORMALS_ATTRIB,
-	TEXTURE_COORD_ATTRIB,
-	LIGHTMAP_COORD_ATTRIB,
-	FOGMAP_COORD_ATTRIB,
-	TEXTURE_ATTRIB,
-	MACRO_COORD_ATTRIB,
-	COLOR_ATTRIB,
-	BINDLESS_TEXTURE_ATTRIB,
-	TEXTURE_COORD_ATTRIB2,
-	TEXTURE_COORD_ATTRIB3,
-	MAP_COORDS_ATTRIB
-};
-
 enum ShaderProgType
 {
 	No_Prog,
@@ -355,6 +338,11 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
     return String;
 }
 
+inline glm::vec4 FPlaneToVec4(FPlane Plane)
+{
+	return glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
+}
+
 enum DrawFlags : DWORD
 {
 	DF_None				= 0x00000000,
@@ -367,36 +355,6 @@ enum DrawFlags : DWORD
 	DF_EnvironmentMap   = 0x00000040,
 	DF_HeightMap	 	= 0x00000080,
 	DF_NoNearZ			= 0x00000100,
-};
-
-enum DrawGouraudTexCoordsIndices : DWORD
-{
-	DGTI_DIFFUSE_INFO,			// UMult, VMult, Diffuse, Alpha
-	DGTI_DETAIL_MACRO_INFO,		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
-	DGTI_MISC_INFO,				// BumpMap Specular, Gamma, texture format, Unused
-	DGTI_EDITOR_DRAWCOLOR,
-	DGTI_DISTANCE_FOG_COLOR,
-	DGTI_DISTANCE_FOG_INFO
-};
-
-enum DrawComplexTexCoordsIndices : DWORD
-{
-	DCTI_DIFFUSE_COORDS,
-	DCTI_LIGHTMAP_COORDS,
-	DCTI_FOGMAP_COORDS,
-	DCTI_DETAIL_COORDS,
-	DCTI_MACRO_COORDS,
-	DCTI_ENVIROMAP_COORDS,
-	DCTI_DIFFUSE_INFO,
-	DCTI_MACRO_INFO,
-	DCTI_BUMPMAP_INFO,
-	DCTI_HEIGHTMAP_INFO,
-	DCTI_X_AXIS,
-	DCTI_Y_AXIS,
-	DCTI_Z_AXIS,
-	DCTI_EDITOR_DRAWCOLOR,
-	DCTI_DISTANCE_FOG_COLOR,
-	DCTI_DISTANCE_FOG_INFO
 };
 
 /*-----------------------------------------------------------------------------
@@ -643,6 +601,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		STORE_INT
 	} BindlessHandleStorage;
 
+	bool NeedDynamicallyUniformBindlessHandles;
+
 	BYTE OpenGLVersion;
 	BYTE ParallaxVersion;
 	BYTE UseVSync;
@@ -695,69 +655,76 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static DWORD ComposeSize;
 	static BYTE* Compose;
 
-	static const INT FloatsPerVertex = 3;
+	enum DrawTileDrawDataIndices : DWORD
+	{
+		DTDD_HIT_COLOR,
+		DTDD_MISC_INFO		// Gamma
+	};
+	
+	struct DrawTileShaderDrawParams
+	{
+		glm::vec4 DrawData[2];
+		// 0: texture number, polyflags, blend polyflags hit testing (bool)
+		// 1: depth tested (bool), unused, unused, unused
+		glm::uvec4 _TexNum[2]; 
 
-	static const GLuint FloatSize1 = (sizeof(float));
-	static const GLuint FloatSize2 = (sizeof(float) * 2);// f.e. TexCoords2D;
-	static const GLuint FloatSize3 = (sizeof(float) * 3);// f.e. FloatsPerVertex
-	static const GLuint FloatSize4 = (sizeof(float) * 4);// f.e. ColorInfo
+		UINT& TexNum()
+		{
+			return _TexNum[0].x;
+		}
 
-	// Don't laugh. Helps to keep overview, just needs to fit UXOpenGLRenderDevice::Buffer...
-    GLuint FloatSize3_2				= FloatSize3 + FloatSize2;
-    GLuint FloatSize3_2_4			= FloatSize3 + FloatSize2 + FloatSize4;
-	GLuint FloatSize3_2_4_1			= FloatSize3 + FloatSize2 + FloatSize4 + FloatSize1;
-	GLuint FloatSize3_2_4_4			= FloatSize3 + FloatSize2 + 2 * FloatSize4;
-	GLuint FloatSize3_2_4_4_2		= FloatSize3 + FloatSize2 + 2 * FloatSize4 + FloatSize2;
-	GLuint FloatSize3_2_4_4_2_2		= FloatSize3 + FloatSize2 + 2 * FloatSize4 + 2 * FloatSize2;
-	GLuint FloatSize3_2_4_4_2_2_3	= FloatSize3 + FloatSize2 + (2 * FloatSize4) + (2 * FloatSize2) + FloatSize3;
-	GLuint FloatSize3_2_4_4_3		= FloatSize3 + FloatSize2 + 2 * FloatSize4 + FloatSize3;
-	GLuint FloatSize3_2_4_4_3_2		= FloatSize3 + FloatSize2 + 2 * FloatSize4 + FloatSize3 + FloatSize2;
-	GLuint FloatSize3_2_4_4_4		= FloatSize3 + FloatSize2 + 3 * FloatSize4;
-	GLuint FloatSize3_2_4_4_4_3		= FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3;
-	GLuint FloatSize3_2_4_4_4_3_2	= FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3 + FloatSize2;
-	GLuint FloatSize3_2_4_4_4_3_4	= FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3 + FloatSize4;
-	GLuint FloatSize3_2_4_4_4_3_2_4 = FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3 + FloatSize2 + FloatSize4;
-	GLuint FloatSize3_2_4_4_4_3_4_4 = FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3 + FloatSize4 + FloatSize4;
-	GLuint FloatSize3_2_4_4_4_3_2_4_4 = FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3 + FloatSize2 + FloatSize4 + FloatSize4;
-	GLuint FloatSize3_2_4_4_4_3_4_4_4 = FloatSize3 + FloatSize2 + 3 * FloatSize4 + FloatSize3 + FloatSize4 + FloatSize4 + FloatSize4;
-	GLuint FloatSize3_3				= 2 * FloatSize3;
-	GLuint FloatSize3_3_4			= 2 * FloatSize3 + FloatSize4;
-	GLuint FloatSize3_3_4_4			= 2 * FloatSize3 + 2 * FloatSize4;
-	GLuint FloatSize3_3_4_4_2		= 2 * FloatSize3 + 2 * FloatSize4 + FloatSize2;
-	GLuint FloatSize3_3_4_4_2_16	= 2 * FloatSize3 + 2 * FloatSize4 + FloatSize2 + 4 * FloatSize4;
-    GLuint FloatSize3_4				= FloatSize3 + FloatSize4;
-    GLuint FloatSize3_4_4			= FloatSize3 + 2 * FloatSize4;
-    GLuint FloatSize3_4_4_4			= FloatSize3 + 3 * FloatSize4;
-    GLuint FloatSize3_4_4_4_4		= FloatSize3 + 4 * FloatSize4;
-	GLuint FloatSize3_4_4_4_4_1		= FloatSize3 + 4 * FloatSize4 + FloatSize1;
-	GLuint FloatSize4_4				= 2 * FloatSize4;
+		UINT& PolyFlags()
+		{
+			return _TexNum[0].y;
+		}
 
-	GLuint DrawTileCoreStrideSize	= FloatSize3_4_4_4_4_1;
-	GLuint DrawTileESStrideSize		= FloatSize3_2_4_1;
+		UINT& BlendPolyFlags()
+		{
+			return _TexNum[0].z;
+		}
+
+		UINT& HitTesting()
+		{
+			return _TexNum[0].w;
+		}
+
+		UINT& DepthTested()
+		{
+			return _TexNum[1].x;
+		}
+
+		FLOAT& Gamma()
+		{
+			return DrawData[DTDD_MISC_INFO].x;
+		}
+		
+	} DrawTileDrawParams;
+
+	struct DrawTileBufferedVertES
+	{
+		glm::vec3 Point;
+		glm::vec2 UV;
+		glm::vec4 Color;
+	};
+
+	struct DrawTileBufferedVertCore
+	{
+		glm::vec3 Point;
+		glm::vec4 TexCoords0;
+		glm::vec4 TexCoords1;
+		glm::vec4 TexCoords2;
+		glm::vec4 Color;
+	};
 
 	struct DrawTileBuffer
 	{
-		glm::vec4 TexCoords[3];
-		GLuint VertSize;
-		GLuint TexSize;
-		GLuint ColorSize;
-		GLuint FloatSize1;
 		GLuint Index;
 		GLuint IndexOffset;
 		GLuint BeginOffset;
-		DWORD PolyFlags;
-		DWORD BlendPolyFlags;
 		DrawTileBuffer()
-			: TexCoords(),
-			VertSize(0),
-			TexSize(0),
-			ColorSize(0),
-			FloatSize1(0),
-			Index(0),
+			: Index(0),
 			IndexOffset(0),
-			BeginOffset(0),
-			PolyFlags(0),
-			BlendPolyFlags(0)
+			BeginOffset(0)
 		{}
 	}DrawTileBufferData;
 
@@ -855,6 +822,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 #endif
 
+	enum DrawGouraudDrawDataIndices : DWORD
+	{
+		DGDD_DIFFUSE_INFO,			// UMult, VMult, Diffuse, Alpha
+		DGDD_DETAIL_MACRO_INFO,		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
+		DGDD_MISC_INFO,				// BumpMap Specular, Gamma, texture format, Unused
+		DGDD_EDITOR_DRAWCOLOR,
+		DGDD_DISTANCE_FOG_COLOR,
+		DGDD_DISTANCE_FOG_INFO
+	};
+
 	struct DrawGouraudShaderDrawParams
 	{
 		glm::vec4 DrawData[6];
@@ -891,7 +868,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 Light;
 		glm::vec4 Fog;
 	};
-	GLuint DrawGouraudStrideSize = sizeof(DrawGouraudBufferedVert);
 	static_assert(sizeof(DrawGouraudBufferedVert) == 64, "Invalid gouraud buffered vertex size");
 
 	struct DrawGouraudBuffer
@@ -927,6 +903,26 @@ class UXOpenGLRenderDevice : public URenderDevice
 	LightInfo LightData;
 	INT NumStaticLights = 0;
 	INT NumLights = 0;
+
+	enum DrawComplexDrawDataIndices : DWORD
+	{
+		DCDD_DIFFUSE_COORDS,
+		DCDD_LIGHTMAP_COORDS,
+		DCDD_FOGMAP_COORDS,
+		DCDD_DETAIL_COORDS,
+		DCDD_MACRO_COORDS,
+		DCDD_ENVIROMAP_COORDS,
+		DCDD_DIFFUSE_INFO,
+		DCDD_MACRO_INFO,
+		DCDD_BUMPMAP_INFO,
+		DCDD_HEIGHTMAP_INFO,
+		DCDD_X_AXIS,
+		DCDD_Y_AXIS,
+		DCDD_Z_AXIS,
+		DCDD_EDITOR_DRAWCOLOR,
+		DCDD_DISTANCE_FOG_COLOR,
+		DCDD_DISTANCE_FOG_INFO
+	};
 
 	struct DrawComplexShaderDrawParams
 	{
@@ -965,7 +961,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 Coords;
 		glm::vec4 Normal;
 	};
-	GLuint DrawComplexStrideSize = sizeof(DrawComplexBufferedVert);
 	static_assert(sizeof(DrawComplexBufferedVert) == 32, "Invalid complex buffered vertex size");
 
 	struct DrawComplexBuffer
@@ -993,7 +988,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//DrawTile
 	GLuint DrawTileTexCoords;
 	GLuint DrawTileTextureHandle;
-	UBOOL PrevDrawTileDepthTested;
 
 	//Matrices
 	glm::mat4 projMat;
@@ -1215,7 +1209,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SwapControl();
 
 #ifdef SDL2BUILD
-    UBOOL SetSDLAttributes();
+    UBOOL SetSDLAttributes(INT NewColorBytes);
 #elif _WIN32
 	void  PrintFormat(HDC hDC, INT nPixelFormat);
 #endif
@@ -1243,7 +1237,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Textures/Sampler Management
 	//
 	static BOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
+	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, DWORD BindlessTexNum=~0);
 	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags);
 	void  SetNoTexture(INT Multi);
@@ -1301,6 +1295,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// DrawTile Support
 	//
+	DrawTileShaderDrawParams* DrawTileGetDrawParamsRef();
 	void  DrawTileVerts();
 	void  DrawTileEnd(INT NextProgram);
 	void  DrawTileStart();

@@ -95,12 +95,15 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	return Result;
 }
 
-BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
+BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, DWORD BindlessTexNum)
 {
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
+	FCachedTexture* Result = nullptr;
+	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;	
 
-	if (!GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE) ||
+	if ((Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE)) == nullptr ||
 		(!IsResidentBindlessTexture && !IsBoundToTMU) ||
+		(IsResidentBindlessTexture && BindlessTexNum != ~0 && BindlessTexNum != Result->TexNum[CacheSlot]) ||
 		IsTextureDataStale)
 	{
 		return TRUE;

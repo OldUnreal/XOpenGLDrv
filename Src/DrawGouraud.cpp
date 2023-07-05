@@ -39,11 +39,6 @@ UXOpenGLRenderDevice::DrawGouraudShaderDrawParams* UXOpenGLRenderDevice::DrawGou
 		&DrawGouraudDrawParams;
 }
 
-inline glm::vec4 FPlaneToVec4(FPlane Plane)
-{
-	return glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
-}
-
 inline void UXOpenGLRenderDevice::DrawGouraudBufferVert( DrawGouraudBufferedVert* Vert, FTransTexture* P, DrawGouraudBuffer& BufferData )
 {
 	Vert->Point  = glm::vec3(P->Point.X, P->Point.Y, P->Point.Z);
@@ -114,12 +109,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		if (HitTesting()) // UED only.
 		{
 			DrawGouraudDrawParams.HitTesting() = 1;
-			DrawGouraudDrawParams.DrawData[DGTI_EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
+			DrawGouraudDrawParams.DrawData[DGDD_EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
 		}
 		else
 		{
 			DrawGouraudDrawParams.HitTesting() = 0;
-			DrawGouraudDrawParams.DrawData[DGTI_EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
+			DrawGouraudDrawParams.DrawData[DGDD_EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
 		}
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
@@ -127,7 +122,7 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	}
 
 	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, DF_DiffuseTexture);
-	DrawGouraudDrawParams.DrawData[DGTI_DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
+	DrawGouraudDrawParams.DrawData[DGDD_DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
 	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
 
 	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture | NoNearZFlag;
@@ -142,12 +137,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		DrawGouraudDrawParams.DrawFlags() |= DF_DetailTexture;
 
 		SetTexture(1, FTEXTURE_GET(DrawGouraudDetailTextureInfo), Info.Texture->DetailTexture->PolyFlags, 0.0, DF_DetailTexture);
-		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
+		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
 		DrawGouraudDrawParams.TexNum[1] = TexInfo[1].TexNum;
 	}
 	else
 	{
-		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO] = glm::vec4(0.f, 0.f, 0.f, 0.f);
+		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO] = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	}
 
 #if ENGINE_VERSION==227
@@ -161,13 +156,13 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		DrawGouraudDrawParams.DrawFlags() |= DF_BumpMap;
 
 		SetTexture(2, FTEXTURE_GET(DrawGouraudBumpMapInfo), Info.Texture->BumpMap->PolyFlags, 0.0, DF_BumpMap);
-		DrawGouraudDrawParams.DrawData[DGTI_MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
+		DrawGouraudDrawParams.DrawData[DGDD_MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
 		DrawGouraudDrawParams.TexNum[2] = TexInfo[2].TexNum; //using Base Texture UV.
 	}
 	else
 	{
 #endif // ENGINE_VERSION
-		DrawGouraudDrawParams.DrawData[DGTI_MISC_INFO] = glm::vec4(0.f, Gamma, Info.Texture->Format, 0.f);
+		DrawGouraudDrawParams.DrawData[DGDD_MISC_INFO] = glm::vec4(0.f, Gamma, Info.Texture->Format, 0.f);
 #if ENGINE_VERSION==227
 	}
 #endif
@@ -184,12 +179,12 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		SetTexture(3, FTEXTURE_GET(DrawGouraudMacroTextureInfo), Info.Texture->MacroTexture->PolyFlags, 0.0, DF_MacroTexture);
 		DrawGouraudDrawParams.TexNum[3] = TexInfo[3].TexNum;
 
-		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO].z = TexInfo[3].UMult;
-		DrawGouraudDrawParams.DrawData[DGTI_DETAIL_MACRO_INFO].w = TexInfo[3].VMult;
+		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO].z = TexInfo[3].UMult;
+		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO].w = TexInfo[3].VMult;
 	}
 
-	DrawGouraudDrawParams.DrawData[DGTI_DISTANCE_FOG_COLOR] = DistanceFogColor;
-	DrawGouraudDrawParams.DrawData[DGTI_DISTANCE_FOG_INFO]  = DistanceFogValues;
+	DrawGouraudDrawParams.DrawData[DGDD_DISTANCE_FOG_COLOR] = DistanceFogColor;
+	DrawGouraudDrawParams.DrawData[DGDD_DISTANCE_FOG_INFO]  = DistanceFogValues;
 }
 
 void UXOpenGLRenderDevice::DrawGouraudReleaseState(FTextureInfo& Info)
@@ -232,7 +227,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	}
 #endif
 
-	if (DrawGouraudBufferData.IndexOffset >= DRAWGOURAUDPOLY_SIZE - DrawGouraudStrideSize * (NumPts - 2) * 3)
+	if (DrawGouraudBufferData.IndexOffset >= DRAWGOURAUDPOLY_SIZE - sizeof(DrawGouraudBufferedVert) * (NumPts - 2) * 3)
 	{
 		unclockFast(Stats.GouraudPolyCycles);
 		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
@@ -241,7 +236,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
 
 		// just in case...
-		if (DrawGouraudStrideSize * (NumPts - 2) * 3 >= DRAWGOURAUDPOLY_SIZE)
+		if (sizeof(DrawGouraudBufferedVert) * (NumPts - 2) * 3 >= DRAWGOURAUDPOLY_SIZE)
 		{
 			GWarn->Logf(TEXT("DrawGouraudPolygon poly too big!"));
 			return;
@@ -490,16 +485,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 
 	if (BeginOffset != PrevDrawGouraudBeginOffset)
 	{
-		// Coords
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)    BeginOffset);
-		// Normals
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ sizeof(FLOAT) * 3));
-		// UV
-		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ sizeof(FLOAT) * 6));
-		// LightColor
-		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ sizeof(FLOAT) * 8));
-		// FogColor
-		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, DrawGouraudStrideSize, (GLvoid*)(	BeginOffset	+ sizeof(FLOAT) * 12));
+		using Vert = DrawGouraudBufferedVert;
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)    BeginOffset);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Normal)));
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, UV)));
+		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Light)));
+		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Fog)));
 		CHECK_GL_ERROR();
 
 		PrevDrawGouraudBeginOffset = BeginOffset;
@@ -512,7 +503,6 @@ void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& 
 		glUniform4fv(DrawGouraudDrawData, ARRAY_COUNT(DrawGouraudDrawParams.DrawData), reinterpret_cast<const GLfloat*>(DrawGouraudDrawParams.DrawData));
 
 	}
-
     CHECK_GL_ERROR();
 
 	// Draw
