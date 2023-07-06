@@ -1209,7 +1209,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SwapControl();
 
 #ifdef SDL2BUILD
-    UBOOL SetSDLAttributes(INT NewColorBytes);
+    UBOOL SetSDLAttributes();
 #elif _WIN32
 	void  PrintFormat(HDC hDC, INT nPixelFormat);
 #endif

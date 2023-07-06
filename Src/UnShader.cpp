@@ -1325,7 +1325,7 @@ void main(void)
 
   vDrawFlags = DrawComplexParams[gl_DrawID].DrawFlags[0];
   vTextureFormat = DrawComplexParams[gl_DrawID].DrawFlags[1];
-  vPolyFlags = DrawComplexParams[gl_DrawID].DrawFlags[2];"));
+  vPolyFlags = DrawComplexParams[gl_DrawID].DrawFlags[2];
 )";
 
 		if (GIsEditor)

@@ -607,22 +607,10 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 }
 
 #ifdef SDL2BUILD
-UBOOL UXOpenGLRenderDevice::SetSDLAttributes(INT NewColorBytes)
+UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
     INT SDLError = 0;
-
-	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
-#if __APPLE__
-	DesiredStencilBits = 0;
-	DesiredDepthBits = 32;
-#else
-	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
-	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
-#endif
-
-	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "),DesiredColorBits,DesiredStencilBits,DesiredDepthBits);
-
 
 	SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
@@ -633,7 +621,6 @@ UBOOL UXOpenGLRenderDevice::SetSDLAttributes(INT NewColorBytes)
         SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
     }
 	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
-	debugf(TEXT("Set GL Depth %d => %d"), DesiredDepthBits, SDLError);
 
     SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
 
@@ -1177,6 +1164,17 @@ void UXOpenGLRenderDevice::SetPermanentState()
 UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::SetRes);
+
+	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
+#if __APPLE__
+	DesiredStencilBits = 0;
+	DesiredDepthBits = 32;
+#else
+	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
+	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
+#endif
+
+	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "), DesiredColorBits, DesiredStencilBits, DesiredDepthBits);
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 #ifdef SDL2BUILD
