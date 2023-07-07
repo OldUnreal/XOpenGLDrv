@@ -1289,7 +1289,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 #else
 
     if (!Window)
-        SetSDLAttributes(NewColorBytes); // Those have to been set BEFORE window creation in SDL2Drv.
+        SetSDLAttributes(); // Those have to been set BEFORE window creation in SDL2Drv.
 
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
