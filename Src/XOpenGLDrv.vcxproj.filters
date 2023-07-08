@@ -58,9 +58,6 @@
       <Filter>Inc</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
-    <ClInclude Include="..\Inc\XOpenGLFuncs.h">
-      <Filter>Inc</Filter>
-    </ClInclude>
     <ClInclude Include="..\Inc\glad.h">
       <Filter>Inc</Filter>
     </ClInclude>

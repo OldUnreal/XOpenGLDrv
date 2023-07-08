@@ -27,19 +27,16 @@
 
 #ifdef WIN32
 	#define WINBUILD 1
-	#define GLAD 1
 	#include <windows.h>
 	#include <mmsystem.h>
 
-	#ifdef GLAD
-		extern "C"
-		{
+	extern "C"
+	{
 		#include "glad.h"
-		}
-		#include "glext.h" // from https://khronos.org/registry/OpenGL/index_gl.php
-		#define WGL_WGLEXT_PROTOTYPES
-		#include "wglext.h"
-	#endif
+	}
+	#include "glext.h" // from https://khronos.org/registry/OpenGL/index_gl.php
+	#define WGL_WGLEXT_PROTOTYPES
+	#include "wglext.h"
 
 	#ifdef SDL2BUILD
 		#include <SDL2/SDL.h>
@@ -48,18 +45,10 @@
 	#endif
 #else
     #define SDL2BUILD 1
-    #ifdef __LINUX_ARM__
-        //On init Glew uses OpenGL instead of GL ES, or fails entirely if SDL2 is built with ES support only, which forces ES only platforms like the ODROID-XU4 to fall back to Mesa.
-        //Glew doesn't seem to work in an ES only environment and officially it does not support ES.
-        //A solely ES based context can be made using glad, so gonna use glad here.
-    #endif
-		#define GLAD 1
-	#ifdef GLAD
-		extern "C"
-		{
-			#include "glad.h"
-		}
-	#endif
+	extern "C"
+	{
+		#include "glad.h"
+	}
     #include <unistd.h>
     #include <SDL.h>
 #endif

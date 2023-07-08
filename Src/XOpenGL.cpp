@@ -759,21 +759,10 @@ InitContext:
 
 	MakeCurrent();
 
-#ifdef GLAD
 	if (OpenGLVersion == GL_ES)
 		gladLoadGLES2Loader(SDL_GL_GetProcAddress);
 	else
 		gladLoadGLLoader(SDL_GL_GetProcAddress);
-#else
-# define GL_PROC(ext,fntype,fnname)										\
-	if (SUPPORTS_##ext) {												\
-		if ((fnname = (fntype) SDL_GL_GetProcAddress(#fnname)) == NULL) { \
-			debugf(NAME_Init, TEXT("Missing OpenGL entry point '%ls' for '%ls'"), #fnname, #ext); \
-			SUPPORTS_##ext = 0;											\
-		}																\
-	}
-# include "XOpenGLFuncs.h"
-#endif
 
 	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
 	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
