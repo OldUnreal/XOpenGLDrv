@@ -733,7 +733,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	{
 		GLsync Sync[NUMBUFFERS];
 		FLOAT* Buffer{};
-		FLOAT* VertBuffer{};
 		GLuint64* Int64Buffer{};
 		BufferRange()
 		: Sync()

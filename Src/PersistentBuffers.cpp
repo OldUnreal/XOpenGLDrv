@@ -106,7 +106,7 @@ void UXOpenGLRenderDevice::MapBuffers()
 	{
 		DrawGouraudBufferRange.Buffer = new FLOAT[DRAWGOURAUDPOLY_SIZE];
 		glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
-		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.VertBuffer, GL_STREAM_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, DRAWGOURAUDPOLY_SIZE * sizeof(float), DrawGouraudBufferRange.Buffer, GL_STREAM_DRAW);
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 		if (UsingShaderDrawParameters)
