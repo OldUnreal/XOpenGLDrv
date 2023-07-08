@@ -658,12 +658,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 	enum DrawTileDrawDataIndices : DWORD
 	{
 		DTDD_HIT_COLOR,
+		DTDD_DRAW_COLOR,
 		DTDD_MISC_INFO		// Gamma
 	};
 	
 	struct DrawTileShaderDrawParams
 	{
-		glm::vec4 DrawData[2];
+		glm::vec4 DrawData[3];
 		// 0: texture number, polyflags, blend polyflags hit testing (bool)
 		// 1: depth tested (bool), unused, unused, unused
 		glm::uvec4 _TexNum[2]; 
@@ -704,7 +705,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	{
 		glm::vec3 Point;
 		glm::vec2 UV;
-		glm::vec4 Color;
 	};
 
 	struct DrawTileBufferedVertCore
@@ -713,7 +713,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 TexCoords0;
 		glm::vec4 TexCoords1;
 		glm::vec4 TexCoords2;
-		glm::vec4 Color;
 	};
 
 	struct DrawTileBuffer
@@ -1059,6 +1058,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//Drawing colors
 	GLuint DrawSimpleDrawColor;
 	GLuint DrawTileHitDrawColor;
+	GLuint DrawTileDrawColor;
 
 	//Texture vars
 	GLuint DrawTileTexture;

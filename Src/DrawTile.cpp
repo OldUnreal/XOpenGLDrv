@@ -9,7 +9,6 @@
         * Added support for bindless textures
         * removed some blending changes (PF_TwoSided PF_Unlit)
         * Added batching
-
 =============================================================================*/
 
 // Include GLM
@@ -51,10 +50,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	*/
 	SetProgram(Tile_Prog);
 
-	// stijn: no longer necessary...
-//    if (Info.Palette && Info.Palette[128].A != 255 && !(PolyFlags & PF_Translucent))
-//        PolyFlags |= PF_Highlighted;
-
+	// Calculate new drawcall parameters
 #if ENGINE_VERSION==227
     if (PolyFlags & (PF_AlphaBlend | PF_Translucent | PF_Modulated | PF_Highlighted)) // Make sure occlusion is correctly set.
 #else
@@ -66,53 +62,13 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	PolyFlags &= ~(PF_RenderHint | PF_Unlit); // Using PF_RenderHint internally for CW/CCW switch.
 
     DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
-    GLuint DrawTileStrideSize = (OpenGLVersion == GL_ES) ? 6 * sizeof(struct DrawTileBufferedVertES) : sizeof(struct DrawTileBufferedVertCore);
 
+	BOOL bHitTesting = GIsEditor && HitTesting();
+
+	// Hack to render HUD on top of everything in 469
 #if UNREAL_TOURNAMENT_OLDUNREAL
     UBOOL ShouldDepthTest = ((GUglyHackFlags & HACKFLAGS_PostRender) == 0) || Abs(1.f - Z) > SMALL_NUMBER;
 #endif
-
-	// Check if uniforms will change
-	if (
-		DrawTileDrawParams.PolyFlags() != NextPolyFlags ||
-        // Check if blending mode will change
-        WillBlendStateChange(DrawTileDrawParams.BlendPolyFlags(), PolyFlags) || // orig polyflags here!
-        // Check if texture will change
-        WillTextureStateChange(0, Info, PolyFlags, DrawTileDrawParams.TexNum()) ||
-        // Check if we have space to batch more data
-        DrawTileBufferData.IndexOffset * sizeof(GLfloat) >= DRAWTILE_SIZE * sizeof(GLfloat) - DrawTileStrideSize
-#if UNREAL_TOURNAMENT_OLDUNREAL
-        // Check if the depth testing mode will change
-        || ShouldDepthTest != DrawTileDrawParams.DepthTested()
-#endif
-        )
-	{
-        if (DrawTileBufferData.IndexOffset > 0)
-        {
-            DrawTileVerts();
-            WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
-        }
-
-        DrawTileDrawParams.BlendPolyFlags() = PolyFlags;
-        SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
-
-#if UNREAL_TOURNAMENT_OLDUNREAL
-        if (ShouldDepthTest)
-            glEnable(GL_DEPTH_TEST);
-        else
-            glDisable(GL_DEPTH_TEST);
-
-		DrawTileDrawParams.DepthTested() = ShouldDepthTest;
-#endif
-	}
-
-    DrawTileDrawParams.PolyFlags() = NextPolyFlags;
-	DrawTileDrawParams.Gamma() = Gamma;
-
-    SetTexture(0, Info, PolyFlags, 0, DF_DiffuseTexture);
-	DrawTileDrawParams.TexNum() = TexInfo[0].TexNum;
-
-    clockFast(Stats.TileBufferCycles);
 
 	// Color
 	if (PolyFlags & PF_Modulated)
@@ -131,23 +87,67 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	else Color.W = 1.0f;
 #endif
 
-	if (GIsEditor)
+	glm::vec4 DrawColor = FPlaneToVec4(Color);
+
+	// How much vertex data are we going to push to the GPU?
+    GLuint DrawTileSize = (OpenGLVersion == GL_ES) ? 6 * sizeof(struct DrawTileBufferedVertES) : 3 * sizeof(struct DrawTileBufferedVertCore);
+
+	// Check if GL state will change
+	if (DrawTileDrawParams.DrawData[DTDD_DRAW_COLOR] != DrawColor ||
+		DrawTileDrawParams.PolyFlags() != NextPolyFlags ||
+		DrawTileDrawParams.HitTesting() != bHitTesting ||
+        WillBlendStateChange(DrawTileDrawParams.BlendPolyFlags(), PolyFlags) || // orig polyflags here!
+        WillTextureStateChange(0, Info, PolyFlags, DrawTileDrawParams.TexNum()) ||
+        // Check if we have space to batch more data
+        DrawTileBufferData.IndexOffset * sizeof(GLfloat) >= DRAWTILE_SIZE * sizeof(GLfloat) - DrawTileSize
+#if UNREAL_TOURNAMENT_OLDUNREAL
+        // Check if the depth testing mode will change
+        || ShouldDepthTest != DrawTileDrawParams.DepthTested()
+#endif
+        )
 	{
-		if (Frame->Viewport->Actor && (Frame->Viewport->IsOrtho() || Abs(Z) <= SMALL_NUMBER))
-			Z = 1.0f; // Probably just needed because projection done below assumes non ortho projection.
-		
-		// Selection Color
-		if (HitTesting())
-		{
-			DrawTileDrawParams.DrawData[0] = FPlaneToVec4(HitColor);
-			DrawTileDrawParams.HitTesting() = TRUE;
-		}
+	    // Flush batched data
+        if (DrawTileBufferData.IndexOffset > 0)
+        {
+            DrawTileVerts();
+            WaitBuffer(DrawTileRange, DrawTileBufferData.Index);
+        }
+
+		// Set new GL state
+        DrawTileDrawParams.BlendPolyFlags() = PolyFlags;
+        SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
+
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		if (ShouldDepthTest)
+			glEnable(GL_DEPTH_TEST);
 		else
-		{
-			DrawTileDrawParams.HitTesting() = FALSE;
-		}
+			glDisable(GL_DEPTH_TEST);
+	
+		DrawTileDrawParams.DepthTested() = ShouldDepthTest;
+#endif
+    }
+
+	// Bind texture or fetch its bindless handle
+    SetTexture(0, Info, PolyFlags, 0, DF_DiffuseTexture);
+
+    // Buffer new drawcall parameters
+	DrawTileDrawParams.DrawData[DTDD_HIT_COLOR] = FPlaneToVec4(HitColor);
+	DrawTileDrawParams.DrawData[DTDD_DRAW_COLOR] = DrawColor;
+	DrawTileDrawParams.HitTesting() = bHitTesting;
+	DrawTileDrawParams.PolyFlags() = NextPolyFlags;
+	DrawTileDrawParams.Gamma() = Gamma;
+	DrawTileDrawParams.TexNum() = TexInfo[0].TexNum;
+
+	if (GIsEditor && 
+		Frame->Viewport->Actor && 
+		(Frame->Viewport->IsOrtho() || Abs(Z) <= SMALL_NUMBER))
+	{
+		Z = 1.0f; // Probably just needed because projection done below assumes non ortho projection.
 	}
 
+    clockFast(Stats.TileBufferCycles);
+
+	// Buffer the tile
 	if (OpenGLVersion == GL_ES)
 	{
 		struct DrawTileBufferedVertES* Out =
@@ -156,37 +156,29 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 					DrawTileBufferData.BeginOffset +
 					DrawTileBufferData.IndexOffset]);
 
-		glm::vec4 OutColor = FPlaneToVec4(Color);
-		
         // 0
 		Out[0].Point = glm::vec3(RFX2*Z*(X - Frame->FX2), RFY2*Z*(Y - Frame->FY2), Z);
 		Out[0].UV    = glm::vec2((U)*TexInfo[0].UMult, (V)*TexInfo[0].VMult);
-		Out[0].Color = OutColor;
 
         // 1
 		Out[1].Point = glm::vec3(RFX2*Z*(X + XL - Frame->FX2), RFY2*Z*(Y - Frame->FY2), Z);
 		Out[1].UV    = glm::vec2((U + UL)*TexInfo[0].UMult, (V)*TexInfo[0].VMult);
-		Out[1].Color = OutColor;
 
         // 2
 		Out[2].Point = glm::vec3(RFX2*Z*(X + XL - Frame->FX2), RFY2*Z*(Y + YL - Frame->FY2), Z);
 		Out[2].UV    = glm::vec2((U + UL)*TexInfo[0].UMult, (V + VL)*TexInfo[0].VMult);
-		Out[2].Color = OutColor;
 
         // 0
 		Out[3].Point = glm::vec3(RFX2*Z*(X - Frame->FX2), RFY2*Z*(Y - Frame->FY2), Z);
 		Out[3].UV    = glm::vec2((U)*TexInfo[0].UMult, (V)*TexInfo[0].VMult);
-		Out[3].Color = OutColor;
 
         // 2
 		Out[4].Point = glm::vec3(RFX2*Z*(X + XL - Frame->FX2), RFY2*Z*(Y + YL - Frame->FY2), Z);
 		Out[4].UV    = glm::vec2((U + UL)*TexInfo[0].UMult, (V + VL)*TexInfo[0].VMult);
-		Out[4].Color = OutColor;
 
         // 3
 		Out[5].Point = glm::vec3(RFX2*Z*(X - Frame->FX2), RFY2*Z*(Y + YL - Frame->FY2), Z);
 		Out[5].UV    = glm::vec2((U)*TexInfo[0].UMult, (V + VL)*TexInfo[0].VMult);
-		Out[5].Color = OutColor;
 
 #if ENGINE_VERSION==227
         if (Info.Modifier)
@@ -195,8 +187,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 				Info.Modifier->TransformPoint(Out[i].UV.x, Out[i].UV.y);
 		}
 #endif
-
-        DrawTileBufferData.IndexOffset += 6 * sizeof(struct DrawTileBufferedVertES) / sizeof(FLOAT);
 	}
 	else
 	{
@@ -210,16 +200,15 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		Out->TexCoords0 = glm::vec4(RFX2, RFY2, Frame->FX2, Frame->FY2);
 		Out->TexCoords1 = glm::vec4(U, V, UL, VL);
 		Out->TexCoords2 = glm::vec4(XL, YL, TexInfo[0].UMult, TexInfo[0].VMult);
-		Out->Color = FPlaneToVec4(Color);
 
 #if ENGINE_VERSION==227 && 0 // TODO - Need to push 2x3 matrix transformation to UV mapping.
         if (Info.Modifier)
         {
         }
 #endif
-
-        DrawTileBufferData.IndexOffset += 3 * sizeof(struct DrawTileBufferedVertCore) / sizeof(FLOAT);
 	}
+	DrawTileBufferData.IndexOffset += DrawTileSize / sizeof(FLOAT);
+
     unclockFast(Stats.TileBufferCycles);
 
     if (NoBuffering) // No buffering at this time for Editor.
@@ -255,12 +244,6 @@ void UXOpenGLRenderDevice::DrawTileVerts()
 			using Vert = DrawTileBufferedVertES;
             glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset));
             glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, UV)));
-
-			// TODO: Remove 1 when we implement drawparams support
-			if (1 || !UsingShaderDrawParameters)
-			{
-				glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, Color)));
-			}
             CHECK_GL_ERROR();
             PrevDrawTileBeginOffset = BeginOffset;
         }
@@ -288,16 +271,12 @@ void UXOpenGLRenderDevice::DrawTileVerts()
             glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, TexCoords1)));
             glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, TexCoords2)));
 
-			// TODO: Remove 1 when we implement drawparams support
-			if (1 || !UsingShaderDrawParameters)
-			{
-				glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, Color)));
-			}
             CHECK_GL_ERROR();
             PrevDrawTileBeginOffset = BeginOffset;
         }
 	}
 
+	// Push drawcall parameters
 	if (0 && UsingShaderDrawParameters)
 	{
 		// TODO: Implement
@@ -325,6 +304,10 @@ void UXOpenGLRenderDevice::DrawTileVerts()
 		// Texture handle
 		glUniform1ui(DrawTileTexNum, DrawTileDrawParams.TexNum());
 		CHECK_GL_ERROR();
+
+		// DrawColor
+		glm::vec4& Color = DrawTileDrawParams.DrawData[DTDD_DRAW_COLOR];
+		glUniform4f(DrawTileDrawColor, Color.x, Color.y, Color.z, Color.w);
 	}
 
     // Draw
@@ -360,8 +343,8 @@ void UXOpenGLRenderDevice::DrawTileEnd(INT NextProgram)
 
     CHECK_GL_ERROR();
 
-//	for (INT i = 0; i < (OpenGLVersion == GL_ES ? 3 : 5); ++i)
-//		glDisableVertexAttribArray(i);
+	for (INT i = 0; i < (OpenGLVersion == GL_ES ? 2 : 4); ++i)
+		glDisableVertexAttribArray(i);
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
     glEnable(GL_DEPTH_TEST);
@@ -386,7 +369,7 @@ void UXOpenGLRenderDevice::DrawTileStart()
     glBindVertexArray(DrawTileVertsVao);
     glBindBuffer(GL_ARRAY_BUFFER, DrawTileVertBuffer);
 
-	for (INT i = 0; i < (OpenGLVersion == GL_ES ? 3 : 5); ++i)
+	for (INT i = 0; i < (OpenGLVersion == GL_ES ? 2 : 4); ++i)
 		glEnableVertexAttribArray(i);
 
     DrawTileDrawParams.BlendPolyFlags() = CurrentPolyFlags | CurrentAdditionalPolyFlags;

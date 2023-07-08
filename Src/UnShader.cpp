@@ -2359,9 +2359,9 @@ uniform uint PolyFlags;
 uniform bool bHitTesting;
 uniform float Gamma;
 uniform vec4 HitDrawColor;
+uniform vec4 DrawColor;
 
 in vec2 gTexCoords;
-flat in vec4 gDrawColor;
 flat in uint gTexNum;
 
 uniform sampler2D Texture0;
@@ -2396,7 +2396,7 @@ void main(void)
   else if (((PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u) && Color.a < 0.01)
     discard;
 
-  TotalColor = Color * gDrawColor; // Add DrawColor.
+  TotalColor = Color * DrawColor;
 
   if ((PolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
   {
@@ -2421,7 +2421,6 @@ void main(void)
   // HitSelection, Zoneview etc.
   if (bHitTesting)
     TotalColor = HitDrawColor; // Use HitDrawColor.
-
 )";		
 	}
 
@@ -2432,7 +2431,7 @@ void main(void)
   FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;
 )";
 	}
-	else Out << "FragColor = TotalColor;" END_LINE;
+	else Out << "  FragColor = TotalColor;" END_LINE;
     Out << "}" END_LINE;
 }
 
@@ -2447,12 +2446,10 @@ flat in uint vTexNum[];
 in vec4 vTexCoords0[];
 in vec4 vTexCoords1[];
 in vec4 vTexCoords2[];
-flat in vec4 vDrawColor[];
 in vec4 vEyeSpacePos[];
 in vec3 vCoords[];
 
 out vec2 gTexCoords;
-flat out vec4 gDrawColor;
 flat out uint gTexNum;
 
 out float gl_ClipDistance[)" << GL->MaxClippingPlanes << R"(];
@@ -2489,7 +2486,6 @@ void main()
   Position.z = Z;
   gTexCoords.x = (U)*UMult;
   gTexCoords.y = (V)*VMult;
-  gDrawColor = vDrawColor[0];
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[0]);
   EmitVertex();
@@ -2500,7 +2496,6 @@ void main()
   Position.z = Z;
   gTexCoords.x = (U + UL) * UMult;
   gTexCoords.y = (V)*VMult;
-  gDrawColor = vDrawColor[0];
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[1]);
   EmitVertex();
@@ -2511,7 +2506,6 @@ void main()
   Position.z = Z;
   gTexCoords.x = (U + UL) * UMult;
   gTexCoords.y = (V + VL) * VMult;
-  gDrawColor = vDrawColor[0];
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[2]);
   EmitVertex();
@@ -2523,7 +2517,6 @@ void main()
   Position.z = Z;
   gTexCoords.x = (U)*UMult;
   gTexCoords.y = (V)*VMult;
-  gDrawColor = vDrawColor[0];
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[0]);
   EmitVertex();
@@ -2534,7 +2527,6 @@ void main()
   Position.z = Z;
   gTexCoords.x = (U + UL) * UMult;
   gTexCoords.y = (V + VL) * VMult;
-  gDrawColor = vDrawColor[0];
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[1]);
   EmitVertex();
@@ -2545,7 +2537,6 @@ void main()
   Position.z = Z;
   gTexCoords.x = (U)*UMult;
   gTexCoords.y = (V + VL) * VMult;
-  gDrawColor = vDrawColor[0];
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, vCoords[2]);
   EmitVertex();
@@ -2567,9 +2558,7 @@ layout(location = 0) in vec3 Coords; // ==gl_Vertex
 		//No geometry shader in GL_ES.
 		Out << R"(
 layout(location = 1) in vec2 TexCoords;
-layout(location = 2) in vec4 DrawColor;
 out vec2 gTexCoords;
-flat out vec4 gDrawColor;
 flat out uint gTexNum;
 )";
 	}
@@ -2579,14 +2568,12 @@ flat out uint gTexNum;
 layout(location = 1) in vec4 TexCoords0;
 layout(location = 2) in vec4 TexCoords1;
 layout(location = 3) in vec4 TexCoords2;
-layout(location = 4) in vec4 DrawColor;
 
 out vec3 vCoords;
 out vec4 vTexCoords0;
 out vec4 vTexCoords1;
 out vec4 vTexCoords2;
 
-flat out vec4 vDrawColor;
 flat out uint vTexNum;
 out vec4 vEyeSpacePos;
 )";
@@ -2609,7 +2596,6 @@ void main(void)
 
   gTexNum = TexNum;
   gTexCoords = TexCoords;
-  gDrawColor = DrawColor;
 
   gl_Position = modelviewprojMat * vec4(Coords, 1.0);
 }
@@ -2628,7 +2614,6 @@ void main(void)
   vTexCoords0 = TexCoords0;
   vTexCoords1 = TexCoords1;
   vTexCoords2 = TexCoords2;
-  vDrawColor = DrawColor;
 
   gl_Position = vec4(Coords, 1.0);
 }
@@ -2883,6 +2868,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	GetUniformLocation(DrawTilePolyFlags, DrawTileProg, "PolyFlags", DrawTile);
 	GetUniformLocation(DrawTileTexNum, DrawTileProg, "TexNum", DrawTile);
 	GetUniformLocation(DrawTileGamma, DrawTileProg, "Gamma", DrawTile);
+	GetUniformLocation(DrawTileDrawColor, DrawTileProg, "DrawColor", DrawTile);
 	CHECK_GL_ERROR();
 
 	//DrawComplexSinglePass vars.
