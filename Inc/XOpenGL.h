@@ -11,15 +11,13 @@
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
 // #define DEBUGGL 1
 
-// Maybe for future release. Not in use yet.
-// #define QTBUILD 1
-
 // Windows only.
 // #define WINBUILD 1
 
 // Linux/OSX mostly, needs to be set in Windows for SDL2Launch.
 // #define SDL2BUILD 1
 
+#pragma once
 
 #ifdef _MSC_VER
 #pragma warning(disable: 4351)
@@ -40,8 +38,6 @@
 
 	#ifdef SDL2BUILD
 		#include <SDL2/SDL.h>
-	#elif QTBUILD
-
 	#endif
 #else
     #define SDL2BUILD 1
@@ -89,6 +85,8 @@
 #define MAX_DRAWCOMPLEX_BATCH 1024
 // maximum number of polys in one drawgouraud multi-draw
 #define MAX_DRAWGOURAUD_BATCH 16384
+// maximum number of tiles in one drawtile multi-draw
+#define MAX_DRAWTILE_BATCH 16384
 // size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
 #define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
@@ -99,9 +97,9 @@
 #define NUMBUFFERS 6
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
-			#define MAX_LIGHTS 256
+# define MAX_LIGHTS 256
 #else
-			#define MAX_LIGHTS 512
+# define MAX_LIGHTS 512
 #endif
 
 #define GL_DEBUG_SOURCE_API 0x8246
@@ -126,22 +124,11 @@
 // necessary defines for GLES (f.e. when building with glad). Only needed to build. Do NOT use these functions for ES. Check if maybe existing some day.
 
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT3_EXT
-    #define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
+# define GL_COMPRESSED_RGBA_S3TC_DXT3_EXT 0x83F2
 #endif
 #ifndef GL_COMPRESSED_RGBA_S3TC_DXT5_EXT
-    #define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
+# define GL_COMPRESSED_RGBA_S3TC_DXT5_EXT 0x83F3
 #endif
-
-enum ShaderProgType
-{
-	No_Prog,
-	Simple_Prog,
-	Tile_Prog,
-	GouraudPolyVert_Prog,
-	GouraudMeshBufferPolyVert_Prog,
-	ComplexSurfaceSinglePass_Prog,
-	ShadowMap_Prog,
-};
 
 enum ELightMode
 {
@@ -169,10 +156,10 @@ enum DrawSimpleMode
 };
 enum eParallaxVersion
 {
-    Parallax_Disabled = 0,
-    Parallax_Basic = 1,
-    Parallax_Occlusion = 2,
-    Parallax_Relief = 3,
+    Parallax_Disabled	= 0,
+    Parallax_Basic		= 1,
+    Parallax_Occlusion	= 2,
+    Parallax_Relief		= 3,
 };
 
 // stijn: missing defs in UT469 tree
@@ -209,37 +196,35 @@ inline FLOAT FOpenGLGammaCompress_sRGB_Inner(FLOAT C)
 {
 	if (C <= 0.00304f)
 		return 12.92f*C;
-	else
-		return (1.055f*appPow(C, 1.0f / 2.4f) - 0.055f);
+	return (1.055f*appPow(C, 1.0f / 2.4f) - 0.055f);
 
 }
 inline FPlane FOpenGLGammaCompress_sRGB(FPlane& Color)
 {
 	return FPlane
-		(
+	(
 		FOpenGLGammaCompress_sRGB_Inner(Color.X),
 		FOpenGLGammaCompress_sRGB_Inner(Color.Y),
 		FOpenGLGammaCompress_sRGB_Inner(Color.Z),
 		Color.W
-		);
+	);
 }
 
 inline FLOAT FOpenGLGammaDecompress_sRGB_Inner(FLOAT C)
 {
 	if (C <= 0.03928f)
 		return C / 12.92f;
-	else
-		return appPow((C + 0.055f) / 1.055f, 2.4f);
+	return appPow((C + 0.055f) / 1.055f, 2.4f);
 }
 inline FPlane FOpenGLGammaDecompress_sRGB(FPlane& Color)
 {
 	return FPlane
-		(
+	(
 		FOpenGLGammaDecompress_sRGB_Inner(Color.X),
 		FOpenGLGammaDecompress_sRGB_Inner(Color.Y),
 		FOpenGLGammaDecompress_sRGB_Inner(Color.Z),
 		Color.W
-		);
+	);
 }
 
 inline FString GetPolyFlagString(DWORD PolyFlags)
@@ -327,6 +312,45 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
     return String;
 }
 
+// Error checking
+// GL ERROR CHECK
+inline int	CheckGLError(char* file, int line)
+{
+	GLenum glErr = glGetError();
+
+	if (glErr != GL_NO_ERROR)
+	{
+		const TCHAR* Msg = TEXT("Unknown");
+		switch (glErr)
+		{
+		case GL_NO_ERROR:
+			Msg = TEXT("GL_NO_ERROR");
+			break;
+		case GL_INVALID_ENUM:
+			Msg = TEXT("GL_INVALID_ENUM");
+			break;
+		case GL_INVALID_VALUE:
+			Msg = TEXT("GL_INVALID_VALUE");
+			break;
+		case GL_INVALID_OPERATION:
+			Msg = TEXT("GL_INVALID_OPERATION");
+			break;
+
+		case GL_STACK_OVERFLOW:
+			Msg = TEXT("GL_STACK_OVERFLOW");
+			break;
+		case GL_STACK_UNDERFLOW:
+			Msg = TEXT("GL_STACK_UNDERFLOW");
+			break;
+		case GL_OUT_OF_MEMORY:
+			Msg = TEXT("GL_OUT_OF_MEMORY");
+			break;
+		};
+		GWarn->Logf(TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
+	}
+	return 1;
+}
+
 inline glm::vec4 FPlaneToVec4(FPlane Plane)
 {
 	return glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
@@ -344,6 +368,101 @@ enum DrawFlags : DWORD
 	DF_EnvironmentMap   = 0x00000040,
 	DF_HeightMap	 	= 0x00000080,
 	DF_NoNearZ			= 0x00000100,
+};
+
+#ifndef END_LINE
+#define END_LINE "\n"
+#endif
+
+// This is Higor's FCharWriter. We could (and should? move it elsewhere because
+// OpenGLDrv also uses it)
+class FShaderWriter
+{
+public:
+	TArray<ANSICHAR> Data;
+
+	FShaderWriter()
+	{
+		Data.Reserve(1000);
+		Data.AddNoCheck();
+		Data(0) = '\0';
+	}
+
+#if __cplusplus > 201103L || _MSVC_LANG > 201103L
+	template < INT Size > FShaderWriter& operator<<(const char(&Input)[Size])
+	{
+		if (Size > 1)
+		{
+			INT i = Data.Add(Size - 1) - 1;
+			appMemcpy(&Data(i), Input, Size);
+		}
+		check(Data.Last() == '\0');
+		return *this;
+	}
+#endif
+
+	FShaderWriter& operator<<(const char* Input)
+	{
+		const char* InputEnd = Input;
+		while (*InputEnd != '\0')
+			InputEnd++;
+		if (InputEnd != Input)
+		{
+			INT Len = (INT)(InputEnd - Input);
+			INT i = Data.Add(Len) - 1;
+			check(Len > 0);
+			check(Len < 4096);
+			appMemcpy(&Data(i), Input, Len + 1);
+		}
+		check(Data.Last() == '\0');
+		return *this;
+	}
+
+	FShaderWriter& operator<<(INT Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf(Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FShaderWriter& operator<<(DrawFlags Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf(Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	FShaderWriter& operator<<(EPolyFlags Input)
+	{
+		TCHAR Buffer[16];
+		appSprintf(Buffer, TEXT("%i"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+
+	FShaderWriter& operator<<(FLOAT Input)
+	{
+		TCHAR Buffer[32];
+		appSprintf(Buffer, TEXT("%f"), Input);
+		return *this << appToAnsi(Buffer);
+	}
+
+	const char* operator*()
+	{
+		return &Data(0);
+	}
+
+	GLsizei Length()
+	{
+		return (GLsizei)(Data.Num() - 1);
+	}
+
+	void Reset()
+	{
+		Data.EmptyNoRealloc();
+		Data.AddNoCheck();
+		Data(0) = '\0';
+	}
 };
 
 /*-----------------------------------------------------------------------------
@@ -368,72 +487,71 @@ class UXOpenGLRenderDevice : public URenderDevice
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config)
 #endif
 
-	// Error checking
-	// GL ERROR CHECK
-	inline int CheckGLError(char *file, int line)
-	{
-		GLenum glErr = glGetError();
+	//
+	// Renderer Options. Most of these are configurable through the game ini
+	//
+	BITFIELD NoFiltering;
+	BITFIELD ShareLists;
+	BITFIELD AlwaysMipmap;
+	BITFIELD UsePrecache;
+	BITFIELD UseTrilinear;
+	BITFIELD UseAA;
+	BITFIELD UseAASmoothing;
+	BITFIELD GammaCorrectScreenshots;
+	BITFIELD MacroTextures;
+	BITFIELD BumpMaps;
+	BITFIELD NoAATiles;
+	BITFIELD GenerateMipMaps;
+	BITFIELD SimulateMultiPass;
+	BITFIELD UseOpenGLDebug;
+	BITFIELD NoBuffering;
+	BITFIELD NoDrawComplexSurface;
+	BITFIELD NoDrawGouraud;
+	BITFIELD NoDrawGouraudList;
+	BITFIELD NoDrawTile;
+	BITFIELD NoDrawSimple;
+	BITFIELD UseHWLighting;
+	BITFIELD UseHWClipping;
+	BITFIELD UseEnhancedLightmaps;
 
-		if (glErr != GL_NO_ERROR)
-		{
-			const TCHAR* Msg = TEXT("Unknown");
-			switch (glErr)
-			{
-			case GL_NO_ERROR:
-				Msg = TEXT("GL_NO_ERROR");
-				break;
-			case GL_INVALID_ENUM:
-				Msg = TEXT("GL_INVALID_ENUM");
-				break;
-			case GL_INVALID_VALUE:
-				Msg = TEXT("GL_INVALID_VALUE");
-				break;
-			case GL_INVALID_OPERATION:
-				Msg = TEXT("GL_INVALID_OPERATION");
-				break;
+	//OpenGL 4 Config
+	BITFIELD UseBindlessTextures;
+	BITFIELD UseBindlessLightmaps;
+	BITFIELD UsePersistentBuffers;
+	BITFIELD UseBufferInvalidation;
+	BITFIELD UseShaderDrawParameters;
 
-			case GL_STACK_OVERFLOW:
-				Msg = TEXT("GL_STACK_OVERFLOW");
-				break;
-			case GL_STACK_UNDERFLOW:
-				Msg = TEXT("GL_STACK_UNDERFLOW");
-				break;
-			case GL_OUT_OF_MEMORY:
-				Msg = TEXT("GL_OUT_OF_MEMORY");
-				break;
-			};
-			GWarn->Logf(TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
-		}
-		return 1;
-	}
+	// Not really in use...(yet)
+	BITFIELD UseMeshBuffering; //Buffer (Static)Meshes for drawing.
+	BITFIELD UseSRGBTextures;
+	BITFIELD EnvironmentMaps;
 
-	// Information about a cached texture.
-	struct FCachedTexture
-	{
-		GLuint Ids[2]; // 0:Unmasked, 1:Masked.
-		INT BaseMip;
-		INT MaxLevel;
-		GLuint Sampler[2];			   // Sampler object
-		GLuint64 BindlessTexHandle[2]; // Bindless handles
-		GLuint TexNum[2];			   // TMU num
-		INT RealtimeChangeCount{};
-	};
+	FLOAT GammaMultiplier;
+	FLOAT GammaMultiplierUED;
+	FLOAT GammaOffsetScreenshots;
+	FLOAT LODBias;
 
-	/*
-	// Information about a Mesh
-	struct UMeshBufferData
-	{
-		FLOAT*	Verts;
-		FLOAT*	VertNormals;
-		FLOAT*	Tex;
-		FLOAT*	LightColor;
-		GLuint	NumPts;
-		DWORD	PolyFlags;
-		bool	HasData;
-	} MeshBufferData; // Buffer a mesh for the renderer.
-	*/
+	// Miscellaneous
+	INT RefreshRate;
+	FLOAT MaxAnisotropy;
+	INT DebugLevel;
+	INT NumAASamples;
+	INT DetailMax;
+	BYTE OpenGLVersion;
+	BYTE ParallaxVersion;
+	BYTE UseVSync;
 
-	// Permanent variables.
+	// Not configurable
+	bool	UsingPersistentBuffers;
+	bool	UsingPersistentBuffersGouraud;
+	bool	UsingPersistentBuffersComplex;
+	bool	UsingPersistentBuffersTile;
+	bool	UsingShaderDrawParameters;
+	static INT LogLevel; // Verbosity level of the GL debug logging
+
+	//
+	// Window, OS, and global GL context state
+	//
 #ifdef _WIN32
 	HGLRC hRC;
 	HWND hWnd;
@@ -441,17 +559,12 @@ class UXOpenGLRenderDevice : public URenderDevice
     PIXELFORMATDESCRIPTOR pfd;
     static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
+	TArray<FPlane> SupportedDisplayModes;
 #else
 	SDL_Window* Window;
 #endif
 
 	UBOOL WasFullscreen;
-	TOpenGLMap<QWORD,FCachedTexture> LocalBindMap, *BindMap;
-	TArray<FPlane> Modes;
-	ULevel* Level;
-
-	TArray<AActor*> StaticLightList;
-	TArray<AActor*> LightList;
 
 	// Context specifics.
 	INT DesiredColorBits;
@@ -459,7 +572,87 @@ class UXOpenGLRenderDevice : public URenderDevice
 	INT DesiredDepthBits;
 	INT iPixelFormat;
 
-	// Timing.
+	//Gamma
+	struct FGammaRamp
+	{
+		_WORD red[256];
+		_WORD green[256];
+		_WORD blue[256];
+	};
+	struct FByteGammaRamp
+	{
+		BYTE red[256];
+		BYTE green[256];
+		BYTE blue[256];
+	};
+	FGammaRamp OriginalRamp; // to restore original value at exit or crash.
+	FLOAT Gamma;
+
+#ifdef SDL2BUILD
+	SDL_GLContext glContext;
+	static SDL_GLContext CurrentGLContext;
+	static TArray<SDL_GLContext> AllContexts;
+#elif _WIN32
+	static TArray<HGLRC> AllContexts;
+	static HGLRC   CurrentGLContext;
+	static HMODULE hModuleGlMain;
+	static HMODULE hModuleGlGdi;
+#endif
+
+	//
+	// Hardware Capabilities and Constraints
+	//
+	FString AllExtensions;
+	INT		MaxClippingPlanes;
+	INT		NumberOfExtensions;
+	INT		MaxUniformBlockSize;
+	bool	SupportsAMDMemoryInfo;
+	bool	SupportsNVIDIAMemoryInfo;
+	bool	SupportsSwapControl;
+	bool	SupportsSwapControlTear;
+	bool	SupportsS3TC;
+	bool	SupportsSSBO;
+	bool	SupportsGLSLInt64;
+	bool	SupportsClipDistance;
+
+	//
+	// Framerate Limiter
+	//
+#if ENGINE_VERSION==227
+	FTime prevFrameTimestamp;
+	INT FrameRateLimit;
+#endif
+
+	//
+	// Current GL Context and Renderer State
+	//
+	bool bContextInitialized;
+	bool bGlobalBuffersMapped;
+
+	GLuint NumClipPlanes;
+	BYTE LastZMode;
+
+	// Lock variables.
+	FPlane FlashScale, FlashFog;
+	FLOAT RProjZ, Aspect;
+	DWORD CurrentPolyFlags;
+	DWORD CurrentAdditionalPolyFlags;
+	DWORD CurrentLineFlags;
+	FLOAT RFX2, RFY2;
+
+	// SceneNode
+	FLOAT StoredFovAngle;
+	FLOAT StoredFX;
+	FLOAT StoredFY;
+	FLOAT StoredOrthoFovAngle;
+	FLOAT StoredOrthoFX;
+	FLOAT StoredOrthoFY;
+	UBOOL StoredbNearZ;
+	bool bIsOrtho;
+
+	//
+	// Performance Statistics
+	//
 	struct FGLStats
 	{
 		DWORD BindCycles;
@@ -477,78 +670,38 @@ class UXOpenGLRenderDevice : public URenderDevice
 		INT StallCount;
 	} Stats;
 
-	// Hardware constraints.
-	INT RefreshRate;
-	FLOAT MaxAnisotropy;
-	INT DebugLevel;
-	INT NumAASamples;
-    INT MaxClippingPlanes;
-    INT NumberOfExtensions;
-    INT DetailMax;
-	INT MaxUniformBlockSize;
-    FLOAT GammaMultiplier;
-    FLOAT GammaMultiplierUED;
+	//
+	// Texture State
+	//
 
-    // Pffffff. FrameRateLimiter UTGLR style.
-#if ENGINE_VERSION==227
-    FTime prevFrameTimestamp;
-    INT FrameRateLimit;
-#endif
+	// Information about a cached texture.
+	struct FCachedTexture
+	{
+		GLuint Ids[2];					// 0:Unmasked, 1:Masked.
+		INT BaseMip;
+		INT MaxLevel;
+		GLuint Sampler[2];				// Sampler object
+		GLuint64 BindlessTexHandle[2];	// Bindless handles
+		GLuint TexNum[2];				// TMU num
+		INT RealtimeChangeCount{};
+	};
 
-    // Config
-	BITFIELD NoFiltering;
-    BITFIELD ShareLists;
-    BITFIELD AlwaysMipmap;
-    BITFIELD UsePrecache;
-    BITFIELD UseTrilinear;
-    BITFIELD UseAA;
-    BITFIELD UseAASmoothing;
-    BITFIELD GammaCorrectScreenshots;
-    BITFIELD MacroTextures;
-    BITFIELD BumpMaps;
-    BITFIELD NoAATiles;
-    BITFIELD GenerateMipMaps;
-    BITFIELD SimulateMultiPass;
-    BITFIELD UseOpenGLDebug;
-    BITFIELD NoBuffering;
-    BITFIELD NoDrawComplexSurface;
-    BITFIELD NoDrawGouraud;
-    BITFIELD NoDrawGouraudList;
-    BITFIELD NoDrawTile;
-    BITFIELD NoDrawSimple;
-    BITFIELD UseHWLighting;
-    BITFIELD UseHWClipping;
-	BITFIELD UseEnhancedLightmaps;
+	// All currently cached textures.
+	TOpenGLMap<QWORD,FCachedTexture> LocalBindMap, *BindMap;
+	static TOpenGLMap<QWORD, FCachedTexture>* SharedBindMap; // Shared between GL contexts (e.g., in UED)
 
-    //OpenGL 4 Config
-	BITFIELD UseBindlessTextures;
-	BITFIELD UseBindlessLightmaps;
-	BITFIELD UsePersistentBuffers;
-	BITFIELD UseBufferInvalidation;
-	BITFIELD UseShaderDrawParameters;
-
-	// Not really in use...(yet)
-	BITFIELD UseMeshBuffering; //Buffer (Static)Meshes for drawing.
-	BITFIELD UseSRGBTextures;
-	BITFIELD EnvironmentMaps;
-
-    // Internal stuff
-	bool UsingPersistentBuffers;
-	bool UsingPersistentBuffersGouraud;
-	bool UsingPersistentBuffersComplex;
-	bool UsingPersistentBuffersTile;
-	bool UsingShaderDrawParameters;
-	bool AMDMemoryInfo;
-	bool NVIDIAMemoryInfo;
-	bool SwapControlExt;
-	bool SwapControlTearExt;
-    bool Compression_s3tcExt;
-	bool SupportsSSBO;
-	bool SupportsGLSLInt64;
-
-	// Bindless textures support
-	bool UsingBindlessTextures;
-	INT	 MaxBindlessTextures;
+	// Describes a currently active (and potentially bound to a TMU) texture
+	struct FTexInfo
+	{
+		QWORD CurrentCacheID{};
+		INT CurrentCacheSlot{};
+		FLOAT UMult{};
+		FLOAT VMult{};
+		FLOAT UPan{};
+		FLOAT VPan{};
+		INT TexNum{};					// TMU number or index in the bindless texture array
+		INT RealTimeChangeCount{};
+	} TexInfo[8];
 
 	enum EBindlessHandleStorage
 	{
@@ -589,20 +742,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 		//
 		STORE_INT
 	} BindlessHandleStorage;
+	
+	bool UsingBindlessTextures;		// Are we currently using bindless textures?
+	INT	 MaxBindlessTextures;		// How many bindless textures can we store?
 
-	bool NeedDynamicallyUniformBindlessHandles;
-
-	BYTE OpenGLVersion;
-	BYTE ParallaxVersion;
-	BYTE UseVSync;
-	bool NeedsInit;
-	bool bMappedBuffers;
-	BYTE SupportsClipDistance;
-
-	FLOAT GammaOffsetScreenshots;
-	FLOAT LODBias;
-
-	// Hit testing.
+	//
+	// Hit Testing State
+	//
 	TArray<BYTE> HitStack;
 	TArray<BYTE> HitMem;
 	TArray<INT>  HitMemOffs;
@@ -611,265 +757,487 @@ class UXOpenGLRenderDevice : public URenderDevice
 	INT*   HitSize;
 	INT    HitCount;
 
-	// Lock variables.
-	FPlane FlashScale, FlashFog;
-	FLOAT RProjZ, Aspect;
-	DWORD CurrentPolyFlags;
-	DWORD CurrentAdditionalPolyFlags;
-	DWORD CurrentLineFlags;
-	struct FTexInfo
-	{
-		QWORD CurrentCacheID;
-		INT CurrentCacheSlot;
-		FLOAT UMult;
-		FLOAT VMult;
-		FLOAT UPan;
-		FLOAT VPan;
-		INT TexNum;					// TMU number or index in the bindless texture array
-		INT RealTimeChangeCount{};
-	FTexInfo()
-		:CurrentCacheID(0),
-		CurrentCacheSlot(0),
-		UMult(0),
-		VMult(0),
-		UPan(0),
-		VPan(0),
-		TexNum(0)
-		{}
-	} TexInfo[8];
-	FLOAT RFX2, RFY2;
-
-	INT PrevProgram;
-	INT ActiveProgram;
+	//
+	// Scratch buffer for texture composition, hit testing, readpixels, etc
+	//
 	static DWORD ComposeSize;
 	static BYTE* Compose;
 
-	enum DrawTileDrawDataIndices : DWORD
+	//
+	// A BufferObject describes a GPU-mapped buffer object. If we're using persistent
+	// buffers, we will subdivide this object into up to <NUMBUFFERS> sub-buffers and
+	// only activate/pin one sub-buffer at a time while writing.
+	//
+	// If we're not using persistent buffers, we will allocate a temporary buffer in
+	// RAM and ask the GPU driver to copy data over to the backing buffer on the GPU
+	// side.
+	//
+	template<typename T> class BufferObject
 	{
-		DTDD_HIT_COLOR,
-		DTDD_DRAW_COLOR,
-		DTDD_MISC_INFO		// Gamma
-	};
-	
-	struct DrawTileShaderDrawParams
-	{
-		glm::vec4 DrawData[3];
-		// 0: texture number, polyflags, blend polyflags hit testing (bool)
-		// 1: depth tested (bool), unused, unused, unused
-		glm::uvec4 _TexNum[2]; 
+		friend class ShaderProgam;
 
-		UINT& TexNum()
+	public:		
+		T* Buffer{};                // CPU-accessible mapping of the _entire_ buffer object
+
+		BufferObject() = default;
+		~BufferObject()
 		{
-			return _TexNum[0].x;
+			DeleteBuffer();
 		}
 
-		UINT& PolyFlags()
+		// Current size in number of elements
+		size_t Size()
 		{
-			return _TexNum[0].y;
+			return IndexOffset;
 		}
 
-		UINT& BlendPolyFlags()
+		// Current size in bytes
+		size_t SizeBytes()
 		{
-			return _TexNum[0].z;
+			return IndexOffset * sizeof(T);
 		}
 
-		UINT& HitTesting()
+		// Offset of the first element of the active sub-buffer, in number of bytes
+		GLuint BeginOffsetBytes()
 		{
-			return _TexNum[0].w;
+			return BeginOffset * sizeof(T);
 		}
 
-		UINT& DepthTested()
+		// Moves the IndexOffset forward after buffering @ElementCount elements
+		void Advance(GLuint ElementCount)
 		{
-			return _TexNum[1].x;
+			IndexOffset += ElementCount;
 		}
 
-		FLOAT& Gamma()
+		// Returns true if the currently active sub-buffer still has room for @ElementCount elements
+		bool CanBuffer(GLuint ElementCount)
 		{
-			return DrawData[DTDD_MISC_INFO].x;
+			return SubBufferSize - IndexOffset >= ElementCount;
 		}
-		
-	} DrawTileDrawParams;
 
-	struct DrawTileBufferedVertES
-	{
-		glm::vec3 Point;
-		glm::vec2 UV;
-	};
-
-	struct DrawTileBufferedVertCore
-	{
-		glm::vec3 Point;
-		glm::vec4 TexCoords0;
-		glm::vec4 TexCoords1;
-		glm::vec4 TexCoords2;
-	};
-
-	struct DrawTileBuffer
-	{
-		GLuint Index;
-		GLuint IndexOffset;
-		GLuint BeginOffset;
-		DrawTileBuffer()
-			: Index(0),
-			IndexOffset(0),
-			BeginOffset(0)
-		{}
-	}DrawTileBufferData;
-
-	struct DrawLinesBuffer
-	{
-		GLuint VertSize;
-		FPlane DrawColor;
-		DWORD LineFlags;
-		DrawLinesBuffer()
-			: VertSize(0),
-			DrawColor(0.f, 0.f, 0.f, 0.f),
-			LineFlags(0)
-		{}
-	}DrawLinesBufferData;
-
-	//PMB's
-	struct BufferRange
-	{
-		GLsync Sync[NUMBUFFERS];
-		FLOAT* Buffer{};
-		GLuint64* Int64Buffer{};
-		BufferRange()
-		: Sync()
-		{}
-	};
-
-	BufferRange DrawGouraudBufferRange;
-	INT PrevDrawGouraudBeginOffset;
-
-	BufferRange DrawGouraudSSBORange;
-	INT PrevDrawGouraudSSBOBeginOffset;
-
-	GLint DrawGouraudMultiDrawPolyListArray[MAX_DRAWGOURAUD_BATCH];
-	GLsizei DrawGouraudMultiDrawVertexCountArray[MAX_DRAWGOURAUD_BATCH];
-	INT DrawGouraudMultiDrawCount;
-	INT DrawGouraudMultiDrawVertices;
-
-    BufferRange DrawComplexSinglePassRange;
-	INT PrevDrawComplexBeginOffset;
-
-	BufferRange DrawComplexSSBORange;
-	INT PrevDrawComplexSSBOBeginOffset;
-
-	GLint DrawComplexMultiDrawFacetArray[MAX_DRAWCOMPLEX_BATCH];
-	GLsizei DrawComplexMultiDrawVertexCountArray[MAX_DRAWCOMPLEX_BATCH];
-	INT DrawComplexMultiDrawCount;
-	INT DrawComplexMultiDrawVertices;
-
-    BufferRange DrawTileRange;
-	INT PrevDrawTileBeginOffset;
-
-	GLuint DrawSimpleVertObject, DrawSimpleGeoObject,DrawSimpleFragObject;
-	GLuint DrawSimpleProg;
-
-	GLuint DrawTileVertObject, DrawTileGeoObject, DrawTileFragObject;
-	GLuint DrawTileProg;
-
-	// Draw everything for ComplexSurface in one pass
-	GLuint DrawComplexVertSinglePassObject, DrawComplexFragSinglePassObject, DrawComplexGeoSinglePassObject;
-	GLuint DrawComplexProg;
-
-	// DrawGouraud
-	GLuint DrawGouraudVertObject, DrawGouraudGeoObject, DrawGouraudFragObject;
-	GLuint DrawGouraudProg;
-
-#if ENGINE_VERSION!=227
-
-	// Definition for a surface that has fog
-	struct FFogSurf
-	{
-		struct FSavedPoly* Polys;
-		FLOAT		FogDistanceStart;	// Zone fog start (zero if none)
-		FLOAT		FogDistanceEnd;		// Zone fog distance (zero if none)
-		FLOAT		FogDensity;			// for exponential fog.
-		FPlane		FogColor;			// Zone fog color
-		INT			FogMode;			// 0 Linear, 1 Exponential, 2 Exponential2
-		DWORD		PolyFlags;			// Surface flags.
-		BYTE		bBSP;				// this flag is unfortunately needed for the old renderers to emulate the fog.
-		FFogSurf()
-			:Polys(NULL),
-			FogDistanceStart(0.f),
-			FogDistanceEnd(0.f),
-			FogDensity(0.f),
-			FogColor(FPlane(0.f, 0.f, 0.f, 0.f)),
-			FogMode(0),
-			PolyFlags(0),
-			bBSP(0)
-		{}
-		inline BYTE IsValid()
+		// Returns true if we have no buffered data in the currently active sub-buffer
+		bool IsEmpty()
 		{
-			return ((FogDistanceEnd > FogDistanceStart) && (FogDensity > 0.f || FogMode == 0));
+			return IndexOffset == 0;
 		}
-	};
 
+		// Rotates @Index, @BeginOffset, and @IndexOffset so they point to the start of the next sub-buffer
+		// if @Wait is true, this function will wait until the GPU has signaled the next sub-buffer
+		// Returns true if Index points to a new sub-buffer after this call
+		bool Rotate(bool Wait)
+		{
+			Index		= (Index + 1) % SubBufferCount;
+			IndexOffset = 0;
+			BeginOffset = Index * SubBufferSize;
+			if (Wait)
+				this->Wait();
+
+			if (SubBufferCount > 1)
+			{
+				bInputLayoutCreated = false;
+				return true;
+			}
+			return false;
+		}
+
+		T* GetElementPtr(GLuint Index)
+		{
+			checkSlow(Index < IndexOffset);
+			return &Buffer[BeginOffset + Index];
+		}
+
+		// Returns a pointer to the element we're currently writing
+		T* GetCurrentElementPtr()
+		{
+			return &Buffer[BeginOffset + IndexOffset];
+		}
+
+		T* GetLastElementPtr()
+		{
+			return &Buffer[BeginOffset + SubBufferSize - 1];
+		}
+
+		// Generates a VBO and VAO for this buffer object
+		void GenerateVertexBuffer()
+		{
+			glGenBuffers(1, &BufferObjectName);
+			glGenVertexArrays(1, &VaoObjectName);
+		}
+
+		// Generates and binds an SSBO for this buffer object
+		void GenerateSSBOBuffer(const GLuint BindingIndex)
+		{
+			glGenBuffers(1, &BufferObjectName);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+		}
+
+		// Generates a UBO for this buffer object
+		void GenerateUBOBuffer(const GLuint BindingIndex)
+		{
+			glGenBuffers(1, &BufferObjectName);
+			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName);
+			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName);
+			glBindBuffer(GL_UNIFORM_BUFFER, 0);
+		}
+
+		// Creates a CPU-accessible mapping for this buffer
+		void MapVertexBuffer(bool Persistent, GLuint BufferSize)
+		{
+			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, GL_STREAM_DRAW);
+		}
+
+		void MapSSBOBuffer(bool Persistent, GLuint BufferSize)
+		{
+			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, GL_STREAM_DRAW);
+		}
+
+		void MapUBOBuffer(bool Persistent, GLuint BufferSize)
+		{
+			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, GL_DYNAMIC_DRAW);
+		}
+
+		// Binds and unbinds the buffer so we can write to it
+		void BindBuffer()
+		{
+			if (bBound)
+				return;
+
+			if (BufferType == GL_ARRAY_BUFFER)
+				glBindVertexArray(VaoObjectName);
+			glBindBuffer(BufferType, BufferObjectName);
+			bBound = true;
+		}
+
+		void UnbindBuffer()
+		{
+			if (!bBound)
+				return;
+
+			glBindBuffer(BufferType, 0);
+			bBound = false;
+		}
+
+		bool IsBound() const
+		{
+			return bBound;
+		}
+		bool IsInputLayoutCreated() const
+		{
+			return bInputLayoutCreated;
+		}
+		void SetInputLayoutCreated()
+		{
+			bInputLayoutCreated = true;
+		}
+
+		//
+		void RebindBufferBase(const GLuint BindingIndex)
+		{
+			BindBuffer();
+			glBindBufferBase(BufferType, BindingIndex, BufferObjectName);
+			UnbindBuffer();
+		}
+
+		//
+		// Moves data over to the GPU by reinitializing or updating the backing buffer
+		// If we set @Invalidate to true, XOGL will call glInvalidateBufferData on the backing buffer first
+		// If we set @Reinitialize to true, we will use glBufferData to move the data. Otherwise, we use glBufferSubData
+		// @ExpectedUsage is the expected usage pattern for the buffer data. We will ignore this value if @Reinitialize is false
+		//
+		// This function is a no-op if we're using persistent buffers!
+		//
+		void BufferData(bool Invalidate, bool Reinitialize, GLenum ExpectedUsage)
+		{
+			if (bPersistentBuffer)
+				return;
+
+			if (Invalidate)
+				glInvalidateBufferData(BufferObjectName);
+
+			if (Reinitialize
+#if defined(__LINUX_ARM__) || MACOSX
+				|| 1 // These platforms seem to prefer forced reinitialization...
 #endif
+				)
+				glBufferData(BufferType, SizeBytes(), Buffer, ExpectedUsage);
+			else
+				glBufferSubData(BufferType, 0, SizeBytes(), Buffer);
+			CHECK_GL_ERROR();
+		}
 
-	enum DrawGouraudDrawDataIndices : DWORD
-	{
-		DGDD_DIFFUSE_INFO,			// UMult, VMult, Diffuse, Alpha
-		DGDD_DETAIL_MACRO_INFO,		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
-		DGDD_MISC_INFO,				// BumpMap Specular, Gamma, texture format, Unused
-		DGDD_EDITOR_DRAWCOLOR,
-		DGDD_DISTANCE_FOG_COLOR,
-		DGDD_DISTANCE_FOG_INFO
+		// Unmaps and deallocates the buffer
+		void DeleteBuffer()
+		{
+			if (bPersistentBuffer)
+			{
+				GLint IsMapped;
+				glGetNamedBufferParameteriv(BufferObjectName, GL_BUFFER_MAPPED, &IsMapped);
+				if (IsMapped == GL_TRUE)
+					glUnmapNamedBuffer(BufferObjectName);
+			}
+			else
+			{
+				delete[] Buffer;
+			}
+			Buffer = nullptr;
+
+			if (BufferObjectName)
+				glDeleteBuffers(1, &BufferObjectName);
+			if (VaoObjectName)
+				glDeleteBuffers(1, &BufferObjectName);
+
+			delete[] Sync;
+			Sync = nullptr;
+			bBound = bInputLayoutCreated = false;
+		}
+
+		// Inserts a fence that makes the GPU signal the active sub-buffer when
+		// it is done with the draw call that uses said buffer
+		void Lock()
+		{
+			if (!bPersistentBuffer)
+				return;
+
+			checkSlow(Sync);
+
+			if (Sync[Index])
+				glDeleteSync(Sync[Index]);
+
+			Sync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+		}
+
+		// Blocks until the GPU has signaled the active sub-buffer
+		void Wait()
+		{
+			if (!bPersistentBuffer)
+				return;
+
+			checkSlow(Sync);
+
+			GLuint64 WaitDuration = 0;
+			GLenum WaitReturn;
+			if (Sync[Index])
+			{
+				while (1)
+				{
+					WaitReturn = glClientWaitSync(Sync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, WaitDuration);
+					CHECK_GL_ERROR();
+
+					if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
+					{
+						return;
+					}
+					if (WaitReturn == GL_WAIT_FAILED)
+					{
+						GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"), Index);
+						return;
+					}
+					//GWarn->Logf(TEXT("Wait! Count %i, %f %x"), Count, appSeconds().GetFloat(),WaitReturn);
+					//Stats.StallCount++;
+					WaitDuration = 500000;
+				}
+			}
+			CHECK_GL_ERROR();
+		}
+
+	private:
+		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
+		{
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+
+			SubBufferSize = BufferSize;
+			BufferType = Target;	
+				
+			// Allocate and pin buffers
+			bPersistentBuffer = Persistent;
+			if (Persistent)
+			{
+				SubBufferCount = 1; // TODO: Put multi-buffering back in
+				Sync = new GLsync [SubBufferCount];
+				memset(Sync, 0, sizeof(GLsync) * SubBufferCount);
+
+				glBindBuffer(Target, BufferObjectName);
+				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), 0, PersistentBufferFlags);
+				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize, PersistentBufferFlags));
+				glBindBuffer(Target, 0);
+			}
+			else
+			{
+				SubBufferCount = 1;
+
+				glBindBuffer(Target, BufferObjectName);
+				Buffer = new T[BufferSize];
+				glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
+				glBindBuffer(Target, 0);
+			}
+		}
+
+		GLsync* Sync{};					// OpenGL sync object. One for each sub-buffer
+
+		GLuint Index{};					// Index of the sub-buffer we're currently writing to. This will always be 0 if we're not using persistent buffers
+		GLuint BeginOffset{};			// Global index of the first buffer element of the sub-buffer we're currently writing to (relative to the start of the _entire_ buffer)
+		GLuint IndexOffset{};			// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
+
+		GLuint BufferObjectName{};		// OpenGL name of the buffer object
+		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
+
+		//
+		// Buffer dimensions
+		//
+		GLuint SubBufferSize{};			// Size of each of the sub-buffers that comprise this buffer object (in number of T-sized elements)
+		GLuint SubBufferCount{};		// Number of sub-buffers
+
+		bool   bPersistentBuffer{};     //
+		bool   bBound{};                // True if currently bound
+		bool   bInputLayoutCreated{};   // 
+		GLenum BufferType{};            // GL target 
 	};
 
-	struct DrawGouraudShaderDrawParams
+	//
+	// Shaders
+	//
+	enum ShaderProgType
 	{
-		glm::vec4 DrawData[6];
-		glm::uvec4 TexNum;
-		glm::uvec4 _DrawFlags;
-
-		UINT& DrawFlags()
-		{
-			return _DrawFlags.x;
-		}
-
-		UINT& HitTesting()
-		{
-			return _DrawFlags.y;
-		}
-
-		UINT& PolyFlags()
-		{
-			return _DrawFlags.z;
-		}
-
-		UINT& RendMap()
-		{
-			return _DrawFlags.w;
-		}
-
-	} DrawGouraudDrawParams;
-
-	struct DrawGouraudBufferedVert
-	{
-		glm::vec3 Point;
-		glm::vec3 Normal;
-		glm::vec2 UV;
-		glm::vec4 Light;
-		glm::vec4 Fog;
+		No_Prog,
+		Simple_Prog,
+		Tile_Prog,
+		Gouraud_Prog,
+		Complex_Prog,
+		Max_Prog,
 	};
-	static_assert(sizeof(DrawGouraudBufferedVert) == 64, "Invalid gouraud buffered vertex size");
 
-	struct DrawGouraudBuffer
+	// Common interface for all shaders
+	class ShaderProgram
 	{
-		GLuint Index;
-		GLuint IndexOffset;
-		GLuint BeginOffset;
+	protected:
+		GLuint VertexShaderObject{};
+		GLuint GeoShaderObject{};
+		GLuint FragmentShaderObject{};
+		GLuint ShaderProgramObject{};
+		const TCHAR* ShaderName{};
+		UXOpenGLRenderDevice* RenDev{};
 
-		DrawGouraudBuffer()
-			: Index(0),
-			IndexOffset(0),
-			BeginOffset(0)
+	public:
+		ShaderProgram(const TCHAR* Name, UXOpenGLRenderDevice* _RenDev)
+			: ShaderName(Name)
+			, RenDev(_RenDev)
 		{}
-	} DrawGouraudBufferData;
+		virtual ~ShaderProgram() = 0;
 
+		//
+		// Common functions
+		//
+
+		// Binds the uniform with the specified @Name to the binding point with index @BindingIndex
+		void  BindUniform(const GLuint BindingIndex, const char* Name) const;
+
+		// Gets the location of the uniform with the specified @Name
+		// This location can later be used to write to the uniform
+		void  GetUniformLocation(GLint& Uniform, const char* Name) const;
+
+		// Compiles one shader
+		typedef void (ShaderWriterFunc)(GLuint, class UXOpenGLRenderDevice*, FShaderWriter&, ShaderProgram*);
+		bool  CompileShader(GLuint ShaderType, GLuint& ShaderObject, ShaderWriterFunc Func, ShaderWriterFunc EmitHeaderFunc);
+
+		// Links the entire shader program
+		bool  LinkShaderProgram();
+
+		// Builds the entire shader program.
+		// @GeoShaderFunc may be nullptr
+		// @EmitHeaderFunc is also optional. If it is not nullptr, BuildShaderProgram will call EmitHeaderFunc before each shader builder func
+		bool  BuildShaderProgram(ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc, ShaderWriterFunc EmitHeaderFunc = nullptr);
+
+		// Used to describe the layout of the drawcall parameters
+		struct DrawCallParameterInfo
+		{
+			const char* Type;
+			const char* Name;
+			const int ArrayCount;
+		};
+		static void  EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriter& Out, ShaderProgram* Program, INT BufferBindingIndex);
+
+		//
+		// Program-specific functions
+		//
+
+		// Allocates and binds the vertex and/or drawcall parameter buffers this shader needs
+		virtual void MapBuffers() = 0;
+
+		// Unbinds and deallocates the vertex and/or drawcall parameter buffers this shader needs
+		virtual void UnmapBuffers() = 0;
+
+		// Generates, compiles, and links this shader
+		virtual bool BuildShaderProgram() = 0;
+
+		// Binds shader-specific state such as uniforms
+		virtual void BindShaderState();
+
+		// Binds the input layout for our vertex and/or drawcall parameter buffers
+		virtual void CreateInputLayout() = 0;
+
+		// Switches to this shader and sets global GL state if necessary
+		virtual void ActivateShader() = 0;
+
+		// Switches away from this shader. This is where we should flush any leftover buffered data and restore global GL state if necessary
+		virtual void DeactivateShader() = 0;
+
+		// Dispatches buffered data. If @Wait is true, we wait for the GPU to signal the next vertex (and, optionally, drawcall parameters) buffer before returning
+		virtual void Flush(bool Wait = false) = 0;
+	};
+
+	ShaderProgram* Shaders[Max_Prog]{};
+	void ResetShaders();
+	void InitShaders();
+	INT PrevProgram;
+	INT ActiveProgram;
+
+	//
+	// Global Shader State
+	//
+	enum GlobalShaderBindingIndices
+	{
+		MatricesIndex			= 0,
+		TextureHandlesIndex		= 1,
+		StaticLightInfoIndex	= 2,
+		CoordsIndex				= 3,
+		ClipPlaneIndex			= 4,
+		TileParametersIndex		= 5,
+		ComplexParametersIndex	= 6,
+		GouraudParametersIndex	= 7,
+		SimpleParametersIndex	= 8
+	};
+
+	// Matrices
+	struct GlobalMatrices
+	{
+		glm::mat4 projMat;
+		glm::mat4 viewMat;
+		glm::mat4 modelMat;
+		glm::mat4 modelviewMat;
+		glm::mat4 modelviewprojMat;
+		glm::mat4 lightSpaceMat;
+	};
+	BufferObject<GlobalMatrices> GlobalMatricesBuffer;
+	
+	// Global bindless textures.
+	struct TextureHandleUBO
+	{
+		GLuint64 TextureHandle;
+		GLuint64 Padding;
+	};
+	BufferObject<TextureHandleUBO> GlobalTextureHandlesBufferUBO;
+
+	struct TextureHandleSSBO
+	{
+		GLuint64 TextureHandle;
+	};
+	BufferObject<TextureHandleSSBO> GlobalTextureHandlesBufferSSBO;
+
+	// Static light info
+	TArray<AActor*> StaticLightList;
+	TArray<AActor*> LightList;
 	struct LightInfo
 	{
 		glm::vec4 LightData1[MAX_LIGHTS];
@@ -884,250 +1252,390 @@ class UXOpenGLRenderDevice : public URenderDevice
 			LightData3(),
 			LightData4(),
 			LightData5(),
-            LightPos()
+			LightPos()
 		{}
 	}StaticLightData;
 	LightInfo LightData;
 	INT NumStaticLights = 0;
 	INT NumLights = 0;
-
-	enum DrawComplexDrawDataIndices : DWORD
+	BufferObject<LightInfo> StaticLightInfoBuffer;
+	
+	// Coords
+	struct GlobalCoords
 	{
-		DCDD_DIFFUSE_COORDS,
-		DCDD_LIGHTMAP_COORDS,
-		DCDD_FOGMAP_COORDS,
-		DCDD_DETAIL_COORDS,
-		DCDD_MACRO_COORDS,
-		DCDD_ENVIROMAP_COORDS,
-		DCDD_DIFFUSE_INFO,
-		DCDD_MACRO_INFO,
-		DCDD_BUMPMAP_INFO,
-		DCDD_HEIGHTMAP_INFO,
-		DCDD_X_AXIS,
-		DCDD_Y_AXIS,
-		DCDD_Z_AXIS,
-		DCDD_EDITOR_DRAWCOLOR,
-		DCDD_DISTANCE_FOG_COLOR,
-		DCDD_DISTANCE_FOG_INFO
+		glm::mat4 FrameCoords;
+		glm::mat4 FrameUncoords;
 	};
-
-	struct DrawComplexShaderDrawParams
-	{
-		glm::vec4 DrawData[16];
-		glm::uvec4 TexNum[4];
-		glm::uvec4 _DrawFlags;
-
-		UINT& DrawFlags()
-		{
-			return _DrawFlags.x;
-		}
-
-		UINT& TextureFormat()
-		{
-			return _DrawFlags.y;
-		}
-
-		UINT& PolyFlags()
-		{
-			return _DrawFlags.z;
-		}
-
-		UINT& RendMap()
-		{
-			return _DrawFlags.w;
-		}
-
-		UINT& HitTesting()
-		{
-			return TexNum[3].x;
-		}
-	} DrawComplexDrawParams;
-
-	struct DrawComplexBufferedVert
-	{
-		glm::vec4 Coords;
-		glm::vec4 Normal;
-	};
-	static_assert(sizeof(DrawComplexBufferedVert) == 32, "Invalid complex buffered vertex size");
-
-	struct DrawComplexBuffer
-	{
-		GLuint Index;
-		GLuint IndexOffset;
-		GLuint BeginOffset;
-		GLuint Iteration;
-
-		DrawComplexBuffer()
-			: Index(0),
-			IndexOffset(0),
-			BeginOffset(0),
-			Iteration(0)
-		{}
-	}DrawComplexBufferData;
-
-	//DrawSimple
-	FLOAT* DrawLinesVertsBuf;
-	FLOAT* Draw2DLineVertsBuf;
-	FLOAT* Draw2DPointVertsBuf;
-	FLOAT* Draw3DLineVertsBuf;
-	FLOAT* EndFlashVertsBuf;
-
-	//DrawTile
-	GLuint DrawTileTexCoords;
-	GLuint DrawTileTextureHandle;
-
-	//Matrices
-	glm::mat4 projMat;
-	glm::mat4 viewMat;
-	glm::mat4 modelMat;
-	glm::mat4 modelviewMat;
-	glm::mat4 modelviewprojMat;
-	glm::mat4 lightSpaceMat;
-
-	// Coords.
-	glm::mat4 FrameCoords;
-	glm::mat4 FrameUncoords;
-
-	FLOAT StoredFovAngle;
-	FLOAT StoredFX;
-	FLOAT StoredFY;
-	FLOAT StoredOrthoFovAngle;
-	FLOAT StoredOrthoFX;
-	FLOAT StoredOrthoFY;
-	UBOOL StoredbNearZ;
-	bool bIsOrtho;
-
-	// Shader globals
-	GLuint GlobalUniformBlockIndex;
-	GLuint GlobalMatricesUBO;
-	static const GLuint GlobalMatricesBindingIndex = 0;
-
-	// Global bindless textures.
-    GLuint GlobalTextureHandlesBlockIndex;
-    GLuint GlobalTextureHandlesBufferObject;
-    BufferRange GlobalTextureHandlesRange;
-	static const GLuint GlobalTextureHandlesBindingIndex = 1;
-
-	// Hardware Lights
-	GLuint GlobalUniformStaticLightInfoIndex;
-	GLuint GlobalStaticLightInfoUBO;
-	static const GLuint GlobalStaticLightInfoIndex = 3;
-
-	// Global Coords
-    GLuint GlobalUniformCoordsBlockIndex;
-	GLuint GlobalCoordsUBO;
-	static const GLuint GlobalCoordsBindingIndex = 4;
+	BufferObject<GlobalCoords> GlobalCoordsBuffer;
 
 	// Global ClipPlanes.
-	GLuint GlobalUniformClipPlaneIndex;
-	GLuint GlobalClipPlaneUBO;
-	static const GLuint GlobalClipPlaneBindingIndex = 5;
+	struct ClipPlaneInfo
+	{
+		glm::vec4 ClipParams;
+		glm::vec4 ClipPlane;
+	};
+	BufferObject<ClipPlaneInfo> GlobalClipPlaneBuffer;
 
-	//SSBOs
-	GLuint DrawComplexSSBO;
-	static const GLuint DrawComplexSSBOBindingIndex = 6;
-	GLuint DrawGouraudSSBO;
-	static const GLuint DrawGouraudSSBOBindingIndex = 7;
-
+	// Fog
 	glm::vec4 DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
 	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
+	glm::int32 DistanceFogMode = -1;
 	bool bFogEnabled = false;
 
-    GLuint TexNum;
-
-	// Editor
-	GLuint DrawSimplebHitTesting;
-	GLuint DrawTilebHitTesting;
-
-	// Bulk texture data
-	GLuint DrawComplexSinglePassTexCoords;
-	GLuint DrawGouraudDrawData;
-
-	//Drawing colors
-	GLuint DrawSimpleDrawColor;
-	GLuint DrawTileHitDrawColor;
-	GLuint DrawTileDrawColor;
-
-	//Texture vars
-	GLuint DrawTileTexture;
-	GLuint DrawGouraudTexture[8];
-	GLuint DrawComplexSinglePassTexture[8];
-
-	// LineFlags for simple drawing.
-	GLuint DrawSimpleLineFlags;
-
-	// PolyFlags for shaders.
-	GLuint DrawTilePolyFlags;
-	GLuint DrawGouraudDrawFlags;
-	GLuint DrawComplexSinglePassDrawFlags;
-
-	// TexNum for bindless textures in shaders.
-	GLuint DrawTileTexNum;
-	GLuint DrawComplexSinglePassTexNum;
-	GLuint DrawGouraudTexNum;
-
-	// Gamma handling
-	static FLOAT Gamma;
-	GLuint DrawSimpleGamma;
-	GLuint DrawTileGamma;
-
-	//Vertices
-	GLuint DrawSimpleVertBuffer;
-	GLuint DrawTileVertBuffer;
-	GLuint DrawComplexVertBuffer;
-	GLuint DrawGouraudVertBuffer;
-
-	//VAO's
-	GLuint DrawSimpleGeometryVertsVao;
-	GLuint DrawTileVertsVao;
-	GLuint DrawGouraudPolyVertsVao;
-	GLuint DrawComplexVertsSinglePassVao;
-	GLuint SimpleDepthVao;
-
-	// Cached Texture Infos
-	FTEXTURE_PTR DrawGouraudDetailTextureInfo;
-	FTEXTURE_PTR DrawGouraudMacroTextureInfo;
-	FTEXTURE_PTR DrawGouraudBumpMapInfo;
-
-	FTEXTURE_PTR DrawComplexBumpMapInfo;
-
-	//Gamma
-	struct FGammaRamp
+	//
+	// DrawTile Shader
+	//
+	class DrawTileProgram : public ShaderProgram
 	{
-		_WORD red[256];
-		_WORD green[256];
-		_WORD blue[256];
+	public:
+		DrawTileProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+			: ShaderProgram(Name, RenDev)
+		{
+		}
+
+		~DrawTileProgram();
+
+		//
+		// ShaderProgram interface
+		//
+		void MapBuffers();
+		void UnmapBuffers();
+		bool BuildShaderProgram();
+		void BindShaderState();
+		void CreateInputLayout();
+		void ActivateShader();
+		void DeactivateShader();
+		void Flush(bool Wait);
+
+		//
+		// RenDev functions
+		//
+		void DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags);
+
+		//
+		// GLSL Shaders
+		//
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		
+	private:
+		struct DrawCallParameters
+		{
+			glm::vec4		DrawColor;
+			glm::vec4		HitColor;
+			glm::uint		TexNum;
+			glm::uint		PolyFlags;
+			glm::uint		BlendPolyFlags;
+			glm::uint		HitTesting;
+			glm::uint		DepthTested;
+			glm::float32	Gamma;
+			glm::uint		Padding0;		// Manually inserted padding to ensure the size of DrawCallParameters is a multiple of GLSL vec4 alignment
+			glm::uint		Padding1;
+		} DrawCallParams{};
+
+		struct BufferedVertES
+		{
+			glm::vec3 Point;
+			glm::vec2 UV;
+		};
+		static_assert(sizeof(BufferedVertES) == 20, "Invalid tile buffered vert size");
+
+		struct BufferedVertCore
+		{
+			glm::vec3 Point;
+			glm::vec4 TexCoords0;
+			glm::vec4 TexCoords1;
+			glm::vec4 TexCoords2;
+		};
+		static_assert(sizeof(BufferedVertCore) == 60, "Invalid tile buffered vert size");
+
+		BufferObject<DrawCallParameters>	ParametersBuffer;
+		BufferObject<BufferedVertES>		VertBufferES;
+		BufferObject<BufferedVertCore>		VertBufferCore;
+
+		GLint MultiDrawFacetArray[MAX_DRAWTILE_BATCH]{};
+		GLsizei MultiDrawVertexCountArray[MAX_DRAWTILE_BATCH]{};
+		INT MultiDrawCount{};
+		INT MultiDrawVertices{};
 	};
-	struct FByteGammaRamp
+
+	//
+	// DrawSimple Shader
+	//
+	class DrawSimpleProgram : public ShaderProgram
 	{
-		BYTE red[256];
-		BYTE green[256];
-		BYTE blue[256];
+	public:
+		DrawSimpleProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+			: ShaderProgram(Name, RenDev)
+		{
+		}
+
+		~DrawSimpleProgram();
+
+		//
+		// ShaderProgram interface
+		//
+		void MapBuffers();
+		void UnmapBuffers();
+		bool BuildShaderProgram();
+		void BindShaderState();
+		void CreateInputLayout();
+		void ActivateShader();
+		void DeactivateShader();
+		void Flush(bool Wait);
+
+		//
+		// RenDev functions
+		//
+		void Draw2DLine(const FSceneNode* Frame, FPlane& Color, DWORD LineFlags, const FVector& P1, const FVector& P2);
+		void Draw3DLine(FSceneNode* Frame, FPlane& Color, DWORD LineFlags, FVector& P1, FVector& P2);
+		void EndFlash();
+		void Draw2DPoint(const FSceneNode* Frame, FPlane& Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z);
+
+		//
+		// GLSL Shaders
+		//
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+
+	private:
+		struct DrawCallParameters
+		{
+			glm::vec4 DrawColor;
+			glm::float32 Gamma;
+			glm::uint HitTesting;
+			glm::uint LineFlags;
+			glm::uint DrawMode;
+			glm::uint BlendMode;
+			glm::uint Padding0;		// Manually inserted padding to ensure sizeof(DrawCallParameters) is a multiple of GLSL vec4 alignment
+			glm::uint Padding1;
+			glm::uint Padding2;
+		} DrawCallParams{};
+
+		struct BufferedVert
+		{
+			glm::vec3 Point;
+		};
+		static_assert(sizeof(BufferedVert) == 12, "Invalid simple buffered vert size");
+
+		BufferObject<BufferedVert> LineVertBuffer;
+		BufferObject<BufferedVert> TriangleVertBuffer;
+		BufferObject<DrawCallParameters> ParametersBuffer;
+
+		// Helpers
+		void PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);
 	};
-	FGammaRamp OriginalRamp; // to restore original value at exit or crash.
 
-	GLuint NumClipPlanes;
-	BYTE LastZMode;
+	//
+	// DrawGouraud Shader
+	//
+	class DrawGouraudProgram : public ShaderProgram
+	{
+	public:
+		DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+			: ShaderProgram(Name, RenDev)
+		{
+		}
 
-	// Static variables.
-	static TOpenGLMap<QWORD,FCachedTexture> *SharedBindMap;
-	static INT   LockCount;
-	static INT LogLevel;
+		~DrawGouraudProgram();
 
-#ifdef SDL2BUILD
-	SDL_GLContext glContext;
-	static SDL_GLContext CurrentGLContext;
-    static TArray<SDL_GLContext> AllContexts;
-#elif QTBUILD
+		//
+		// ShaderProgram interface
+        //
+		void MapBuffers();
+		void UnmapBuffers();
+		bool BuildShaderProgram();
+		void BindShaderState();
+		void CreateInputLayout();
+		void ActivateShader();
+		void DeactivateShader();
+		void Flush(bool Wait);
 
-#elif _WIN32
-	static TArray<HGLRC> AllContexts;
-	static HGLRC   CurrentGLContext;
-	static HMODULE hModuleGlMain;
-	static HMODULE hModuleGlGdi;
+		//
+		// RenDev functions
+		//
+		void DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+		void DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span);
 #endif
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		void DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
+#endif
+		//
+		// GLSL Shaders
+		//
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
 
-    FString AllExtensions;
+	private:
+		struct DrawCallParameters
+		{
+			glm::vec4 DiffuseInfo;			// UMult, VMult, Diffuse, Alpha
+			glm::vec4 DetailMacroInfo;		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
+			glm::vec4 MiscInfo;				// BumpMap Specular, Gamma
+			glm::vec4 DistanceFogColor;
+			glm::vec4 DistanceFogInfo;
+			glm::vec4 DrawColor;
+			glm::uint DrawFlags;
+			glm::uint PolyFlags;
+			glm::uint TextureFormat;
+			glm::uint HitTesting;
+			glm::uint RendMap;
+			glm::int32 DistanceFogMode;
+			glm::uint Padding0;				// Intentionally inserted padding to make the struct layout consistent in C++, GLSL std140, and GLSL std430
+			glm::uint Padding1;
+			glm::uint TexNum[4];
+		} DrawCallParams{};
+
+		struct BufferedVert
+		{
+			glm::vec3 Point;
+			glm::vec3 Normal;
+			glm::vec2 UV;
+			glm::vec4 Light;
+			glm::vec4 Fog;
+		};
+		static_assert(sizeof(BufferedVert) == 64, "Invalid gouraud buffered vertex size");
+
+		// Helper funcs
+		static void BufferVert(BufferedVert* Vert, FTransTexture* P);
+		void PrepareDrawCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
+		void FinishDrawCall(FTextureInfo& Info);
+		void SetTexture(INT Multi, UTexture* Texture, DWORD DrawFlags, FSceneNode* Frame, FTEXTURE_PTR& CachedInfo);
+
+		BufferObject<DrawCallParameters> ParametersBuffer;
+		BufferObject<BufferedVert> VertBuffer;
+
+		// Drawcall batching
+		GLint MultiDrawPolyListArray[MAX_DRAWGOURAUD_BATCH]{};
+		GLsizei MultiDrawVertexCountArray[MAX_DRAWGOURAUD_BATCH]{};
+		INT MultiDrawCount{};
+		INT MultiDrawVertices{};
+
+		// Cached Texture Infos
+		FTEXTURE_PTR DetailTextureInfo{};
+		FTEXTURE_PTR MacroTextureInfo{};
+		FTEXTURE_PTR BumpMapInfo{};
+	};
+
+	//
+	// DrawComplex Shader
+	//
+	class DrawComplexProgram : public ShaderProgram
+	{
+	public:
+		DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+			: ShaderProgram(Name, RenDev)
+		{
+		}
+
+		~DrawComplexProgram();
+
+		//
+		// ShaderProgram interface
+		//
+		void MapBuffers();
+		void UnmapBuffers();
+		bool BuildShaderProgram();
+		void BindShaderState();
+		void CreateInputLayout();
+		void ActivateShader();
+		void DeactivateShader();
+		void Flush(bool Wait);
+
+		//
+		// RenDev functions
+		//
+		void DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, const FSurfaceFacet& Facet);
+
+		//
+		// GLSL Shaders
+		//
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+
+	private:
+		struct DrawCallParameters
+		{
+			glm::vec4 DiffuseUV;
+			glm::vec4 LightMapUV;
+			glm::vec4 FogMapUV;
+			glm::vec4 DetailUV;
+			glm::vec4 MacroUV;
+			glm::vec4 EnviroMapUV;
+			glm::vec4 DiffuseInfo;
+			glm::vec4 MacroInfo;
+			glm::vec4 BumpMapInfo;
+			glm::vec4 HeightMapInfo;
+			glm::vec4 XAxis;
+			glm::vec4 YAxis;
+			glm::vec4 ZAxis;
+			glm::vec4 DrawColor;
+			glm::vec4 DistanceFogColor;
+			glm::vec4 DistanceFogInfo;
+			glm::uint DrawFlags;
+			glm::uint HitTesting;
+			glm::uint TextureFormat;
+			glm::uint PolyFlags;
+			glm::uint RendMap;
+			glm::int32 DistanceFogMode;
+			glm::uint Padding0; // This manually inserted padding ensures this struct layout is identical in C++, GLSL std140, and GLSL std430
+			glm::uint Padding1;
+			glm::uint TexNum[8];
+		} DrawCallParams{};
+
+		// Sets texture and updates corresponding drawcall data
+		void SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags, glm::vec4* TextureCoords = nullptr, glm::vec4* TextureInfo = nullptr);
+
+		struct BufferedVert
+		{
+			glm::vec4 Coords;
+			glm::vec4 Normal;
+		};
+		static_assert(sizeof(BufferedVert) == 32, "Invalid complex buffered vertex size");
+
+		BufferObject<DrawCallParameters> ParametersBuffer;
+		BufferObject<BufferedVert> VertBuffer;
+
+		GLint MultiDrawFacetArray[MAX_DRAWCOMPLEX_BATCH]{};
+		GLsizei MultiDrawVertexCountArray[MAX_DRAWCOMPLEX_BATCH]{};
+		INT MultiDrawCount{};
+		INT MultiDrawVertices{};
+
+		// Cached texture Info
+		FTEXTURE_PTR BumpMapInfo{};
+	};
+
+	//
+	// Dummy Shader
+	//
+	class NoProgram : public ShaderProgram
+	{
+	public:
+		NoProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+			: ShaderProgram(Name, RenDev)
+		{
+		}
+
+		//
+		// ShaderProgram interface
+		// 
+		void MapBuffers();
+		void UnmapBuffers();
+		bool BuildShaderProgram();
+		void BindShaderState();
+		void CreateInputLayout();
+		void ActivateShader();
+		void DeactivateShader();
+		void Flush(bool Wait);
+	};
 
 	//
 	// UObject interface
@@ -1165,10 +1673,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Unreal 227 URenderDevice interface
 	//
+#if ENGINE_VERSION==227
 	void  PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf);
 	void  PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf);
 	void  DrawPass(FSceneNode* Frame, INT Pass);
+#endif
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	void  DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span = NULL);
+#endif
 	BYTE  PushClipPlane(const FPlane& Plane);
 	BYTE  PopClipPlane();
 	BYTE  SetZTestMode(BYTE Mode);
@@ -1176,8 +1688,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// URenderDeviceOldUnreal469 interface
 	//
+#if UNREAL_TOURNAMENT_OLDUNREAL
 	void  DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
 	UBOOL SupportsTextureFormat(ETextureFormat Format);
+#endif
 
 	//
 	// Extension Checking
@@ -1209,10 +1723,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// OpenGL Context State Management
 	//
-	void  LockBuffer(BufferRange& Buffer, GLuint Index);
-	void  WaitBuffer(BufferRange& Buffer, GLuint Index);
-	void  MapBuffers();
-	void  UnMapBuffers();
 	void  MakeCurrent();
 	void  UpdateCoords(FSceneNode* Frame);
 	void  SetOrthoProjection(FSceneNode* Frame);
@@ -1229,7 +1739,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags);
 	void  SetNoTexture(INT Multi);
-	DWORD SetPolyFlags(DWORD PolyFlags);
+	static DWORD SetPolyFlags(DWORD PolyFlags);
 	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
 	DWORD SetDepth(DWORD PolyFlags);
 	void  SetSampler(GLuint Multi, FTextureInfo& Info, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags);
@@ -1245,56 +1755,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetGamma(FLOAT GammaCorrection);
 
 	//
-	// Shader Management
-	//
-	void  InitShaders();
-	void  DeleteShaderBuffers();
-	void  LinkShader(const TCHAR* ShaderProgName, GLuint& ShaderProg);
-	void  GetUniformBlockIndex(GLuint& Program, GLuint BlockIndex, const GLuint BindingIndex, const char* Name, FString ProgramName);
-	void  GetUniformLocation(GLuint& Uniform, GLuint& Program, const char* Name, FString ProgramName);
-
-	//
 	// Editor Hit Testing
 	//
 	void  LockHit(BYTE* InHitData, INT* InHitSize);
 	void  UnlockHit(UBOOL Blit);
 	void  SetSceneNodeHit(FSceneNode* Frame);
 	bool  HitTesting() { return HitData != NULL; }
-
-	//
-	// DrawComplexSurface Support
-	//
-	DrawComplexShaderDrawParams* DrawComplexGetDrawParamsRef();
-	void DrawComplexVertsSinglePass(DrawComplexBuffer& BufferData);
-	void DrawComplexEnd(INT NextProgram);
-	void DrawComplexStart();
-
-	//
-	// DrawGouraud Support
-	//
-	DrawGouraudShaderDrawParams* DrawGouraudGetDrawParamsRef();
-	static void DrawGouraudBufferVert(DrawGouraudBufferedVert* DrawGouraudTemp, FTransTexture* P, DrawGouraudBuffer& Buffer);
-	void  DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
-	void  DrawGouraudReleaseState(FTextureInfo& Info);
-	void  DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData);
-	void  DrawGouraudEnd(INT NextProgram);
-	void  DrawGouraudStart();
-
-	//
-	// DrawTile Support
-	//
-	DrawTileShaderDrawParams* DrawTileGetDrawParamsRef();
-	void  DrawTileVerts();
-	void  DrawTileEnd(INT NextProgram);
-	void  DrawTileStart();
-
-	//
-	// DrawSimple Support
-	//
-	void  DrawSimpleGeometryVerts(DrawSimpleMode DrawMode, GLuint size, INT Mode, DWORD LineFLags, FPlane DrawColor, bool BufferedDraw);
-	void  DrawSimpleBufferLines(FLOAT* DrawLinesTemp, FLOAT* LineData);
-	void  DrawSimpleEnd(INT NextProgram);
-	void  DrawSimpleStart();
 
 	//
 	// Error logging

@@ -275,7 +275,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	GLuint SourceFormat = GL_RGBA;
 	GLuint SourceType   = GL_UNSIGNED_BYTE;
 
-	if (!Compression_s3tcExt && FIsCompressedFormat(Info.Format))
+	if (!SupportsS3TC && FIsCompressedFormat(Info.Format))
 		UnsupportedTexture = true;
 
 	// Unsupported can already be set in case of only too large mip maps available.
@@ -674,7 +674,7 @@ void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FTextureInfo& Info, 
 	CHECK_GL_ERROR();
 }
 
-void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags )
+void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags)
 {
 	guard(UXOpenGLRenderDevice::SetTexture);
 
@@ -740,35 +740,44 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
 		UploadTexture(Info, Bind, PolyFlags, IsNewBind, IsResidentBindlessTexture);
 
 	// stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in) - Smirftsch: Added manual override UseBindlessLightmaps
-	UBOOL ShouldMakeBindlessResident = UsingBindlessTextures && (UseBindlessLightmaps || Info.Texture);
+	const auto ShouldMakeBindlessResident = 
+		UsingBindlessTextures && (UseBindlessLightmaps || Info.Texture);
 
-    if (UsingBindlessTextures && Bind->TexNum[CacheSlot] == 0 && TexNum < MaxBindlessTextures && ShouldMakeBindlessResident)
+	const auto BindlessTextureHandleCount =
+		(ShouldMakeBindlessResident && BindlessHandleStorage == STORE_UBO)
+		? GlobalTextureHandlesBufferUBO.Size()
+		: (ShouldMakeBindlessResident && BindlessHandleStorage == STORE_SSBO)
+		? GlobalTextureHandlesBufferSSBO.Size()
+		: 0;
+
+    if (ShouldMakeBindlessResident && Bind->TexNum[CacheSlot] == 0 && BindlessTextureHandleCount < static_cast<size_t>(MaxBindlessTextures))
     {
         guard(MakeTextureHandleResident);
-        Bind->TexNum[CacheSlot]            = TexNum;
+        Bind->TexNum[CacheSlot]            = BindlessTextureHandleCount;
 		Bind->BindlessTexHandle[CacheSlot] = glGetTextureSamplerHandleARB(Bind->Ids[CacheSlot], Bind->Sampler[CacheSlot]);
         CHECK_GL_ERROR();
 
         if (!Bind->BindlessTexHandle[CacheSlot])
         {
-            GWarn->Logf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture?Info.Texture->GetFullName():TEXT("LightMap/FogMap"));
+            GWarn->Logf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture ? Info.Texture->GetFullName() : TEXT("LightMap/FogMap"));
             Bind->BindlessTexHandle[CacheSlot] = 0;
             Bind->TexNum[CacheSlot] = 0;
         }
         else
         {
             glMakeTextureHandleResidentARB(Bind->BindlessTexHandle[CacheSlot]);
-            CHECK_GL_ERROR();
-
-            WaitBuffer(GlobalTextureHandlesRange, 0);
+            CHECK_GL_ERROR();			
 
 			if (BindlessHandleStorage == STORE_UBO)
-				GlobalTextureHandlesRange.Int64Buffer[TexNum * 2] = Bind->BindlessTexHandle[CacheSlot];
+			{
+				GlobalTextureHandlesBufferUBO.GetCurrentElementPtr()->TextureHandle = Bind->BindlessTexHandle[CacheSlot];
+				GlobalTextureHandlesBufferUBO.Advance(1);
+			}
 			else if (BindlessHandleStorage == STORE_SSBO)
-				GlobalTextureHandlesRange.Int64Buffer[TexNum] = Bind->BindlessTexHandle[CacheSlot];
-
-            LockBuffer(GlobalTextureHandlesRange, 0);
-            TexNum++;
+			{
+				GlobalTextureHandlesBufferSSBO.GetCurrentElementPtr()->TextureHandle = Bind->BindlessTexHandle[CacheSlot];
+				GlobalTextureHandlesBufferSSBO.Advance(1);
+			}
         }
         unguard;
     }
@@ -777,37 +786,6 @@ void UXOpenGLRenderDevice::SetTexture( INT Multi, FTextureInfo& Info, DWORD Poly
         Bind->BindlessTexHandle[CacheSlot] = 0;
         Bind->TexNum[CacheSlot] = 0;
     }
-
-	// Bind to a regular sampler if we failed to make the texture bindless resident
-	if (Bind->BindlessTexHandle[CacheSlot] == 0)
-	{
-		switch (ActiveProgram)
-		{
-			case Tile_Prog:
-			{
-				glUniform1i(DrawTileTexture, Multi);
-				CHECK_GL_ERROR();
-				break;
-			}
-			case GouraudPolyVert_Prog:
-			{
-				glUniform1i(DrawGouraudTexture[Multi], Multi);
-				CHECK_GL_ERROR();
-				break;
-			}
-			case ComplexSurfaceSinglePass_Prog:
-			{
-				glUniform1i(DrawComplexSinglePassTexture[Multi], Multi);
-				CHECK_GL_ERROR();
-				break;
-			}
-			case Simple_Prog:
-			default:
-			{
-				break;
-			}
-		}
-	}
 
 	Tex.TexNum = Bind->TexNum[CacheSlot];
 
@@ -935,10 +913,6 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 		CurrentPolyFlags = PolyFlags;
 	}
 	STAT(unclockFast(Stats.BlendCycles));
-
-	return;
-
-	CHECK_GL_ERROR();
 	unguard;
 }
 

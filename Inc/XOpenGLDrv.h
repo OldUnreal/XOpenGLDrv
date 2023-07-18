@@ -28,6 +28,7 @@
 #elif ENGINE_VERSION==1100
 #include "RenderPrivate.h"
 #endif
+#include "UnRender.h"
 
 //#define AUTO_INITIALIZE_REGISTRANTS_OPENGLDRV UXOpenGLRenderDevice::StaticClass();
 extern "C" { void autoInitializeRegistrantsXOpenGLDrv(void); }

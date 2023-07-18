@@ -37,16 +37,25 @@
     <ClCompile Include="EditorHit.cpp">
       <Filter>Src</Filter>
     </ClCompile>
-    <ClCompile Include="PersistentBuffers.cpp">
-      <Filter>Src</Filter>
-    </ClCompile>
     <ClCompile Include="CheckExtensions.cpp">
       <Filter>Src</Filter>
     </ClCompile>
     <ClCompile Include="glad.cpp">
       <Filter>Src</Filter>
     </ClCompile>
-    <ClCompile Include="UnShader.cpp">
+    <ClCompile Include="ShaderProgram.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawComplex_GLSL.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawGouraud_GLSL.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawSimple_GLSL.cpp">
+      <Filter>Src</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawTile_GLSL.cpp">
       <Filter>Src</Filter>
     </ClCompile>
   </ItemGroup>

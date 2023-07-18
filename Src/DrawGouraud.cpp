@@ -22,24 +22,85 @@
 
 =============================================================================*/
 
-// Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtc/matrix_inverse.hpp>
-
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
-//#include "UnStaticLight.h"
 
-UXOpenGLRenderDevice::DrawGouraudShaderDrawParams* UXOpenGLRenderDevice::DrawGouraudGetDrawParamsRef()
+/*-----------------------------------------------------------------------------
+	RenDev Interface
+-----------------------------------------------------------------------------*/
+
+void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
-	return UsingShaderDrawParameters ?
-		&reinterpret_cast<DrawGouraudShaderDrawParams*>(DrawGouraudSSBORange.Buffer)[DrawGouraudBufferData.Index * MAX_DRAWGOURAUD_BATCH + DrawGouraudMultiDrawCount] :
-		&DrawGouraudDrawParams;
+	if (NoDrawGouraud)
+		return;
+
+	clockFast(Stats.GouraudPolyCycles);
+	SetProgram(Gouraud_Prog);
+	dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog])->DrawGouraudPolygon(Frame, Info, Pts, NumPts, PolyFlags, Span);
+	unclockFast(Stats.GouraudPolyCycles);
 }
 
-inline void UXOpenGLRenderDevice::DrawGouraudBufferVert( DrawGouraudBufferedVert* Vert, FTransTexture* P, DrawGouraudBuffer& BufferData )
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
+{
+	if (NoDrawGouraudList)
+		return;
+
+	clockFast(Stats.GouraudPolyCycles);
+	SetProgram(Gouraud_Prog);
+	dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog])->DrawGouraudPolyList(Frame, Info, Pts, NumPts, PolyFlags, Span);
+	unclockFast(Stats.GouraudPolyCycles);
+}
+#endif
+
+#if UNREAL_TOURNAMENT_OLDUNREAL
+void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
+{
+	if (NoDrawGouraudList)
+		return;
+
+	clockFast(Stats.GouraudPolyCycles);
+	SetProgram(Gouraud_Prog);
+	dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog])->DrawGouraudTriangles(Frame, Info, Pts, NumPts, PolyFlags, DataFlags, Span);
+	unclockFast(Stats.GouraudPolyCycles);
+}
+#endif
+
+#if ENGINE_VERSION==227
+void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
+{
+	guard(UOpenGLRenderDevice::PreDrawGouraud);
+
+	if (FogSurf.IsValid())
+	{
+		DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
+		DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, 0);
+		DistanceFogMode = FogSurf.FogMode;
+
+		bFogEnabled = true;
+	}
+	else if (bFogEnabled)
+		ResetFog();
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
+{
+	guard(UOpenGLRenderDevice::PostDrawGouraud);
+	ResetFog();
+	unguard;
+}
+#endif // ENGINE_VERSION
+
+/*-----------------------------------------------------------------------------
+	ShaderProgram Implementation
+-----------------------------------------------------------------------------*/
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::BufferVert(BufferedVert* Vert, FTransTexture* P)
 {
 	Vert->Point  = glm::vec3(P->Point.X, P->Point.Y, P->Point.Z);
 	Vert->Normal = glm::vec3(P->Normal.X, P->Normal.Y, P->Normal.Z);
@@ -48,10 +109,21 @@ inline void UXOpenGLRenderDevice::DrawGouraudBufferVert( DrawGouraudBufferedVert
 	Vert->Fog    = glm::vec4(P->Fog.X, P->Fog.Y, P->Fog.Z, P->Fog.W);
 }
 
-void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags)
+void UXOpenGLRenderDevice::DrawGouraudProgram::SetTexture(INT Multi, UTexture* Texture, DWORD DrawFlags, FSceneNode* Frame, FTEXTURE_PTR& CachedInfo)
 {
-	SetProgram(GouraudPolyVert_Prog);
+#if XOPENGL_MODIFIED_LOCK
+	 CachedInfo = Texture->GetTexture(INDEX_NONE, RenDev);
+#else
+	 Texture->Lock(CachedInfo, Frame->Viewport->CurrentTime, -1, RenDev);
+#endif
+	 DrawCallParams.DrawFlags |= DrawFlags;
 
+	 RenDev->SetTexture(Multi, FTEXTURE_GET(CachedInfo), Texture->PolyFlags, 0.f, DrawFlags);
+     DrawCallParams.TexNum[Multi] = RenDev->TexInfo[Multi].TexNum;
+}
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags)
+{
 	// stijn: this absolutely kills performance on mac. You're updating global state here for every gouraud mesh/complex surface!
 #if ENGINE_VERSION==227 && !__APPLE__
     // Update FrameCoords for shaders.
@@ -59,8 +131,8 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
     // This is only essential (so far) for NormalMaps/Parallax/HWLighting, so this may be kept disabled for non 227 builds.
     // However, even in debugmode I can't see any ḿeasurable performance difference at all (on my machine).
     // In order to have any (future) calculations depending on FrameCoords working correctly you may want to enable this in general.
-    if (BumpMaps)
-        UpdateCoords(Frame);
+    if (RenDev->BumpMaps)
+		RenDev->UpdateCoords(Frame);
 #endif
 
 	DWORD NextPolyFlags = SetPolyFlags(PolyFlags);
@@ -68,33 +140,34 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 	DrawFlags NoNearZFlag = NoNearZ ? DF_NoNearZ : DF_None;
 
 	// Check if the uniforms will change
-	if (!UsingShaderDrawParameters ||
+	if (!RenDev->UsingShaderDrawParameters ||
 		// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
-		((DrawGouraudDrawParams.PolyFlags()^PolyFlags) & PF_ForceViewZone) ||
+		((DrawCallParams.PolyFlags^PolyFlags) & PF_ForceViewZone) ||
 		// Check if the blending mode will change
-		WillBlendStateChange(DrawGouraudDrawParams.PolyFlags(), NextPolyFlags) ||
+		RenDev->WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
 		// Check if the texture will change
-		WillTextureStateChange(0, Info, NextPolyFlags) ||
+		RenDev->WillTextureStateChange(0, Info, NextPolyFlags) ||
 		// Check if NoNearZ will change
-		((DrawGouraudDrawParams.DrawFlags()^NoNearZFlag) & DF_NoNearZ) ||
+		((DrawCallParams.DrawFlags^NoNearZFlag) & DF_NoNearZ) ||
 		// Check if we have room left in the multi-draw array
-		DrawGouraudMultiDrawCount+1 >= MAX_DRAWGOURAUD_BATCH)
+		MultiDrawCount+1 >= MAX_DRAWGOURAUD_BATCH)
 	{
-		if (DrawGouraudBufferData.IndexOffset > 0)
+		// Dispatch buffered data
+		Flush(true);
+
+		RenDev->SetBlend(NextPolyFlags, false);
+
+		if (NoNearZ &&
+			(RenDev->StoredFovAngle != RenDev->Viewport->Actor->FovAngle ||
+			 RenDev->StoredFX != Frame->FX ||
+			 RenDev->StoredFY != Frame->FY ||
+			 !RenDev->StoredbNearZ))
 		{
-			unclockFast(Stats.GouraudPolyCycles);
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			clockFast(Stats.GouraudPolyCycles);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
+			RenDev->SetProjection(Frame, 1);
 		}
-
-		SetBlend(NextPolyFlags, false);
-
-		if (NoNearZ && (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || !StoredbNearZ))
-			SetProjection(Frame, 1);
 	}
 
-	DrawGouraudDrawParams.PolyFlags() = NextPolyFlags;
+	DrawCallParams.PolyFlags = NextPolyFlags;
 
 	const FLOAT TextureAlpha =
 #if ENGINE_VERSION==227
@@ -103,120 +176,79 @@ void UXOpenGLRenderDevice::DrawGouraudSetState(FSceneNode* Frame, FTextureInfo& 
 		Info.Texture->Alpha;
 #endif
 
+	DrawCallParams.HitTesting = GIsEditor && RenDev->HitTesting();	
+	
 	// Editor Support.
 	if (GIsEditor)
 	{
-		if (HitTesting()) // UED only.
-		{
-			DrawGouraudDrawParams.HitTesting() = 1;
-			DrawGouraudDrawParams.DrawData[DGDD_EDITOR_DRAWCOLOR] = FPlaneToVec4(HitColor);
-		}
-		else
-		{
-			DrawGouraudDrawParams.HitTesting() = 0;
-			DrawGouraudDrawParams.DrawData[DGDD_EDITOR_DRAWCOLOR] = glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
-		}
+		DrawCallParams.DrawColor = DrawCallParams.HitTesting
+			? FPlaneToVec4(RenDev->HitColor)
+			: glm::vec4(0.f, 0.f, 0.f, TextureAlpha);		
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
-			DrawGouraudDrawParams.RendMap() = Frame->Viewport->Actor->RendMap;
+			DrawCallParams.RendMap = Frame->Viewport->Actor->RendMap;
 	}
 
-	SetTexture(0, Info, DrawGouraudDrawParams.PolyFlags(), 0, DF_DiffuseTexture);
-	DrawGouraudDrawParams.DrawData[DGDD_DIFFUSE_INFO] = glm::vec4(TexInfo[0].UMult, TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
-	DrawGouraudDrawParams.TexNum[0] = TexInfo[0].TexNum;
+	RenDev->SetTexture(0, Info, DrawCallParams.PolyFlags, 0, DF_DiffuseTexture);
+	DrawCallParams.DiffuseInfo = glm::vec4(RenDev->TexInfo[0].UMult, RenDev->TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
+	DrawCallParams.TexNum[0] = RenDev->TexInfo[0].TexNum;
+	DrawCallParams.DrawFlags = DF_DiffuseTexture | NoNearZFlag;
 
-	DrawGouraudDrawParams.DrawFlags() = DF_DiffuseTexture | NoNearZFlag;
-
-	if (Info.Texture->DetailTexture && DetailTextures)
+	DrawCallParams.DetailMacroInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
+	if (Info.Texture->DetailTexture && RenDev->DetailTextures)
 	{
-#if XOPENGL_MODIFIED_LOCK
-		DrawGouraudDetailTextureInfo = Info.Texture->DetailTexture->GetTexture(INDEX_NONE, this);
-#else
-		Info.Texture->DetailTexture->Lock(DrawGouraudDetailTextureInfo, Frame->Viewport->CurrentTime, -1, this);
-#endif
-		DrawGouraudDrawParams.DrawFlags() |= DF_DetailTexture;
-
-		SetTexture(1, FTEXTURE_GET(DrawGouraudDetailTextureInfo), Info.Texture->DetailTexture->PolyFlags, 0.0, DF_DetailTexture);
-		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO] = glm::vec4(TexInfo[1].UMult, TexInfo[1].VMult, 0.f, 0.f);
-		DrawGouraudDrawParams.TexNum[1] = TexInfo[1].TexNum;
-	}
-	else
-	{
-		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO] = glm::vec4(0.f, 0.f, 0.f, 0.f);
+		SetTexture(1, Info.Texture->DetailTexture, DF_DetailTexture, Frame, DetailTextureInfo);
+		DrawCallParams.DetailMacroInfo.x = RenDev->TexInfo[1].UMult;
+		DrawCallParams.DetailMacroInfo.y = RenDev->TexInfo[1].VMult;
 	}
 
+	DrawCallParams.MiscInfo = glm::vec4(0.f, RenDev->Gamma, 0.f, 0.f);
 #if ENGINE_VERSION==227
-	if (Info.Texture->BumpMap && BumpMaps)
+	if (Info.Texture->BumpMap && RenDev->BumpMaps)
 	{
-#if XOPENGL_MODIFIED_LOCK
-		DrawGouraudBumpMapInfo = Info.Texture->BumpMap->GetTexture(INDEX_NONE, this);
-#else
-		Info.Texture->BumpMap->Lock(DrawGouraudBumpMapInfo, Frame->Viewport->CurrentTime, -1, this);
-#endif
-		DrawGouraudDrawParams.DrawFlags() |= DF_BumpMap;
-
-		SetTexture(2, FTEXTURE_GET(DrawGouraudBumpMapInfo), Info.Texture->BumpMap->PolyFlags, 0.0, DF_BumpMap);
-		DrawGouraudDrawParams.DrawData[DGDD_MISC_INFO] = glm::vec4(Info.Texture->BumpMap->Specular, Gamma, Info.Texture->Format, 0.f);
-		DrawGouraudDrawParams.TexNum[2] = TexInfo[2].TexNum; //using Base Texture UV.
-	}
-	else
-	{
-#endif // ENGINE_VERSION
-		DrawGouraudDrawParams.DrawData[DGDD_MISC_INFO] = glm::vec4(0.f, Gamma, Info.Texture->Format, 0.f);
-#if ENGINE_VERSION==227
+		SetTexture(2, Info.Texture->BumpMap, DF_BumpMap, Frame, BumpMapInfo);
+		DrawCallParams.MiscInfo.x = Info.Texture->BumpMap->Specular;
 	}
 #endif
 
-	if (Info.Texture->MacroTexture && MacroTextures)
+	if (Info.Texture->MacroTexture && RenDev->MacroTextures)
 	{
-#if XOPENGL_MODIFIED_LOCK
-		DrawGouraudMacroTextureInfo = Info.Texture->MacroTexture->GetTexture(INDEX_NONE, this);
-#else
-		Info.Texture->MacroTexture->Lock(DrawGouraudMacroTextureInfo, Frame->Viewport->CurrentTime, -1, this);
-#endif
-		DrawGouraudDrawParams.DrawFlags() |= DF_MacroTexture;
-
-		SetTexture(3, FTEXTURE_GET(DrawGouraudMacroTextureInfo), Info.Texture->MacroTexture->PolyFlags, 0.0, DF_MacroTexture);
-		DrawGouraudDrawParams.TexNum[3] = TexInfo[3].TexNum;
-
-		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO].z = TexInfo[3].UMult;
-		DrawGouraudDrawParams.DrawData[DGDD_DETAIL_MACRO_INFO].w = TexInfo[3].VMult;
+		SetTexture(3, Info.Texture->MacroTexture, DF_MacroTexture, Frame, MacroTextureInfo);
+		DrawCallParams.DetailMacroInfo.z = RenDev->TexInfo[3].UMult;
+		DrawCallParams.DetailMacroInfo.w = RenDev->TexInfo[3].VMult;
 	}
 
-	DrawGouraudDrawParams.DrawData[DGDD_DISTANCE_FOG_COLOR] = DistanceFogColor;
-	DrawGouraudDrawParams.DrawData[DGDD_DISTANCE_FOG_INFO]  = DistanceFogValues;
+	DrawCallParams.DistanceFogColor = RenDev->DistanceFogColor;
+	DrawCallParams.DistanceFogInfo  = RenDev->DistanceFogValues;
+	DrawCallParams.DistanceFogMode = RenDev->DistanceFogMode;
 }
 
-void UXOpenGLRenderDevice::DrawGouraudReleaseState(FTextureInfo& Info)
+void UXOpenGLRenderDevice::DrawGouraudProgram::FinishDrawCall(FTextureInfo& Info)
 {
-	if (NoBuffering)
-	{
-		unclockFast(Stats.GouraudPolyCycles);
-		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-		clockFast(Stats.GouraudPolyCycles);
-		WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-	}
+	if (RenDev->NoBuffering)
+		Flush(true);
 
 #if !XOPENGL_MODIFIED_LOCK
-	if (DrawGouraudDrawParams.DrawFlags() & DF_DetailTexture)
-		Info.Texture->DetailTexture->Unlock(DrawGouraudDetailTextureInfo);
+	if (DrawCallParams.DrawFlags & DF_DetailTexture)
+		Info.Texture->DetailTexture->Unlock(DetailTextureInfo);
 
-	if (DrawGouraudDrawParams.DrawFlags() & DF_BumpMap)
-		Info.Texture->BumpMap->Unlock(DrawGouraudBumpMapInfo);
+	if (DrawCallParams.DrawFlags & DF_BumpMap)
+		Info.Texture->BumpMap->Unlock(BumpMapInfo);
 
-	if (DrawGouraudDrawParams.DrawFlags() & DF_MacroTexture)
-		Info.Texture->MacroTexture->Unlock(DrawGouraudMacroTextureInfo);
+	if (DrawCallParams.DrawFlags & DF_MacroTexture)
+		Info.Texture->MacroTexture->Unlock(MacroTextureInfo);
 #endif
 }
 
-void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
+void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolygon);
 
-	if (NumPts < 3 || /*Frame->Recursion > MAX_FRAME_RECURSION ||*/ NoDrawGouraud) //reject invalid.
+	if (NumPts < 3 /*|| Frame->Recursion > MAX_FRAME_RECURSION*/ ) //reject invalid.
 		return;
 
-	clockFast(Stats.GouraudPolyCycles);
+	auto InVertexCount  = NumPts - 2;
+	auto OutVertexCount = InVertexCount * 3;
 
 #if ENGINE_VERSION==227
 	if (Info.Modifier)
@@ -227,55 +259,50 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	}
 #endif
 
-	if (DrawGouraudBufferData.IndexOffset >= DRAWGOURAUDPOLY_SIZE - sizeof(DrawGouraudBufferedVert) * (NumPts - 2) * 3)
+	if (!VertBuffer.CanBuffer(OutVertexCount))
 	{
-		unclockFast(Stats.GouraudPolyCycles);
-		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-		debugf(NAME_DevGraphics, TEXT("DrawGouraudPolygon overflow!"));
-		clockFast(Stats.GouraudPolyCycles);
-		WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
+		Flush(true);
 
 		// just in case...
-		if (sizeof(DrawGouraudBufferedVert) * (NumPts - 2) * 3 >= DRAWGOURAUDPOLY_SIZE)
+		if (sizeof(BufferedVert) * OutVertexCount >= DRAWGOURAUDPOLY_SIZE)
 		{
 			GWarn->Logf(TEXT("DrawGouraudPolygon poly too big!"));
 			return;
 		}
 	}
 
-	DrawGouraudSetState(Frame, Info, PolyFlags);
+	PrepareDrawCall(Frame, Info, PolyFlags);
+	if (RenDev->UsingShaderDrawParameters)
+		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
+	
+	MultiDrawPolyListArray[MultiDrawCount] = MultiDrawVertices;
 
-	if (UsingShaderDrawParameters)
-		memcpy(DrawGouraudGetDrawParamsRef(), &DrawGouraudDrawParams, sizeof(DrawGouraudDrawParams));
-	DrawGouraudMultiDrawPolyListArray[DrawGouraudMultiDrawCount] = DrawGouraudMultiDrawVertices;
+	auto Out = VertBuffer.GetCurrentElementPtr();
 
-	auto Out = reinterpret_cast<DrawGouraudBufferedVert*>(
-		&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
-
-	for ( INT i=0; i<NumPts-2; i++ )
+	// Unfan and buffer
+	for ( INT i=0; i < InVertexCount; i++ )
     {
-        DrawGouraudBufferVert(Out++, Pts[0    ], DrawGouraudBufferData);
-		DrawGouraudBufferVert(Out++, Pts[i + 1], DrawGouraudBufferData);
-		DrawGouraudBufferVert(Out++, Pts[i + 2], DrawGouraudBufferData);
+        BufferVert(Out++, Pts[0    ]);
+		BufferVert(Out++, Pts[i + 1]);
+		BufferVert(Out++, Pts[i + 2]);
     }
 
-	DrawGouraudMultiDrawVertices      += (NumPts - 2) * 3;
-	DrawGouraudBufferData.IndexOffset += (NumPts - 2) * 3 * (sizeof(DrawGouraudBufferedVert) / sizeof(FLOAT));
-	DrawGouraudMultiDrawVertexCountArray[DrawGouraudMultiDrawCount++] = (NumPts - 2) * 3;
+	MultiDrawVertices += OutVertexCount;
+	MultiDrawVertexCountArray[MultiDrawCount++] = OutVertexCount;
+	VertBuffer.Advance(OutVertexCount);
+	if (RenDev->UsingShaderDrawParameters)
+		ParametersBuffer.Advance(1);
 
-	DrawGouraudReleaseState(Info);
-	unclockFast(Stats.GouraudPolyCycles);
+	FinishDrawCall(Info);
 	unguard;
 }
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
+void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudPolyList);
-	if (NumPts < 3 || /*Frame->Recursion > MAX_FRAME_RECURSION ||*/ NoDrawGouraudList)		//reject invalid.
+	if (NumPts < 3 /*|| Frame->Recursion > MAX_FRAME_RECURSION*/) //reject invalid.
 		return;
-
-	clockFast(Stats.GouraudPolyCycles);
 
 #if ENGINE_VERSION==227
 	if (Info.Modifier)
@@ -286,55 +313,51 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	}
 #endif
 
-	DrawGouraudSetState(Frame, Info, PolyFlags);
+	PrepareDrawCall(Frame, Info, PolyFlags);
 
-	if (UsingShaderDrawParameters)
-		memcpy(DrawGouraudGetDrawParamsRef(), &DrawGouraudDrawParams, sizeof(DrawGouraudDrawParams));
-	DrawGouraudMultiDrawPolyListArray[DrawGouraudMultiDrawCount] = DrawGouraudMultiDrawVertices;
+	if (RenDev->UsingShaderDrawParameters)
+		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
+	MultiDrawPolyListArray[MultiDrawCount] = MultiDrawVertices;
 
-	auto Out = reinterpret_cast<DrawGouraudBufferedVert*>(
-		&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
-	auto End = reinterpret_cast<DrawGouraudBufferedVert*>(
-		&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DRAWGOURAUDPOLY_SIZE - 1]);
+	auto Out = VertBuffer.GetCurrentElementPtr();
+	auto End = VertBuffer.GetLastElementPtr();
 
 	INT PolyListSize = 0;
     for (INT i = 0; i < NumPts; i++)
     {
-		// stijn: this was the previous condition but this was all wrong! if we flush the buffer before the triangle we
-		// were pushing is complete, all subsequent triangles we push will be borked as well!!
-		//if ( DrawGouraudListBufferData.IndexOffset >= (DRAWGOURAUDPOLY_SIZE - DrawGouraudStrideSize))
+		// Polylists can be bigger than the vertex buffer so check here if we
+		// need to split the mesh up into separate drawcalls
 		if ((i % 3 == 0) && (Out + 2 > End))
 		{
-			DrawGouraudMultiDrawVertices += PolyListSize;
-			DrawGouraudBufferData.IndexOffset += PolyListSize * (sizeof(DrawGouraudBufferedVert) / sizeof(FLOAT));
-			DrawGouraudMultiDrawVertexCountArray[DrawGouraudMultiDrawCount++] = PolyListSize;
-
-			unclockFast(Stats.GouraudPolyCycles);
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
+			MultiDrawVertices += PolyListSize;
+			MultiDrawVertexCountArray[MultiDrawCount++] = PolyListSize;
+			VertBuffer.Advance(PolyListSize);
+			if (RenDev->UsingShaderDrawParameters)
+				ParametersBuffer.Advance(1);
+			
+			Flush(true);
 			debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
-			clockFast(Stats.GouraudPolyCycles);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
 
-			DrawGouraudSetState(Frame, Info, PolyFlags);
-			Out = reinterpret_cast<DrawGouraudBufferedVert*>(
-				&DrawGouraudBufferRange.Buffer[DrawGouraudBufferData.BeginOffset + DrawGouraudBufferData.IndexOffset]);
+			Out = VertBuffer.GetCurrentElementPtr();
+			End = VertBuffer.GetLastElementPtr();
 
-			if (UsingShaderDrawParameters)
-				memcpy(DrawGouraudGetDrawParamsRef(), &DrawGouraudDrawParams, sizeof(DrawGouraudDrawParams));
+			if (RenDev->UsingShaderDrawParameters)
+				memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
 
 			PolyListSize = 0;
 		}
 
-		DrawGouraudBufferVert(Out++, &Pts[i], DrawGouraudBufferData);
+		BufferVert(Out++, &Pts[i]);
 		PolyListSize++;
     }
 
-	DrawGouraudMultiDrawVertices      += PolyListSize;
-	DrawGouraudBufferData.IndexOffset += PolyListSize * (sizeof(DrawGouraudBufferedVert) / sizeof(FLOAT));
-	DrawGouraudMultiDrawVertexCountArray[DrawGouraudMultiDrawCount++] = PolyListSize;
-
-	DrawGouraudReleaseState(Info);
-	unclockFast(Stats.GouraudPolyCycles);
+	MultiDrawVertices                          += PolyListSize;
+	MultiDrawVertexCountArray[MultiDrawCount++] = PolyListSize;
+	VertBuffer.Advance(PolyListSize);
+	if (RenDev->UsingShaderDrawParameters)
+		ParametersBuffer.Advance(1);
+	
+	FinishDrawCall(Info);
 	CHECK_GL_ERROR();
 
 	unguard;
@@ -343,19 +366,15 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 // stijn: This is the UT extended renderer interface. This does not map directly onto DrawGouraudPolyList because DrawGouraudTriangles pushes info out earlier
 #if UNREAL_TOURNAMENT_OLDUNREAL
-void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
+void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span)
 {
 	INT StartOffset = 0;
 	INT i = 0;
 
 	if (Frame->NearClip.W != 0.0)
 	{
-		if (DrawGouraudBufferData.IndexOffset > 0)
-		{
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-		}
-		PushClipPlane(Frame->NearClip);
+		Flush(true);
+		RenDev->PushClipPlane(Frame->NearClip);
 	}
 
 	for (; i < NumPts; i += 3)
@@ -412,239 +431,141 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 
 	if (Frame->NearClip.W != 0.0)
 	{
-		if (DrawGouraudBufferData.IndexOffset > 0)
-		{
-			DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-			WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
-		}
-		PopClipPlane();
+		Flush(true);
+		RenDev->PopClipPlane();
 	}
 }
 #endif
 
-
-void UXOpenGLRenderDevice::DrawGouraudPolyVerts(GLenum Mode, DrawGouraudBuffer& BufferData)
+void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 {
-	clockFast(Stats.GouraudPolyCycles);
+	if (VertBuffer.Size() == 0)
+		return;
 
-	// Using one huge buffer instead of 3, interleaved data.
-	// This is to reduce overhead by reducing API calls.
-	GLuint TotalSize = BufferData.IndexOffset;
-	CHECK_GL_ERROR();
+	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_DYNAMIC_DRAW);
 
-	checkSlow(ActiveProgram == GouraudPolyVert_Prog);
-
-	if (!UsingPersistentBuffersGouraud)
+	if (!RenDev->UsingShaderDrawParameters)
 	{
-	    if (UseBufferInvalidation)
-        {
-            glInvalidateBufferData(DrawGouraudVertBuffer);
-            CHECK_GL_ERROR();
-        }
-#if defined(__LINUX_ARM__) || MACOSX
-        glBufferData(GL_ARRAY_BUFFER, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer, GL_DYNAMIC_DRAW);
-#else
-		glBufferSubData(GL_ARRAY_BUFFER, 0, TotalSize * sizeof(float), DrawGouraudBufferRange.Buffer);
-#endif
-
-		if (UsingShaderDrawParameters)
-		{
-			if (UseBufferInvalidation)
-			{
-				glInvalidateBufferData(DrawGouraudSSBO);
-				CHECK_GL_ERROR();
-			}
-
-#if defined(__LINUX_ARM__) || MACOSX
-			glBufferData(GL_SHADER_STORAGE_BUFFER, DrawGouraudMultiDrawCount * sizeof(DrawGouraudShaderDrawParams), DrawGouraudSSBORange.Buffer, GL_DYNAMIC_DRAW);
-#else
-			glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, DrawGouraudMultiDrawCount * sizeof(DrawGouraudShaderDrawParams), DrawGouraudSSBORange.Buffer);
-#endif
-		}
-
-		// GL > 4.5 for later use maybe.
-		/*
-		if (ActiveProgram == GouraudPolyVertList_Prog)
-			glNamedBufferData(DrawGouraudVertListBuffer, sizeof(float) * TotalSize, verts, GL_STREAM_DRAW);
-		else if (ActiveProgram == GouraudPolyVert_Prog)
-			glNamedBufferData(DrawGouraudVertBuffer, sizeof(float) * TotalSize, verts, GL_STREAM_DRAW);
-		CHECK_GL_ERROR();
-		*/
+		auto Out = ParametersBuffer.GetElementPtr(0);
+		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
 	}
-/*
-	else
-	{
-        if (ActiveProgram == GouraudPolyVertList_Prog)
-            glFlushMappedNamedBufferRange(DrawGouraudVertListBuffer, sizeof(float) * BufferData.BeginOffset, TotalSize * sizeof(float));
-        else if (ActiveProgram == GouraudPolyVert_Prog)
-            glFlushMappedNamedBufferRange(DrawGouraudVertBuffer, sizeof(float) * BufferData.BeginOffset, TotalSize * sizeof(float));
-	}
-*/
+	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, GL_DYNAMIC_DRAW);
 
-	GLintptr BeginOffset = BufferData.BeginOffset * sizeof(float);
-
-	if (BeginOffset != PrevDrawGouraudBeginOffset)
-	{
-		using Vert = DrawGouraudBufferedVert;
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)    BeginOffset);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Normal)));
-		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, UV)));
-		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Light)));
-		glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Fog)));
-		CHECK_GL_ERROR();
-
-		PrevDrawGouraudBeginOffset = BeginOffset;
-	}
-
-	if (!UsingShaderDrawParameters)
-	{
-		glUniform1uiv(DrawGouraudDrawFlags, 4, &DrawGouraudDrawParams._DrawFlags[0]);
-		glUniform1uiv(DrawGouraudTexNum, 4, reinterpret_cast<const GLuint*>(&DrawGouraudDrawParams.TexNum[0]));
-		glUniform4fv(DrawGouraudDrawData, ARRAY_COUNT(DrawGouraudDrawParams.DrawData), reinterpret_cast<const GLfloat*>(DrawGouraudDrawParams.DrawData));
-
-	}
-    CHECK_GL_ERROR();
+	if (!VertBuffer.IsInputLayoutCreated())
+		CreateInputLayout();
 
 	// Draw
-	if (OpenGLVersion == GL_Core)
-	{
-		glMultiDrawArrays(Mode, DrawGouraudMultiDrawPolyListArray, DrawGouraudMultiDrawVertexCountArray, DrawGouraudMultiDrawCount);
-	}
+	if (RenDev->OpenGLVersion == GL_Core)
+		glMultiDrawArrays(GL_TRIANGLES, MultiDrawPolyListArray, MultiDrawVertexCountArray, MultiDrawCount);
 	else
-	{
-		for (INT i = 0; i < DrawGouraudMultiDrawCount; ++i)
-			glDrawArrays(Mode, DrawGouraudMultiDrawPolyListArray[i], DrawGouraudMultiDrawVertexCountArray[i]);
-	}
+		for (INT i = 0; i < MultiDrawCount; ++i)
+			glDrawArrays(GL_TRIANGLES, MultiDrawPolyListArray[i], MultiDrawVertexCountArray[i]);
 
 	// reset
-	DrawGouraudMultiDrawVertices = DrawGouraudMultiDrawCount = 0;
+	MultiDrawVertices = MultiDrawCount = 0;
 
-	if (UsingPersistentBuffersGouraud)
+	VertBuffer.Lock();
+	VertBuffer.Rotate(Wait);
+
+	if (RenDev->UsingShaderDrawParameters)
 	{
-		LockBuffer(DrawGouraudBufferRange, BufferData.Index);
-		BufferData.Index = (BufferData.Index + 1) % NUMBUFFERS;
-		CHECK_GL_ERROR();
+		ParametersBuffer.Lock();
+		ParametersBuffer.Rotate(Wait);
 	}
-
-	BufferData.BeginOffset = BufferData.Index * DRAWGOURAUDPOLY_SIZE;
-    BufferData.IndexOffset = 0;
-
-	unclockFast(Stats.GouraudPolyCycles);
 }
 
-BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
+void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 {
-	guard(UXOpenGLRenderDevice::PushClipPlane);
-	if (NumClipPlanes == MaxClippingPlanes)
-		return 2;
-
-	glEnable(GL_CLIP_DISTANCE0 + NumClipPlanes);
-	glm::vec4 ClipParams = glm::vec4(NumClipPlanes, 1.f, 0.f, 0.f);
-	glm::vec4 ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
-
-	glBindBuffer(GL_UNIFORM_BUFFER, GlobalClipPlaneUBO);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(ClipParams));
-	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(ClipPlane));
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
-
-	CHECK_GL_ERROR();
-	++NumClipPlanes;
-
-	return 1;
-	unguard;
-}
-BYTE UXOpenGLRenderDevice::PopClipPlane()
-{
-	guard(UXOpenGLRenderDevice::PopClipPlane);
-	if (NumClipPlanes == 0)
-		return 2;
-
-	--NumClipPlanes;
-	glDisable(GL_CLIP_DISTANCE0 + NumClipPlanes);
-
-	glm::vec4 ClipParams = glm::vec4(NumClipPlanes, 0.f, 0.f, 0.f);
-	glm::vec4 ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
-
-	glBindBuffer(GL_UNIFORM_BUFFER, GlobalClipPlaneUBO);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::vec4), glm::value_ptr(ClipParams));
-	glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::vec4), sizeof(glm::vec4), glm::value_ptr(ClipPlane));
-	glBindBuffer(GL_UNIFORM_BUFFER, 0);
-
-	CHECK_GL_ERROR();
-
-	return 1;
-	unguard;
+	using Vert = BufferedVert;
+	auto BeginOffset = VertBuffer.BeginOffsetBytes() / sizeof(FLOAT);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)     BeginOffset);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Normal)));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, UV)));
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Light)));
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Fog)));
+	VertBuffer.SetInputLayoutCreated();
 }
 
-void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
+void UXOpenGLRenderDevice::DrawGouraudProgram::DeactivateShader()
 {
-	guard(UOpenGLRenderDevice::PreDrawGouraud);
+	Flush(false);
 
-	if (FogSurf.IsValid())
-	{
-		DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
-		DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, (GLfloat)(FogSurf.FogMode));
-
-		bFogEnabled = true;
-	}
-	else if (bFogEnabled)
-		ResetFog();
-
-	unguard;
-}
-
-void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
-{
-	guard(UOpenGLRenderDevice::PostDrawGouraud);
-
-#if ENGINE_VERSION==227
-	ResetFog();
-#endif // ENGINE_VERSION
-
-	unguard;
-}
-
-//
-// Program Switching
-//
-void UXOpenGLRenderDevice::DrawGouraudEnd(INT NextProgram)
-{
-	if (DrawGouraudBufferData.IndexOffset > 0)
-		DrawGouraudPolyVerts(GL_TRIANGLES, DrawGouraudBufferData);
-
-	CHECK_GL_ERROR();
-
-	// Clean up
 	for (INT i = 0; i < 5; ++i)
 		glDisableVertexAttribArray(i);
-	CHECK_GL_ERROR();
+
+	VertBuffer.UnbindBuffer();
+	ParametersBuffer.UnbindBuffer();
 }
 
-void UXOpenGLRenderDevice::DrawGouraudStart()
+void UXOpenGLRenderDevice::DrawGouraudProgram::ActivateShader()
 {
-	clockFast(Stats.GouraudPolyCycles);
-	WaitBuffer(DrawGouraudBufferRange, DrawGouraudBufferData.Index);
+	VertBuffer.Wait();
+	ParametersBuffer.Wait();
+	
+	glUseProgram(ShaderProgramObject);
 
-	glUseProgram(DrawGouraudProg);
-
-#if !defined(__EMSCRIPTEN__) && !__LINUX_ARM__
-	if (UseAA && NoAATiles && PrevProgram != ComplexSurfaceSinglePass_Prog)
-		glEnable(GL_MULTISAMPLE);
-#endif
-
-	glBindVertexArray(DrawGouraudPolyVertsVao);
-	glBindBuffer(GL_ARRAY_BUFFER, DrawGouraudVertBuffer);
-	if (UsingShaderDrawParameters)
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, DrawGouraudSSBO);
+	VertBuffer.BindBuffer();
+	ParametersBuffer.BindBuffer();
 
 	for (INT i = 0; i < 5; ++i)
 		glEnableVertexAttribArray(i);
 
-	DrawGouraudDrawParams.PolyFlags() = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
-	PrevDrawGouraudBeginOffset		  = -1;
+	DrawCallParams.PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
+}
 
-	CHECK_GL_ERROR();
-	unclockFast(Stats.GouraudPolyCycles);
+void UXOpenGLRenderDevice::DrawGouraudProgram::BindShaderState()
+{
+	ShaderProgram::BindShaderState();
+
+	if (!RenDev->UsingShaderDrawParameters)
+		BindUniform(GouraudParametersIndex, "DrawCallParameters");
+
+	// Bind regular texture samplers to their respective TMUs
+	for (INT i = 0; i < 4; i++)
+	{
+		GLint MultiTextureUniform;
+		GetUniformLocation(MultiTextureUniform, appToAnsi(*FString::Printf(TEXT("Texture%i"), i)));
+		if (MultiTextureUniform != -1)
+			glUniform1i(MultiTextureUniform, i);
+	}
+}
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::MapBuffers()
+{
+	VertBuffer.GenerateVertexBuffer();
+	VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffersGouraud, DRAWGOURAUDPOLY_SIZE);
+
+	if (RenDev->UsingShaderDrawParameters)
+	{
+		ParametersBuffer.GenerateSSBOBuffer(GouraudParametersIndex);
+		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH);
+	}
+	else
+	{
+		ParametersBuffer.GenerateUBOBuffer(GouraudParametersIndex);
+		ParametersBuffer.MapUBOBuffer(false, 1);
+		ParametersBuffer.Advance(1);
+	}
+}
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::UnmapBuffers()
+{
+	VertBuffer.DeleteBuffer();
+	ParametersBuffer.DeleteBuffer();
+}
+
+bool UXOpenGLRenderDevice::DrawGouraudProgram::BuildShaderProgram()
+{
+	return ShaderProgram::BuildShaderProgram(
+		BuildVertexShader,
+		RenDev->OpenGLVersion == GL_Core ? BuildGeometryShader : nullptr,
+		BuildFragmentShader,
+		EmitHeader);
+	}
+
+UXOpenGLRenderDevice::DrawGouraudProgram::~DrawGouraudProgram()
+{
+	DrawGouraudProgram::UnmapBuffers();
 }
 
 /*-----------------------------------------------------------------------------

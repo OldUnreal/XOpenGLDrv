@@ -398,14 +398,17 @@
     <ClCompile Include="CheckExtensions.cpp" />
     <ClCompile Include="DebugLog.cpp" />
     <ClCompile Include="DrawComplex.cpp" />
+    <ClCompile Include="DrawComplex_GLSL.cpp" />
     <ClCompile Include="DrawGouraud.cpp" />
+    <ClCompile Include="DrawGouraud_GLSL.cpp" />
     <ClCompile Include="DrawSimple.cpp" />
+    <ClCompile Include="DrawSimple_GLSL.cpp" />
     <ClCompile Include="DrawTile.cpp" />
+    <ClCompile Include="DrawTile_GLSL.cpp" />
     <ClCompile Include="EditorHit.cpp" />
     <ClCompile Include="glad.cpp" />
-    <ClCompile Include="PersistentBuffers.cpp" />
     <ClCompile Include="SetTexture.cpp" />
-    <ClCompile Include="UnShader.cpp" />
+    <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="XOpenGL.cpp" />
     <ClCompile Include="XOpenGLDrv.cpp" />
   </ItemGroup>

@@ -67,8 +67,8 @@ void UXOpenGLRenderDevice::CheckExtensions()
         SupportsClipDistance = false; // have to disable this functionality.
     }
 
-    NVIDIAMemoryInfo = false; // found no such info available...yet?
-    AMDMemoryInfo = false;
+    SupportsNVIDIAMemoryInfo = false; // found no such info available...yet?
+    SupportsAMDMemoryInfo = false;
 #else
     if (UsePersistentBuffers)
     {
@@ -123,8 +123,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
             UseBindlessTextures = false;
             UseBindlessLightmaps = false;
         }
-
-		NeedDynamicallyUniformBindlessHandles = !GLExtensionSupported(TEXT("NV_gpu_shader5"));
     }
 
     if (GLExtensionSupported(TEXT("GL_ARB_shader_storage_buffer_object")))
@@ -164,38 +162,38 @@ void UXOpenGLRenderDevice::CheckExtensions()
     if (GLExtensionSupported(TEXT("GL_NVX_gpu_memory_info")))
     {
         debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_NVX_gpu_memory_info found."));
-        NVIDIAMemoryInfo = true;
+        SupportsNVIDIAMemoryInfo = true;
     }
-    else NVIDIAMemoryInfo = false;
+    else SupportsNVIDIAMemoryInfo = false;
 
     if (GLExtensionSupported(TEXT("GL_ATI_meminfo")))
     {
         debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ATI_meminfo found."));
-        AMDMemoryInfo = true;
+        SupportsAMDMemoryInfo = true;
     }
-    else AMDMemoryInfo = false;
+    else SupportsAMDMemoryInfo = false;
 
 # ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
     if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))
     {
         debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control found."));
-        SwapControlExt = true;
+        SupportsSwapControl = true;
     }
     else
     {
         GWarn->Logf(TEXT("XOpenGL: WGL_EXT_swap_control not found. Can't set VSync options."));
-        SwapControlExt = false;
+        SupportsSwapControl = false;
     }
 
     if (GLExtensionSupported(TEXT("WGL_EXT_swap_control_tear")))
     {
         debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control_tear found."));
-        SwapControlTearExt = true;
+        SupportsSwapControlTear = true;
     }
     else
     {
         GWarn->Logf(TEXT("WGL_EXT_swap_control_tear is not supported by device."));
-        SwapControlTearExt = false;
+        SupportsSwapControlTear = false;
     }
 # else
     // Just some additional info to check on...
@@ -272,7 +270,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
     if (!GLExtensionSupported(TEXT("GL_EXT_texture_compression_s3tc")))
 	{
 		GWarn->Logf(TEXT("XOpenGL: GL_EXT_texture_compression_s3tc extension not found!"));
-		Compression_s3tcExt = false;
+        SupportsS3TC = false;
 	}
 
     if (UseSRGBTextures && !GLExtensionSupported(TEXT("GL_EXT_texture_sRGB")) && !GLExtensionSupported(TEXT("GL_EXT_sRGB"))) //GL_EXT_sRGB for ES
