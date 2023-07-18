@@ -2215,7 +2215,8 @@ void UXOpenGLRenderDevice::Exit()
 
 #ifdef SDL2BUILD
 	ResetShaders();
-	TextureHandlesBuffer.DeleteBuffer();
+	GlobalTextureHandlesBufferUBO.DeleteBuffer();
+	GlobalTextureHandlesBufferSSBO.DeleteBuffer();	
 	if (SharedBindMap)
 	{
 		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
