@@ -98,16 +98,26 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, DWORD BindlessTexNum)
 {
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
-	FCachedTexture* Result = nullptr;
-	INT CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;	
+	FCachedTexture* Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
 
-	if ((Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE)) == nullptr ||
-		(!IsResidentBindlessTexture && !IsBoundToTMU) ||
-		(IsResidentBindlessTexture && BindlessTexNum != ~0 && BindlessTexNum != Result->TexNum[CacheSlot]) ||
-		IsTextureDataStale)
-	{
+	const auto CacheSlot = ((PolyFlags & PF_Masked) && (Info.Format == TEXF_P8)) ? 1 : 0;
+	const auto CanMakeBindlessResident = UsingBindlessTextures && GlobalTextureHandlesBufferSSBO.Size() + GlobalTextureHandlesBufferUBO.Size() < MaxBindlessTextures;
+
+	// We will have to free up a TMU => stop batching
+	if (Result && !UsingBindlessTextures && !IsBoundToTMU)
 		return TRUE;
-	}
+
+	// We need to re-upload a texture we're currently using
+	if (Result && !UsingBindlessTextures && IsBoundToTMU && IsTextureDataStale)
+		return TRUE;
+
+	// Ditto. We're using the texture and its data is stale => stop batching
+	if (Result && IsResidentBindlessTexture && IsTextureDataStale && Result->TexNum[Multi] == Result->TexNum[CacheSlot])
+		return TRUE;
+
+	// We have to upload and will have to bind to a TMU => stop batching
+	if (!Result && !CanMakeBindlessResident)
+		return TRUE;
 
 	return FALSE;
 }
