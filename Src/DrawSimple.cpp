@@ -214,16 +214,15 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 	// Set GL state
 	RenDev->SetDepth(DrawCallParams.LineFlags);
 	RenDev->SetBlend(DrawCallParams.BlendMode, false);
-
+	
 	// Pass drawcall params
 	auto Out = ParametersBuffer.GetElementPtr(0);
 	memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
-	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, GL_DYNAMIC_DRAW);
-
+	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
+	
 	if (LineVertBuffer.Size() > 0)
 	{
-		TriangleVertBuffer.UnbindBuffer();
-		LineVertBuffer.BindBuffer();
+		LineVertBuffer.Bind();
 
 		if (!LineVertBuffer.IsInputLayoutCreated())
 		{
@@ -232,24 +231,23 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 			LineVertBuffer.SetInputLayoutCreated();
 		}
 
-		LineVertBuffer.BufferData(false, true, GL_DYNAMIC_DRAW);
+		LineVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
 		glDrawArrays(GL_LINES, 0, LineVertBuffer.Size());
 		LineVertBuffer.Rotate(Wait);
 	}
 
 	if (TriangleVertBuffer.Size() > 0)
 	{
-		LineVertBuffer.UnbindBuffer();
-		TriangleVertBuffer.BindBuffer();
-
+		TriangleVertBuffer.Bind();
+	
 		if (!TriangleVertBuffer.IsInputLayoutCreated())
 		{
 			CreateInputLayout();
 			glEnableVertexAttribArray(0);
 			TriangleVertBuffer.SetInputLayoutCreated();
 		}
-		
-		TriangleVertBuffer.BufferData(false, true, GL_DYNAMIC_DRAW);
+
+		TriangleVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
 		glDrawArrays(GL_TRIANGLE_FAN, 0, TriangleVertBuffer.Size());
 		TriangleVertBuffer.Rotate(Wait);
 	}
@@ -267,10 +265,8 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::DeactivateShader()
 {
 	Flush(false);
 
-	glDisableVertexAttribArray(0);
-
-	LineVertBuffer.UnbindBuffer();
-	TriangleVertBuffer.UnbindBuffer();
+	if (LineVertBuffer.IsBound() || TriangleVertBuffer.IsBound())
+		glDisableVertexAttribArray(0);
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::ActivateShader()
@@ -278,26 +274,26 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::ActivateShader()
 	glUseProgram(ShaderProgramObject);
 	// Note: we don't enable any vertex attrib array here because we haven't bound any vertex buffers yet
 
-	ParametersBuffer.BindBuffer();
+	ParametersBuffer.Bind();
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::BindShaderState()
 {
 	ShaderProgram::BindShaderState();
 
-	BindUniform(ComplexParametersIndex, "DrawCallParameters");
+	BindUniform(SimpleParametersIndex, "DrawCallParameters");
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::MapBuffers()
 {
 	for (const auto Buffer : { &LineVertBuffer, &TriangleVertBuffer })
 	{
-		Buffer->GenerateVertexBuffer();
+		Buffer->GenerateVertexBuffer(RenDev);
 		Buffer->MapVertexBuffer(RenDev->UsingPersistentBuffers, DRAWSIMPLE_SIZE);
 	}
 
-	ParametersBuffer.GenerateUBOBuffer(SimpleParametersIndex);
-	ParametersBuffer.MapUBOBuffer(false, 1);
+	ParametersBuffer.GenerateUBOBuffer(RenDev, SimpleParametersIndex);
+	ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 	ParametersBuffer.Advance(1);
 }
 
@@ -312,7 +308,7 @@ bool UXOpenGLRenderDevice::DrawSimpleProgram::BuildShaderProgram()
 {
 	return ShaderProgram::BuildShaderProgram(
 		BuildVertexShader,
-		RenDev->OpenGLVersion == GL_Core ? BuildGeometryShader : nullptr,
+		nullptr,
 		BuildFragmentShader,
 		EmitHeader);
 }

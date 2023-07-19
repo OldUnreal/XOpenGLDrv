@@ -119,7 +119,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 			glEnable(GL_DEPTH_TEST);
 		else
 			glDisable(GL_DEPTH_TEST);
-	
 		DrawCallParams.DepthTested = ShouldDepthTest;
 #endif
     }
@@ -135,18 +134,18 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 	DrawCallParams.PolyFlags	= NextPolyFlags;
 	DrawCallParams.HitTesting	= bHitTesting;
 	DrawCallParams.Gamma		= RenDev->Gamma;
-
+	
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
 	MultiDrawFacetArray[MultiDrawCount] = MultiDrawVertices;
-
+	
 	if (GIsEditor && 
 		Frame->Viewport->Actor && 
 		(Frame->Viewport->IsOrtho() || Abs(Z) <= SMALL_NUMBER))
 	{
 		Z = 1.0f; // Probably just needed because projection done below assumes non ortho projection.
 	}
-
+	
     // Buffer the tile
 	if (VertBufferES.IsBound())
 	{
@@ -225,14 +224,14 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 
     if (VertBufferES.IsBound())
 	{
-		VertBufferES.BufferData(RenDev->UseBufferInvalidation, false, GL_NONE);
+		VertBufferES.BufferData(RenDev->UseBufferInvalidation, false, GL_STREAM_DRAW);
 
 		if (!VertBufferES.IsInputLayoutCreated())
 			CreateInputLayout();
 	}
 	else
 	{
-		VertBufferCore.BufferData(RenDev->UseBufferInvalidation, false, GL_NONE);
+		VertBufferCore.BufferData(RenDev->UseBufferInvalidation, false, GL_STREAM_DRAW);
 
 		if (!VertBufferCore.IsInputLayoutCreated())
 			CreateInputLayout();
@@ -244,13 +243,12 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		auto Out = ParametersBuffer.GetElementPtr(0);
 		memcpy(Out, &DrawCallParams, sizeof(DrawCallParams));
 	}
-	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, GL_DYNAMIC_DRAW);
-
+	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
+		
 	if (VertBufferES.IsBound())
 	{
 		for (INT i = 0; i < MultiDrawCount; ++i)
 			glDrawArrays(GL_TRIANGLES, MultiDrawFacetArray[i], MultiDrawVertexCountArray[i]);
-		CHECK_GL_ERROR();
 
 		VertBufferES.Lock();
 		VertBufferES.Rotate(Wait);
@@ -258,7 +256,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 	else
 	{
 		glMultiDrawArrays(GL_TRIANGLES, MultiDrawFacetArray, MultiDrawVertexCountArray, MultiDrawCount);
-		CHECK_GL_ERROR();
 
 		VertBufferCore.Lock();
 		VertBufferCore.Rotate(Wait);
@@ -300,7 +297,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DeactivateShader()
 {
 	Flush(false);
 
-	for (INT i = 0; i < (RenDev->OpenGLVersion == GL_ES ? 2 : 4); ++i)
+	for (INT i = 0; i < (RenDev->UsingGeometryShaders ? 4 : 2); ++i)
 		glDisableVertexAttribArray(i);
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -309,10 +306,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::DeactivateShader()
 
 	if (RenDev->UseAA && RenDev->NoAATiles)
 		glEnable(GL_MULTISAMPLE);
-
-	VertBufferES.UnbindBuffer();
-	VertBufferCore.UnbindBuffer();
-	ParametersBuffer.UnbindBuffer();
 }
 
 void UXOpenGLRenderDevice::DrawTileProgram::ActivateShader()
@@ -328,21 +321,20 @@ void UXOpenGLRenderDevice::DrawTileProgram::ActivateShader()
 #endif
 
     glUseProgram(ShaderProgramObject);
-
-	if (RenDev->OpenGLVersion == GL_ES)
+	if (!RenDev->UsingGeometryShaders)
 	{
-		VertBufferES.BindBuffer();
+		VertBufferES.Bind();
 		for (INT i = 0; i < 2; ++i)
 			glEnableVertexAttribArray(i);
 	}
 	else
 	{
-		VertBufferCore.BindBuffer();
+		VertBufferCore.Bind();
 		for (INT i = 0; i < 4; ++i)
 			glEnableVertexAttribArray(i);
 	}
 
-	ParametersBuffer.BindBuffer();
+	ParametersBuffer.Bind();
     DrawCallParams.BlendPolyFlags = RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
 	DrawCallParams.PolyFlags = 0;
 }
@@ -362,33 +354,33 @@ void UXOpenGLRenderDevice::DrawTileProgram::BindShaderState()
 
 void UXOpenGLRenderDevice::DrawTileProgram::MapBuffers()
 {
-	if (RenDev->OpenGLVersion == GL_ES)
+	if (!RenDev->UsingGeometryShaders)
 	{
-		VertBufferES.GenerateVertexBuffer();
+		VertBufferES.GenerateVertexBuffer(RenDev);
 		VertBufferES.MapVertexBuffer(RenDev->UsingPersistentBuffersTile, DRAWTILE_SIZE);
 	}
 	else
 	{
-		VertBufferCore.GenerateVertexBuffer();
+		VertBufferCore.GenerateVertexBuffer(RenDev);
 		VertBufferCore.MapVertexBuffer(RenDev->UsingPersistentBuffersTile, DRAWTILE_SIZE);
 	}
 
 	if (RenDev->UsingShaderDrawParameters)
 	{
-		ParametersBuffer.GenerateSSBOBuffer(TileParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH);
+		ParametersBuffer.GenerateSSBOBuffer(RenDev, TileParametersIndex);
+		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
-		ParametersBuffer.GenerateUBOBuffer(TileParametersIndex);
-		ParametersBuffer.MapUBOBuffer(false, 1);
+		ParametersBuffer.GenerateUBOBuffer(RenDev, TileParametersIndex);
+		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
 	}
 }
 
 void UXOpenGLRenderDevice::DrawTileProgram::UnmapBuffers()
 {
-	if (RenDev->OpenGLVersion == GL_ES)
+	if (!RenDev->UsingGeometryShaders)
 		VertBufferES.DeleteBuffer();
 	else
 		VertBufferCore.DeleteBuffer();
@@ -400,7 +392,7 @@ bool UXOpenGLRenderDevice::DrawTileProgram::BuildShaderProgram()
 {
 	return ShaderProgram::BuildShaderProgram(
 		BuildVertexShader,
-		RenDev->OpenGLVersion == GL_Core ? BuildGeometryShader : nullptr,
+		RenDev->UsingGeometryShaders ? BuildGeometryShader : nullptr,
 		BuildFragmentShader, 
 		EmitHeader);
 }

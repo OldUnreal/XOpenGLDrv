@@ -864,12 +864,10 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 				//instead of forcing permanent state changes when disabling glBend use this as default state. Also fixes some flickering due to these changes.
 				glBlendFunc(GL_ONE, GL_CONSTANT_COLOR);
 				glBlendColor(0.0, 0.0, 0.0, 0.0);//actually add...nothing :)
-				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_Invisible)
 			{
 				glBlendFunc(GL_ZERO, GL_ONE);
-				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_Translucent)
 			{
@@ -886,22 +884,18 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
                     //debugf(TEXT("Mirror"));
                 }
                 */
-				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_Modulated)
 			{
 				glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);
-				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_AlphaBlend)
 			{
 				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-				CHECK_GL_ERROR();
 			}
 			else if (PolyFlags & PF_Highlighted)
 			{
 				glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-				CHECK_GL_ERROR();
 			}
 		}
 		if (Xor & PF_Invisible)
@@ -910,7 +904,6 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 				glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
 			else
 				glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-			CHECK_GL_ERROR();
 		}
 		if (Xor & PF_Occlude)
 		{
@@ -918,7 +911,6 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 				glDepthMask(GL_TRUE);
 			else
 				glDepthMask(GL_FALSE);
-			CHECK_GL_ERROR();
 		}
 		CurrentPolyFlags = PolyFlags;
 	}

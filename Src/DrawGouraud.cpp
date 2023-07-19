@@ -358,8 +358,6 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 		ParametersBuffer.Advance(1);
 	
 	FinishDrawCall(Info);
-	CHECK_GL_ERROR();
-
 	unguard;
 }
 #endif
@@ -442,14 +440,18 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 	if (VertBuffer.Size() == 0)
 		return;
 
-	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_DYNAMIC_DRAW);
+	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
 
 	if (!RenDev->UsingShaderDrawParameters)
 	{
 		auto Out = ParametersBuffer.GetElementPtr(0);
 		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
 	}
-	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, GL_DYNAMIC_DRAW);
+
+	// We might have to rebind the parametersbuffer here because
+	// PushClipPlane/PopClipPlane can also bind GL_UNIFORM_BUFFER
+	ParametersBuffer.Bind();
+	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 
 	if (!VertBuffer.IsInputLayoutCreated())
 		CreateInputLayout();
@@ -492,9 +494,6 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DeactivateShader()
 
 	for (INT i = 0; i < 5; ++i)
 		glDisableVertexAttribArray(i);
-
-	VertBuffer.UnbindBuffer();
-	ParametersBuffer.UnbindBuffer();
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::ActivateShader()
@@ -504,8 +503,8 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::ActivateShader()
 	
 	glUseProgram(ShaderProgramObject);
 
-	VertBuffer.BindBuffer();
-	ParametersBuffer.BindBuffer();
+	VertBuffer.Bind();
+	ParametersBuffer.Bind();
 
 	for (INT i = 0; i < 5; ++i)
 		glEnableVertexAttribArray(i);
@@ -532,18 +531,18 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::BindShaderState()
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::MapBuffers()
 {
-	VertBuffer.GenerateVertexBuffer();
+	VertBuffer.GenerateVertexBuffer(RenDev);
 	VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffersGouraud, DRAWGOURAUDPOLY_SIZE);
 
 	if (RenDev->UsingShaderDrawParameters)
 	{
-		ParametersBuffer.GenerateSSBOBuffer(GouraudParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH);
+		ParametersBuffer.GenerateSSBOBuffer(RenDev, GouraudParametersIndex);
+		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
-		ParametersBuffer.GenerateUBOBuffer(GouraudParametersIndex);
-		ParametersBuffer.MapUBOBuffer(false, 1);
+		ParametersBuffer.GenerateUBOBuffer(RenDev, GouraudParametersIndex);
+		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
 	}
 }
@@ -558,7 +557,7 @@ bool UXOpenGLRenderDevice::DrawGouraudProgram::BuildShaderProgram()
 {
 	return ShaderProgram::BuildShaderProgram(
 		BuildVertexShader,
-		RenDev->OpenGLVersion == GL_Core ? BuildGeometryShader : nullptr,
+		RenDev->UsingGeometryShaders ? BuildGeometryShader : nullptr,
 		BuildFragmentShader,
 		EmitHeader);
 	}

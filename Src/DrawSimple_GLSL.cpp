@@ -15,7 +15,7 @@
 	GLSL Code
 ------------------------------------------------------------------------------*/
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawSimpleProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	// DrawSimple isn't performance-critical so we don't use multi-drawing with SSBOs here
 	Out << R"(
@@ -34,7 +34,7 @@ layout(std140) uniform DrawCallParameters
 )";
 }
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawSimpleProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	Out << "layout(location = 0) in vec3 Coords; // == gl_Vertex" END_LINE;
 
@@ -59,7 +59,12 @@ void main(void)
 	Out << "}" END_LINE;
 }
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+/* 
+
+stijn: I don't think we need this anymore + it breaks DrawSimple on macOS because
+the geoshader expects lines as input, but EndFlash and 2DPoint draw triangles
+
+void UXOpenGLRenderDevice::DrawSimpleProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	Out << R"(
 layout(lines) in;
@@ -84,10 +89,10 @@ void main()
   EndPrimitive();
 }
 )";
-
 }
+*/
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawSimpleProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	if (GL->OpenGLVersion == GL_ES)
 	{

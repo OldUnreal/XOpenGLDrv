@@ -499,6 +499,16 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #endif
 	}
 
+	if (OpenGLVersion == GL_Core
+#if MACOSX
+		&& 0
+#endif
+		)
+	{
+		// macOS performance tanks when we use these
+		UsingGeometryShaders = true;
+	}
+
 	LogLevel = DebugLevel;
 
 	// For matrix setup in SetSceneNode()
@@ -774,7 +784,7 @@ InitContext:
 	{
 		glEnable(GL_DEBUG_OUTPUT);
 		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-		glDebugMessageCallback(&UXOpenGLRenderDevice::DebugCallback, NULL);
+		glDebugMessageCallback(UXOpenGLRenderDevice::DebugCallback, NULL);
 		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
 		GWarn->Logf(TEXT("XOpenGL: OpenGL debugging enabled, this can cause severe performance drain!"));
 	}
@@ -1628,9 +1638,8 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 	Coords->FrameUncoords[2] = glm::vec4(Frame->Uncoords.YAxis.X, Frame->Uncoords.YAxis.Y, Frame->Uncoords.YAxis.Z, 0.0f);
 	Coords->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
-	GlobalCoordsBuffer.BindBuffer();
-	GlobalCoordsBuffer.BufferData(false, false, GL_STATIC_DRAW);
-	GlobalCoordsBuffer.UnbindBuffer();
+	GlobalCoordsBuffer.Bind();
+	GlobalCoordsBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
 	CHECK_GL_ERROR();
 	unguard;
 }
@@ -1687,10 +1696,9 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 			if (i == MAX_LIGHTS - 1)
 				break;
 		}
-
-		StaticLightInfoBuffer.BindBuffer();
-		StaticLightInfoBuffer.BufferData(false, false, GL_NONE);
-		StaticLightInfoBuffer.UnbindBuffer();
+		
+		StaticLightInfoBuffer.Bind();
+		StaticLightInfoBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
 		CHECK_GL_ERROR();
 	}
 	else if (UseHWLighting && Level)
@@ -1731,9 +1739,8 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 				break;
 		}
 
-		StaticLightInfoBuffer.BindBuffer();
-		StaticLightInfoBuffer.BufferData(false, false, GL_NONE);
-		StaticLightInfoBuffer.UnbindBuffer();
+		StaticLightInfoBuffer.Bind();
+		StaticLightInfoBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
 		CHECK_GL_ERROR();
 	}
 	CHECK_GL_ERROR();
@@ -1794,9 +1801,8 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	GlobalMatrices->modelviewprojMat = GlobalMatrices->projMat * GlobalMatrices->viewMat * GlobalMatrices->modelMat; //yes, this is right.
 	GlobalMatrices->modelviewMat = GlobalMatrices->viewMat * GlobalMatrices->modelMat;
 
-	GlobalMatricesBuffer.BindBuffer();
-	GlobalMatricesBuffer.BufferData(false, false, GL_NONE);
-	GlobalMatricesBuffer.UnbindBuffer();
+	GlobalMatricesBuffer.Bind();
+	GlobalMatricesBuffer.BufferData(false, false, GL_STATIC_DRAW);
 	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
@@ -1846,9 +1852,8 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	GlobalMatrices->modelviewprojMat = GlobalMatrices->projMat * GlobalMatrices->viewMat * GlobalMatrices->modelMat;
 	GlobalMatrices->modelviewMat = GlobalMatrices->viewMat * GlobalMatrices->modelMat;
 
-	GlobalMatricesBuffer.BindBuffer();
-	GlobalMatricesBuffer.BufferData(false, false, GL_NONE);
-	GlobalMatricesBuffer.UnbindBuffer();	
+	GlobalMatricesBuffer.Bind();
+	GlobalMatricesBuffer.BufferData(false, false, GL_STATIC_DRAW);
 	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
@@ -1867,9 +1872,8 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	ClipPlaneInfo->ClipParams = glm::vec4(NumClipPlanes, 1.f, 0.f, 0.f);
 	ClipPlaneInfo->ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 
-	GlobalClipPlaneBuffer.BindBuffer();
-	GlobalClipPlaneBuffer.BufferData(false, false, GL_NONE);
-	GlobalClipPlaneBuffer.UnbindBuffer();
+	GlobalClipPlaneBuffer.Bind();
+	GlobalClipPlaneBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
 	CHECK_GL_ERROR();
 
 	++NumClipPlanes;
@@ -1890,9 +1894,8 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	ClipPlaneInfo->ClipParams = glm::vec4(NumClipPlanes, 0.f, 0.f, 0.f);
 	ClipPlaneInfo->ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
 
-	GlobalClipPlaneBuffer.BindBuffer();
-	GlobalClipPlaneBuffer.BufferData(false, false, GL_NONE);
-	GlobalClipPlaneBuffer.UnbindBuffer();
+	GlobalClipPlaneBuffer.Bind();
+	GlobalClipPlaneBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
 	CHECK_GL_ERROR();
 
 	return 1;
@@ -1951,7 +1954,11 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	CHECK_GL_ERROR();
 	glPolygonOffset(-1.f, -1.f);
     SetBlend(PF_Occlude, false);
+#if MACOSX // stijn: on macOS, it's much faster to just clear everything
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+#else
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags & LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
+#endif
 	CHECK_GL_ERROR();
 
 #if ENGINE_VERSION==227
@@ -2107,14 +2114,20 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 
 	if (ActiveProgram != NextProgram)
 	{
+		CHECK_GL_ERROR();
+		
 		// Flush the old program
 		Shaders[ActiveProgram]->DeactivateShader();
+
+		CHECK_GL_ERROR();
 
 		// Switch and initialize the new program
 		PrevProgram = ActiveProgram;
 		ActiveProgram = NextProgram;
 
 		Shaders[ActiveProgram]->ActivateShader();
+
+		CHECK_GL_ERROR();
 	}
 
 	unguard;

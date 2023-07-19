@@ -16,7 +16,7 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriter& Out)
+static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
 	// VERSION
 	if (GL->OpenGLVersion == GL_Core)
@@ -188,7 +188,7 @@ float PlaneDot(vec4 Plane, vec3 Point)
 
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriter& Out, ShaderProgram* Program, INT BufferBindingIndex)
+void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex)
 {
 	// gl_DrawID is only accessible in vertex shaders
 	if (GL->UsingShaderDrawParameters && ShaderType != GL_VERTEX_SHADER)
@@ -295,7 +295,7 @@ static const TCHAR* ShaderTypeString(GLuint ShaderType)
 bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuint& ShaderObject, ShaderWriterFunc Func, ShaderWriterFunc EmitHeaderFunc)
 {
 	guard(CompileShader);
-	FShaderWriter ShOut;
+	FShaderWriterX ShOut;
 	Emit_Globals(RenDev, ShOut);
 	if (EmitHeaderFunc)
 		(*EmitHeaderFunc)(ShaderType, RenDev, ShOut, this);
@@ -394,7 +394,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	Shaders[Complex_Prog] = new DrawComplexProgram(TEXT("DrawComplex"), this);
 
 	// (Re)initialize UBOs
-	GlobalMatricesBuffer.GenerateUBOBuffer(GlobalShaderBindingIndices::MatricesIndex);
+	GlobalMatricesBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::MatricesIndex);
 	GlobalMatricesBuffer.MapUBOBuffer(false, 1);
 	GlobalMatricesBuffer.Advance(1);
 	CHECK_GL_ERROR();
@@ -406,7 +406,7 @@ void UXOpenGLRenderDevice::InitShaders()
 		{
 			if (!GlobalTextureHandlesBufferUBO.Buffer)
 			{
-				GlobalTextureHandlesBufferUBO.GenerateUBOBuffer(GlobalShaderBindingIndices::TextureHandlesIndex);
+				GlobalTextureHandlesBufferUBO.GenerateUBOBuffer(this, GlobalShaderBindingIndices::TextureHandlesIndex);
 				GlobalTextureHandlesBufferUBO.MapUBOBuffer(true, MaxBindlessTextures);
 				GlobalTextureHandlesBufferUBO.Advance(1); // we don't want to use index 0 because our shaders interpret that as a bound texture
 			}
@@ -419,7 +419,7 @@ void UXOpenGLRenderDevice::InitShaders()
 		{
 			if (!GlobalTextureHandlesBufferSSBO.Buffer)
 			{
-				GlobalTextureHandlesBufferSSBO.GenerateSSBOBuffer(GlobalShaderBindingIndices::TextureHandlesIndex);
+				GlobalTextureHandlesBufferSSBO.GenerateSSBOBuffer(this, GlobalShaderBindingIndices::TextureHandlesIndex);
 				GlobalTextureHandlesBufferSSBO.MapSSBOBuffer(true, MaxBindlessTextures);
 				GlobalTextureHandlesBufferSSBO.Advance(1); // we don't want to use index 0 because our shaders interpret that as a bound texture
 			}
@@ -436,15 +436,15 @@ void UXOpenGLRenderDevice::InitShaders()
 		}
 	}
 
-	StaticLightInfoBuffer.GenerateUBOBuffer(GlobalShaderBindingIndices::StaticLightInfoIndex);
+	StaticLightInfoBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::StaticLightInfoIndex);
 	StaticLightInfoBuffer.MapUBOBuffer(false, 1);
 	StaticLightInfoBuffer.Advance(1);
 
-	GlobalCoordsBuffer.GenerateUBOBuffer(GlobalShaderBindingIndices::CoordsIndex);
+	GlobalCoordsBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::CoordsIndex);
 	GlobalCoordsBuffer.MapUBOBuffer(false, 1);
 	GlobalCoordsBuffer.Advance(1);
 
-	GlobalClipPlaneBuffer.GenerateUBOBuffer(GlobalShaderBindingIndices::ClipPlaneIndex);
+	GlobalClipPlaneBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::ClipPlaneIndex);
 	GlobalClipPlaneBuffer.MapUBOBuffer(false, 1);
 	GlobalClipPlaneBuffer.Advance(1);
 
@@ -521,9 +521,17 @@ UXOpenGLRenderDevice::ShaderProgram::~ShaderProgram()
 
 void UXOpenGLRenderDevice::NoProgram::ActivateShader()
 {
+	/*
+	if (RenDev->ArrayPoint)
+	{
+		RenDev->ArrayPoint->Unbind();
+		RenDev->ArrayPoint = nullptr;
+	}
+	
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
     glUseProgram(0);
+	*/
 }
 
 void UXOpenGLRenderDevice::NoProgram::DeactivateShader()	{}

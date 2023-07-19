@@ -221,8 +221,6 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Advance(1);
 
-	CHECK_GL_ERROR();
-
 #if ENGINE_VERSION!=227
 	if(DrawCallParams.DrawFlags & DF_BumpMap)
 		Surface.Texture->Texture->BumpMap->Unlock(BumpMapInfo);
@@ -236,22 +234,16 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 	if (VertBuffer.IsEmpty())
 		return;
 
-	CHECK_GL_ERROR();
-
-	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_DYNAMIC_DRAW);
-	CHECK_GL_ERROR();
-
+	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
 	if (!RenDev->UsingShaderDrawParameters)
 	{
 		auto Out = ParametersBuffer.GetElementPtr(0);
 		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
 	}
-	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, GL_DYNAMIC_DRAW);
+	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 
 	if (!VertBuffer.IsInputLayoutCreated())
 		CreateInputLayout();
-
-	CHECK_GL_ERROR();
 
 	// Issue draw calls
 	if (RenDev->OpenGLVersion == GL_Core)
@@ -260,8 +252,6 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 		for (INT i = 0; i < MultiDrawCount; ++i)
 			 glDrawArrays(GL_TRIANGLES, MultiDrawFacetArray[i], MultiDrawVertexCountArray[i]);
 	
-	CHECK_GL_ERROR();
-
 	// reset
 	MultiDrawVertices = MultiDrawCount = 0;
 
@@ -285,22 +275,17 @@ void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 
 void UXOpenGLRenderDevice::DrawComplexProgram::ActivateShader()
 {
-	clockFast(RenDev->Stats.ComplexCycles);
-
 	VertBuffer.Wait();
 	ParametersBuffer.Wait();
 
 	glUseProgram(ShaderProgramObject);
-	VertBuffer.BindBuffer();
-	ParametersBuffer.BindBuffer();
+	VertBuffer.Bind();
+	ParametersBuffer.Bind();
 
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 
 	DrawCallParams.PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
-
-	CHECK_GL_ERROR();
-	unclockFast(RenDev->Stats.ComplexCycles);
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::DeactivateShader()
@@ -309,15 +294,11 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DeactivateShader()
 
 	glDisableVertexAttribArray(0);
 	glDisableVertexAttribArray(1);
-
-	VertBuffer.UnbindBuffer();
-	ParametersBuffer.UnbindBuffer();
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::BindShaderState()
 {
 	ShaderProgram::BindShaderState();
-	CHECK_GL_ERROR();
 
 	if (!RenDev->UsingShaderDrawParameters)
 		BindUniform(ComplexParametersIndex, "DrawCallParameters");
@@ -330,23 +311,22 @@ void UXOpenGLRenderDevice::DrawComplexProgram::BindShaderState()
 		if (MultiTextureUniform != -1)
 			glUniform1i(MultiTextureUniform, i);
 	}
-	CHECK_GL_ERROR();
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::MapBuffers()
 {
-	VertBuffer.GenerateVertexBuffer();
+	VertBuffer.GenerateVertexBuffer(RenDev);
 	VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffersComplex, DRAWCOMPLEX_SIZE);
 
 	if (RenDev->UsingShaderDrawParameters)
 	{
-		ParametersBuffer.GenerateSSBOBuffer(ComplexParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWCOMPLEX_BATCH);
+		ParametersBuffer.GenerateSSBOBuffer(RenDev, ComplexParametersIndex);
+		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
-		ParametersBuffer.GenerateUBOBuffer(ComplexParametersIndex);
-		ParametersBuffer.MapUBOBuffer(false, 1);
+		ParametersBuffer.GenerateUBOBuffer(RenDev, ComplexParametersIndex);
+		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
 	}
 }

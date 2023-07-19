@@ -36,7 +36,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     { nullptr, nullptr, 0}
 };
 
-void UXOpenGLRenderDevice::DrawGouraudProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawGouraudProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
     EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::GouraudParametersIndex);
 
@@ -48,7 +48,7 @@ uniform sampler2D Texture3; // MacroTex
 )";
 }
 
-static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriter& Out)
+static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
     Out << R"(
   flat uint TexNum;
@@ -85,7 +85,7 @@ static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriter& Out)
 )";
 }
 
-void UXOpenGLRenderDevice::DrawGouraudProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawGouraudProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
     Out << R"(
 layout(location = 0) in vec3 Coords; // == gl_Vertex
@@ -135,7 +135,7 @@ void main(void)
 )";
     }
 
-    if (GL->OpenGLVersion == GL_ES)
+    if (!GL->UsingGeometryShaders)
     {
         Out << R"(
   vec3 T = vec3(1.0, 1.0, 1.0); // Arbitrary.
@@ -168,7 +168,7 @@ void main(void)
     Out << "}" END_LINE;
 }
 
-void UXOpenGLRenderDevice::DrawGouraudProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawGouraudProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
     Out << R"(
 layout(triangles) in;
@@ -270,9 +270,9 @@ void main(void)
 )";
 }
 
-void UXOpenGLRenderDevice::DrawGouraudProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawGouraudProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
-    if (GL->OpenGLVersion == GL_ES)
+    if (!GL->UsingGeometryShaders)
     {
         Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
         if (GL->SimulateMultiPass)

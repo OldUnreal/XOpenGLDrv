@@ -90,6 +90,8 @@
 // size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
 #define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
+#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STATIC_DRAW
+
 #define DRAWSIMPLE_SIZE 524288
 #define DRAWTILE_SIZE 1048576
 #define DRAWCOMPLEX_SIZE 8 * 32 * MAX_DRAWCOMPLEX_BATCH
@@ -314,7 +316,7 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
 
 // Error checking
 // GL ERROR CHECK
-inline int	CheckGLError(char* file, int line)
+inline int	CheckGLError(const char* file, int line)
 {
 	GLenum glErr = glGetError();
 
@@ -374,14 +376,15 @@ enum DrawFlags : DWORD
 #define END_LINE "\n"
 #endif
 
-// This is Higor's FCharWriter. We could (and should? move it elsewhere because
-// OpenGLDrv also uses it)
-class FShaderWriter
+// This is Higor's FShaderWriter. We could (and should? move it elsewhere
+// because OpenGLDrv also uses it). Renamed to FShaderWriterX (for now) because
+// it clashes with FShaderWriter in statically linked builds.
+class FShaderWriterX
 {
 public:
 	TArray<ANSICHAR> Data;
 
-	FShaderWriter()
+	FShaderWriterX()
 	{
 		Data.Reserve(1000);
 		Data.AddNoCheck();
@@ -389,7 +392,7 @@ public:
 	}
 
 #if __cplusplus > 201103L || _MSVC_LANG > 201103L
-	template < INT Size > FShaderWriter& operator<<(const char(&Input)[Size])
+	template < INT Size > FShaderWriterX& operator<<(const char(&Input)[Size])
 	{
 		if (Size > 1)
 		{
@@ -401,7 +404,7 @@ public:
 	}
 #endif
 
-	FShaderWriter& operator<<(const char* Input)
+	FShaderWriterX& operator<<(const char* Input)
 	{
 		const char* InputEnd = Input;
 		while (*InputEnd != '\0')
@@ -418,21 +421,21 @@ public:
 		return *this;
 	}
 
-	FShaderWriter& operator<<(INT Input)
+	FShaderWriterX& operator<<(INT Input)
 	{
 		TCHAR Buffer[16];
 		appSprintf(Buffer, TEXT("%i"), Input);
 		return *this << appToAnsi(Buffer);
 	}
 
-	FShaderWriter& operator<<(DrawFlags Input)
+	FShaderWriterX& operator<<(DrawFlags Input)
 	{
 		TCHAR Buffer[16];
 		appSprintf(Buffer, TEXT("%i"), Input);
 		return *this << appToAnsi(Buffer);
 	}
 
-	FShaderWriter& operator<<(EPolyFlags Input)
+	FShaderWriterX& operator<<(EPolyFlags Input)
 	{
 		TCHAR Buffer[16];
 		appSprintf(Buffer, TEXT("%i"), Input);
@@ -440,7 +443,7 @@ public:
 	}
 
 
-	FShaderWriter& operator<<(FLOAT Input)
+	FShaderWriterX& operator<<(FLOAT Input)
 	{
 		TCHAR Buffer[32];
 		appSprintf(Buffer, TEXT("%f"), Input);
@@ -547,6 +550,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	UsingPersistentBuffersComplex;
 	bool	UsingPersistentBuffersTile;
 	bool	UsingShaderDrawParameters;
+	bool    UsingGeometryShaders;
 	static INT LogLevel; // Verbosity level of the GL debug logging
 
 	//
@@ -764,6 +768,24 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static BYTE* Compose;
 
 	//
+	// BoundBuffers represent BufferObjects that are currently bound to a buffer
+	// binding target. Each buffer binding target can only be bound to one
+	// buffer at any given time. Thus, whenever we bind a new BufferObject to a
+	// binding target, we need to unbind the current BufferObject bound to that
+	// target first.
+	//
+	class BoundBuffer
+	{
+	public:
+		virtual void Bind() = 0;
+		virtual void Unbind() = 0;
+	};
+
+	BoundBuffer* UBOPoint{};    // aka GL_UNIFORM_BUFFER
+	BoundBuffer* SSBOPoint{};   // aka GL_SHADER_STORAGE_BUFFER
+	BoundBuffer* ArrayPoint{};  // aka GL_ARRAY_BUFFER
+
+	//
 	// A BufferObject describes a GPU-mapped buffer object. If we're using persistent
 	// buffers, we will subdivide this object into up to <NUMBUFFERS> sub-buffers and
 	// only activate/pin one sub-buffer at a time while writing.
@@ -772,7 +794,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// RAM and ask the GPU driver to copy data over to the backing buffer on the GPU
 	// side.
 	//
-	template<typename T> class BufferObject
+	template<typename T> class BufferObject : public BoundBuffer
 	{
 		friend class ShaderProgam;
 
@@ -858,15 +880,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 		// Generates a VBO and VAO for this buffer object
-		void GenerateVertexBuffer()
+		void GenerateVertexBuffer(UXOpenGLRenderDevice* RenDev)
 		{
+			BindingPoint = &RenDev->ArrayPoint;
 			glGenBuffers(1, &BufferObjectName);
 			glGenVertexArrays(1, &VaoObjectName);
 		}
 
 		// Generates and binds an SSBO for this buffer object
-		void GenerateSSBOBuffer(const GLuint BindingIndex)
+		void GenerateSSBOBuffer(UXOpenGLRenderDevice* RenDev, const GLuint BindingIndex)
 		{
+			BindingPoint = &RenDev->SSBOPoint;
 			glGenBuffers(1, &BufferObjectName);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName);
@@ -874,8 +898,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 		// Generates a UBO for this buffer object
-		void GenerateUBOBuffer(const GLuint BindingIndex)
+		void GenerateUBOBuffer(UXOpenGLRenderDevice* RenDev, const GLuint BindingIndex)
 		{
+			BindingPoint = &RenDev->UBOPoint;
 			glGenBuffers(1, &BufferObjectName);
 			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName);
 			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName);
@@ -888,35 +913,46 @@ class UXOpenGLRenderDevice : public URenderDevice
 			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, GL_STREAM_DRAW);
 		}
 
-		void MapSSBOBuffer(bool Persistent, GLuint BufferSize)
+		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=GL_DYNAMIC_DRAW)
 		{
-			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, GL_STREAM_DRAW);
+			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, ExpectedUsage);
 		}
 
-		void MapUBOBuffer(bool Persistent, GLuint BufferSize)
+		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=GL_DYNAMIC_DRAW)
 		{
-			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, GL_DYNAMIC_DRAW);
+			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage);
 		}
 
 		// Binds and unbinds the buffer so we can write to it
-		void BindBuffer()
+		void Bind()
 		{
 			if (bBound)
 				return;
+
+			if (*BindingPoint)
+				(*BindingPoint)->Unbind();
 
 			if (BufferType == GL_ARRAY_BUFFER)
 				glBindVertexArray(VaoObjectName);
 			glBindBuffer(BufferType, BufferObjectName);
 			bBound = true;
+
+			*BindingPoint = this;
+
+			debugf(TEXT("BufferType %d - BufferObject %016lx bind"), BufferType, this);
+
 		}
 
-		void UnbindBuffer()
+		void Unbind()
 		{
 			if (!bBound)
 				return;
 
+			debugf(TEXT("BufferType %d - BufferObject %016lx unbind"), BufferType, this);
 			glBindBuffer(BufferType, 0);
 			bBound = false;
+
+			*BindingPoint = nullptr;
 		}
 
 		bool IsBound() const
@@ -935,9 +971,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		//
 		void RebindBufferBase(const GLuint BindingIndex)
 		{
-			BindBuffer();
+			Bind();
 			glBindBufferBase(BufferType, BindingIndex, BufferObjectName);
-			UnbindBuffer();
+			Unbind();
 		}
 
 		//
@@ -1092,7 +1128,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		bool   bPersistentBuffer{};     //
 		bool   bBound{};                // True if currently bound
 		bool   bInputLayoutCreated{};   // 
-		GLenum BufferType{};            // GL target 
+		GLenum BufferType{};            // GL target
+		BoundBuffer** BindingPoint{};   // The binding point that needs to be unbound before we can bind this buffer
 	};
 
 	//
@@ -1138,7 +1175,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void  GetUniformLocation(GLint& Uniform, const char* Name) const;
 
 		// Compiles one shader
-		typedef void (ShaderWriterFunc)(GLuint, class UXOpenGLRenderDevice*, FShaderWriter&, ShaderProgram*);
+		typedef void (ShaderWriterFunc)(GLuint, class UXOpenGLRenderDevice*, FShaderWriterX&, ShaderProgram*);
 		bool  CompileShader(GLuint ShaderType, GLuint& ShaderObject, ShaderWriterFunc Func, ShaderWriterFunc EmitHeaderFunc);
 
 		// Links the entire shader program
@@ -1156,7 +1193,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			const char* Name;
 			const int ArrayCount;
 		};
-		static void  EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriter& Out, ShaderProgram* Program, INT BufferBindingIndex);
+		static void  EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex);
 
 		//
 		// Program-specific functions
@@ -1315,10 +1352,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		//
 		// GLSL Shaders
 		//
-		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
 		
 	private:
 		struct DrawCallParameters
@@ -1397,10 +1434,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		//
 		// GLSL Shaders
 		//
-		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
 
 	private:
 		struct DrawCallParameters
@@ -1468,10 +1505,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		//
 		// GLSL Shaders
 		//
-		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
 
 	private:
 		struct DrawCallParameters
@@ -1557,9 +1594,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		//
 		// GLSL Shaders
 		//
-		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
-		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program);
+		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
+		static void EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program);
 
 	private:
 		struct DrawCallParameters

@@ -28,14 +28,14 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 	{ nullptr, nullptr, 0}
 };
 
-void UXOpenGLRenderDevice::DrawTileProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawTileProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::TileParametersIndex);
 
 	Out << "uniform sampler2D Texture0;" END_LINE;
 }
 
-static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriter& Out)
+static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
 	Out << R"(
   flat uint TexNum;
@@ -57,7 +57,7 @@ static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriter& Out)
 )";
 }
 
-void UXOpenGLRenderDevice::DrawTileProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawTileProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	Out << R"(
 out VertexData
@@ -68,7 +68,7 @@ out VertexData
 } Out;
 )";
 
-	if (GL->OpenGLVersion == GL_ES)
+	if (!GL->UsingGeometryShaders)
 	{
 		Out << R"(
 layout(location = 0) in vec3 Coords; // ==gl_Vertex
@@ -118,7 +118,7 @@ void main(void)
 	Out << "}" END_LINE;
 }
 
-void UXOpenGLRenderDevice::DrawTileProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawTileProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	Out << R"(
 layout(triangles) in;
@@ -247,9 +247,9 @@ void main()
 )";
 }
 
-void UXOpenGLRenderDevice::DrawTileProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawTileProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
-	if (GL->OpenGLVersion == GL_ES)
+	if (!GL->UsingGeometryShaders)
 	{
 		Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
 		if (GL->SimulateMultiPass)
@@ -319,6 +319,6 @@ void main(void)
 )";
 	}
 	else Out << "  FragColor = TotalColor;" END_LINE;
-	//Out << "FragColor = vec4(1.0, 1.0, 1.0, 1.0);" END_LINE;	
+//	Out << "FragColor = vec4(1.0, 1.0, 1.0, 1.0);" END_LINE;	
 	Out << "}" END_LINE;
 }

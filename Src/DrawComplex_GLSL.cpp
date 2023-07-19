@@ -46,7 +46,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     { nullptr, nullptr, 0}
 };
 
-void UXOpenGLRenderDevice::DrawComplexProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawComplexProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
     EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::ComplexParametersIndex);
 
@@ -63,7 +63,7 @@ uniform sampler2D Texture7; //HeightMap
 }
 
 // Vertexshader for DrawComplexSurface, single pass.
-void UXOpenGLRenderDevice::DrawComplexProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice * GL, FShaderWriter & Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawComplexProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice * GL, FShaderWriterX & Out, ShaderProgram* Program)
 {
 	Out << R"(
 layout(location = 0) in vec4 Coords; // == gl_Vertex
@@ -323,7 +323,7 @@ void main(void)
 #endif
 }
 
-void UXOpenGLRenderDevice::DrawComplexProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriter& Out, ShaderProgram* Program)
+void UXOpenGLRenderDevice::DrawComplexProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
 	Out << R"(
 in vec3 vCoords;
