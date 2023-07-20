@@ -116,10 +116,10 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::SetTexture(INT Multi, UTexture* T
 #else
 	 Texture->Lock(CachedInfo, Frame->Viewport->CurrentTime, -1, RenDev);
 #endif
-	 DrawCallParams->DrawFlags |= DrawFlags;
+	 DrawCallParams.DrawFlags |= DrawFlags;
 
 	 RenDev->SetTexture(Multi, FTEXTURE_GET(CachedInfo), Texture->PolyFlags, 0.f, DrawFlags);
-     DrawCallParams->TexNum[Multi] = RenDev->TexInfo[Multi].TexNum;
+     DrawCallParams.TexNum[Multi] = RenDev->TexInfo[Multi].TexNum;
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags)
@@ -142,13 +142,13 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 	// Check if the uniforms will change
 	if (!RenDev->UsingShaderDrawParameters ||
 		// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
-		((DrawCallParams->PolyFlags^PolyFlags) & PF_ForceViewZone) ||
+		((DrawCallParams.PolyFlags^PolyFlags) & PF_ForceViewZone) ||
 		// Check if the blending mode will change
-		RenDev->WillBlendStateChange(DrawCallParams->PolyFlags, NextPolyFlags) ||
+		RenDev->WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
 		// Check if the texture will change
 		RenDev->WillTextureStateChange(0, Info, NextPolyFlags) ||
 		// Check if NoNearZ will change
-		((DrawCallParams->DrawFlags^NoNearZFlag) & DF_NoNearZ) ||
+		((DrawCallParams.DrawFlags^NoNearZFlag) & DF_NoNearZ) ||
 		// Check if we have room left in the multi-draw array
 		MultiDrawCount+1 >= MAX_DRAWGOURAUD_BATCH)
 	{
@@ -167,7 +167,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 		}
 	}
 
-	DrawCallParams->PolyFlags = NextPolyFlags;
+	DrawCallParams.PolyFlags = NextPolyFlags;
 
 	const FLOAT TextureAlpha =
 #if ENGINE_VERSION==227
@@ -176,51 +176,51 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 		Info.Texture->Alpha;
 #endif
 
-	DrawCallParams->HitTesting = GIsEditor && RenDev->HitTesting();	
+	DrawCallParams.HitTesting = GIsEditor && RenDev->HitTesting();	
 	
 	// Editor Support.
 	if (GIsEditor)
 	{
-		DrawCallParams->DrawColor = DrawCallParams->HitTesting
+		DrawCallParams.DrawColor = DrawCallParams.HitTesting
 			? FPlaneToVec4(RenDev->HitColor)
 			: glm::vec4(0.f, 0.f, 0.f, TextureAlpha);		
 
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
-			DrawCallParams->RendMap = Frame->Viewport->Actor->RendMap;
+			DrawCallParams.RendMap = Frame->Viewport->Actor->RendMap;
 	}
 
-	RenDev->SetTexture(0, Info, DrawCallParams->PolyFlags, 0, DF_DiffuseTexture);
-	DrawCallParams->DiffuseInfo = glm::vec4(RenDev->TexInfo[0].UMult, RenDev->TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
-	DrawCallParams->TexNum[0] = RenDev->TexInfo[0].TexNum;
-	DrawCallParams->DrawFlags = DF_DiffuseTexture | NoNearZFlag;
+	RenDev->SetTexture(0, Info, DrawCallParams.PolyFlags, 0, DF_DiffuseTexture);
+	DrawCallParams.DiffuseInfo = glm::vec4(RenDev->TexInfo[0].UMult, RenDev->TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
+	DrawCallParams.TexNum[0] = RenDev->TexInfo[0].TexNum;
+	DrawCallParams.DrawFlags = DF_DiffuseTexture | NoNearZFlag;
 
-	DrawCallParams->DetailMacroInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
+	DrawCallParams.DetailMacroInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	if (Info.Texture->DetailTexture && RenDev->DetailTextures)
 	{
 		SetTexture(1, Info.Texture->DetailTexture, DF_DetailTexture, Frame, DetailTextureInfo);
-		DrawCallParams->DetailMacroInfo.x = RenDev->TexInfo[1].UMult;
-		DrawCallParams->DetailMacroInfo.y = RenDev->TexInfo[1].VMult;
+		DrawCallParams.DetailMacroInfo.x = RenDev->TexInfo[1].UMult;
+		DrawCallParams.DetailMacroInfo.y = RenDev->TexInfo[1].VMult;
 	}
 
-	DrawCallParams->MiscInfo = glm::vec4(0.f, RenDev->Gamma, 0.f, 0.f);
+	DrawCallParams.MiscInfo = glm::vec4(0.f, RenDev->Gamma, 0.f, 0.f);
 #if ENGINE_VERSION==227
 	if (Info.Texture->BumpMap && RenDev->BumpMaps)
 	{
 		SetTexture(2, Info.Texture->BumpMap, DF_BumpMap, Frame, BumpMapInfo);
-		DrawCallParams->MiscInfo.x = Info.Texture->BumpMap->Specular;
+		DrawCallParams.MiscInfo.x = Info.Texture->BumpMap->Specular;
 	}
 #endif
 
 	if (Info.Texture->MacroTexture && RenDev->MacroTextures)
 	{
 		SetTexture(3, Info.Texture->MacroTexture, DF_MacroTexture, Frame, MacroTextureInfo);
-		DrawCallParams->DetailMacroInfo.z = RenDev->TexInfo[3].UMult;
-		DrawCallParams->DetailMacroInfo.w = RenDev->TexInfo[3].VMult;
+		DrawCallParams.DetailMacroInfo.z = RenDev->TexInfo[3].UMult;
+		DrawCallParams.DetailMacroInfo.w = RenDev->TexInfo[3].VMult;
 	}
 
-	DrawCallParams->DistanceFogColor = RenDev->DistanceFogColor;
-	DrawCallParams->DistanceFogInfo  = RenDev->DistanceFogValues;
-	DrawCallParams->DistanceFogMode = RenDev->DistanceFogMode;
+	DrawCallParams.DistanceFogColor = RenDev->DistanceFogColor;
+	DrawCallParams.DistanceFogInfo  = RenDev->DistanceFogValues;
+	DrawCallParams.DistanceFogMode = RenDev->DistanceFogMode;
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::FinishDrawCall(FTextureInfo& Info)
@@ -229,13 +229,13 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::FinishDrawCall(FTextureInfo& Info
 		Flush(true);
 
 #if !XOPENGL_MODIFIED_LOCK
-	if (DrawCallParams->DrawFlags & DF_DetailTexture)
+	if (DrawCallParams.DrawFlags & DF_DetailTexture)
 		Info.Texture->DetailTexture->Unlock(DetailTextureInfo);
 
-	if (DrawCallParams->DrawFlags & DF_BumpMap)
+	if (DrawCallParams.DrawFlags & DF_BumpMap)
 		Info.Texture->BumpMap->Unlock(BumpMapInfo);
 
-	if (DrawCallParams->DrawFlags & DF_MacroTexture)
+	if (DrawCallParams.DrawFlags & DF_MacroTexture)
 		Info.Texture->MacroTexture->Unlock(MacroTextureInfo);
 #endif
 }
@@ -272,6 +272,9 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolygon(FSceneNode* Fr
 	}
 
 	PrepareDrawCall(Frame, Info, PolyFlags);
+	if (RenDev->UsingShaderDrawParameters)
+		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
+	
 	MultiDrawPolyListArray[MultiDrawCount] = MultiDrawVertices;
 
 	auto Out = VertBuffer.GetCurrentElementPtr();
@@ -288,10 +291,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolygon(FSceneNode* Fr
 	MultiDrawVertexCountArray[MultiDrawCount++] = OutVertexCount;
 	VertBuffer.Advance(OutVertexCount);
 	if (RenDev->UsingShaderDrawParameters)
-	  {
 		ParametersBuffer.Advance(1);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
-	  }
 
 	FinishDrawCall(Info);
 	unguard;
@@ -314,6 +314,9 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 #endif
 
 	PrepareDrawCall(Frame, Info, PolyFlags);
+
+	if (RenDev->UsingShaderDrawParameters)
+		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
 	MultiDrawPolyListArray[MultiDrawCount] = MultiDrawVertices;
 
 	auto Out = VertBuffer.GetCurrentElementPtr();
@@ -329,14 +332,8 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 			MultiDrawVertices += PolyListSize;
 			MultiDrawVertexCountArray[MultiDrawCount++] = PolyListSize;
 			VertBuffer.Advance(PolyListSize);
-
-			DrawCallParameters TmpParams;
 			if (RenDev->UsingShaderDrawParameters)
-			  {
-			    memcpy(&TmpParams, DrawCallParams, sizeof(DrawCallParameters));
 				ParametersBuffer.Advance(1);
-				DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
-			  }			
 			
 			Flush(true);
 			debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
@@ -345,7 +342,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 			End = VertBuffer.GetLastElementPtr();
 
 			if (RenDev->UsingShaderDrawParameters)
-			  memcpy(DrawCallParams, &TmpParams, sizeof(DrawCallParameters));
+				memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
 
 			PolyListSize = 0;
 		}
@@ -358,10 +355,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 	MultiDrawVertexCountArray[MultiDrawCount++] = PolyListSize;
 	VertBuffer.Advance(PolyListSize);
 	if (RenDev->UsingShaderDrawParameters)
-	  {
 		ParametersBuffer.Advance(1);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
-	  }
 	
 	FinishDrawCall(Info);
 	unguard;
@@ -448,6 +442,12 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 
 	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
 
+	if (!RenDev->UsingShaderDrawParameters)
+	{
+		auto Out = ParametersBuffer.GetElementPtr(0);
+		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
+	}
+
 	// We might have to rebind the parametersbuffer here because
 	// PushClipPlane/PopClipPlane can also bind GL_UNIFORM_BUFFER
 	ParametersBuffer.Bind();
@@ -473,7 +473,6 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 	{
 		ParametersBuffer.Lock();
 		ParametersBuffer.Rotate(Wait);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
 	}
 }
 
@@ -510,7 +509,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::ActivateShader()
 	for (INT i = 0; i < 5; ++i)
 		glEnableVertexAttribArray(i);
 
-	DrawCallParams->PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
+	DrawCallParams.PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::BindShaderState()
@@ -539,14 +538,12 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::MapBuffers()
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, GouraudParametersIndex);
 		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
 	}
 	else
 	{
 		ParametersBuffer.GenerateUBOBuffer(RenDev, GouraudParametersIndex);
 		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
-		DrawCallParams = ParametersBuffer.GetElementPtr(0);
 	}
 }
 

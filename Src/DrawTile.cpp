@@ -95,46 +95,48 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 
 	// Check if the draw call parameters will change
 	if ((!RenDev->UsingShaderDrawParameters &&
-		(DrawCallParams->DrawColor != DrawColor || DrawCallParams->PolyFlags != NextPolyFlags || DrawCallParams->HitTesting != bHitTesting)) ||
+		(DrawCallParams.DrawColor != DrawColor || DrawCallParams.PolyFlags != NextPolyFlags || DrawCallParams.HitTesting != bHitTesting)) ||
 		// Check if global GL state will change
-        WillBlendStateChange(DrawCallParams->BlendPolyFlags, PolyFlags) || // orig polyflags here as intended!
+        WillBlendStateChange(DrawCallParams.BlendPolyFlags, PolyFlags) || // orig polyflags here as intended!
 		// Check if bound sampler state will change
-        RenDev->WillTextureStateChange(0, Info, PolyFlags, DrawCallParams->TexNum) ||
+        RenDev->WillTextureStateChange(0, Info, PolyFlags, DrawCallParams.TexNum) ||
         // Check if we have space to batch more data
         !CanBuffer
 #if UNREAL_TOURNAMENT_OLDUNREAL
         // Check if the depth testing mode will change
-        || ShouldDepthTest != DrawCallParams->DepthTested
+        || ShouldDepthTest != DrawCallParams.DepthTested
 #endif
         )
 	{
 		Flush(true);
 
 		// Set new GL state
-		DrawCallParams->BlendPolyFlags = PolyFlags;
-		RenDev->SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
+		DrawCallParams.BlendPolyFlags = PolyFlags;
+        RenDev->SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
 		if (ShouldDepthTest)
 			glEnable(GL_DEPTH_TEST);
 		else
 			glDisable(GL_DEPTH_TEST);
-		DrawCallParams->DepthTested = ShouldDepthTest;
+		DrawCallParams.DepthTested = ShouldDepthTest;
 #endif
     }
 
 	// Bind texture or fetch its bindless handle
-	RenDev->SetTexture(0, Info, PolyFlags, 0, DF_DiffuseTexture);
+    RenDev->SetTexture(0, Info, PolyFlags, 0, DF_DiffuseTexture);
 
-	// Buffer new drawcall parameters
+    // Buffer new drawcall parameters
 	const auto& TexInfo = RenDev->TexInfo[0];
-	DrawCallParams->DrawColor	= DrawColor;
-	DrawCallParams->HitColor        = FPlaneToVec4(RenDev->HitColor);
-	DrawCallParams->TexNum		= TexInfo.TexNum;
-	DrawCallParams->PolyFlags	= NextPolyFlags;
-	DrawCallParams->HitTesting	= bHitTesting;
-	DrawCallParams->Gamma		= RenDev->Gamma;
+	DrawCallParams.DrawColor	= DrawColor;
+	DrawCallParams.HitColor		= FPlaneToVec4(RenDev->HitColor);
+	DrawCallParams.TexNum		= TexInfo.TexNum;
+	DrawCallParams.PolyFlags	= NextPolyFlags;
+	DrawCallParams.HitTesting	= bHitTesting;
+	DrawCallParams.Gamma		= RenDev->Gamma;
 	
+	if (RenDev->UsingShaderDrawParameters)
+		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
 	MultiDrawFacetArray[MultiDrawCount] = MultiDrawVertices;
 	
 	if (GIsEditor && 
@@ -207,10 +209,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 
 	MultiDrawVertexCountArray[MultiDrawCount++] = 6;
 	if (RenDev->UsingShaderDrawParameters)
-	  {
 		ParametersBuffer.Advance(1);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
-	  }
 
 	if (RenDev->NoBuffering)
 		Flush(true);
@@ -238,6 +237,12 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 			CreateInputLayout();
 	}
 
+	// Push drawcall parameters
+	if (!RenDev->UsingShaderDrawParameters)
+	{
+		auto Out = ParametersBuffer.GetElementPtr(0);
+		memcpy(Out, &DrawCallParams, sizeof(DrawCallParams));
+	}
 	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 		
 	if (VertBufferES.IsBound())
@@ -263,7 +268,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 	{
 		ParametersBuffer.Lock();
 		ParametersBuffer.Rotate(Wait);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
 	}
 }
 
@@ -331,8 +335,8 @@ void UXOpenGLRenderDevice::DrawTileProgram::ActivateShader()
 	}
 
 	ParametersBuffer.Bind();
-        DrawCallParams->BlendPolyFlags = RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
-	DrawCallParams->PolyFlags = 0;
+    DrawCallParams.BlendPolyFlags = RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
+	DrawCallParams.PolyFlags = 0;
 }
 
 void UXOpenGLRenderDevice::DrawTileProgram::BindShaderState()	
@@ -365,14 +369,12 @@ void UXOpenGLRenderDevice::DrawTileProgram::MapBuffers()
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, TileParametersIndex);
 		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
-		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
 	}
 	else
 	{
 		ParametersBuffer.GenerateUBOBuffer(RenDev, TileParametersIndex);
 		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
-		DrawCallParams = ParametersBuffer.GetElementPtr(0);
 	}
 }
 

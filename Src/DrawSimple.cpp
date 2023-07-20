@@ -71,19 +71,19 @@ void UXOpenGLRenderDevice::EndFlash()
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount)
 {
-	if (DrawCallParams->LineFlags != LineFlags ||
-		DrawCallParams->DrawColor != DrawColor ||
-		DrawCallParams->BlendMode != BlendMode ||
+	if (DrawCallParams.LineFlags != LineFlags ||
+		DrawCallParams.DrawColor != DrawColor ||
+		DrawCallParams.BlendMode != BlendMode ||
 		!OutBuffer.CanBuffer(VertexCount))
 	{
 		Flush(true);
 
-		DrawCallParams->LineFlags = LineFlags;
-		DrawCallParams->DrawColor = DrawColor;
-		DrawCallParams->BlendMode = BlendMode;
+		DrawCallParams.LineFlags = LineFlags;
+		DrawCallParams.DrawColor = DrawColor;
+		DrawCallParams.BlendMode = BlendMode;
 	}
-	DrawCallParams->HitTesting = GIsEditor && RenDev->HitTesting();
-	DrawCallParams->Gamma = RenDev->Gamma;
+	DrawCallParams.HitTesting = GIsEditor && RenDev->HitTesting();
+	DrawCallParams.Gamma = RenDev->Gamma;
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DLine(const FSceneNode* Frame, FPlane& Color, DWORD LineFlags, const FVector& P1, const FVector& P2)
@@ -214,10 +214,12 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 		return;
 
 	// Set GL state
-	RenDev->SetDepth(DrawCallParams->LineFlags);
-	RenDev->SetBlend(DrawCallParams->BlendMode, false);
+	RenDev->SetDepth(DrawCallParams.LineFlags);
+	RenDev->SetBlend(DrawCallParams.BlendMode, false);
 	
 	// Pass drawcall params
+	auto Out = ParametersBuffer.GetElementPtr(0);
+	memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
 	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 	
 	if (LineVertBuffer.Size() > 0)
@@ -295,7 +297,6 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::MapBuffers()
 	ParametersBuffer.GenerateUBOBuffer(RenDev, SimpleParametersIndex);
 	ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 	ParametersBuffer.Advance(1);
-	DrawCallParams = ParametersBuffer.GetElementPtr(0);
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::UnmapBuffers()
