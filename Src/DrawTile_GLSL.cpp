@@ -24,6 +24,8 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 	{"uint", "BlendPolyFlags", 0},
 	{"uint", "HitTesting", 0},
 	{"uint", "DepthTested", 0},
+	{"uint", "Padding0", 0},
+	{"uint", "Padding1", 0},
 	{"float", "Gamma", 0},
 	{ nullptr, nullptr, 0}
 };

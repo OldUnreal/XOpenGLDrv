@@ -21,8 +21,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::EmitHeader(GLuint ShaderType, UXOp
 	Out << R"(
 layout(std140) uniform DrawCallParameters
 {
-	vec4 DrawColor;
-	float Gamma;
+	vec4 DrawColor;	
 	uint HitTesting;
 	uint LineFlags;
 	uint DrawMode;
@@ -30,6 +29,7 @@ layout(std140) uniform DrawCallParameters
 	uint Padding0;
 	uint Padding1;
 	uint Padding2;
+	float Gamma;
 };
 )";
 }

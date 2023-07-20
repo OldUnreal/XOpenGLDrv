@@ -34,7 +34,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     {"vec4", "DrawColor", 0},
     {"vec4", "DistanceFogColor", 0},
     {"vec4", "DistanceFogInfo", 0},
-    {"uint", "DrawFlags", 0},
+	{"uint", "DrawFlags", 0},
     {"uint", "HitTesting", 0},
     {"uint", "TextureFormat", 0},
     {"uint", "PolyFlags", 0},
@@ -42,7 +42,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     {"int", "DistanceFogMode", 0},
     {"uint", "Padding0", 0},
     {"uint", "Padding1", 0},
-    {"uint", "TexNum", 8},
+    {"uvec4", "TexNum", 2},         // mirrored as a uvec4 in GLSL to ensure tight packing in std140
     { nullptr, nullptr, 0}
 };
 
@@ -138,13 +138,13 @@ void main(void)
   vPolyFlags = GetPolyFlags();
   vDrawFlags = GetDrawFlags();
   vTextureFormat = GetTextureFormat();
-  vTexNum = GetTexNum(0);
+  vTexNum = GetTexNum(0).x;
   vGamma = GetZAxis().w;
-  vLightMapTexNum = GetTexNum(1);
-  vFogMapTexNum = GetTexNum(2);
-  vDetailTexNum = GetTexNum(3);
-  vMacroTexNum = GetTexNum(4);
-  vBumpMapTexNum = GetTexNum(5);  
+  vLightMapTexNum = GetTexNum(0).y;
+  vFogMapTexNum = GetTexNum(0).z;
+  vDetailTexNum = GetTexNum(0).w;
+  vMacroTexNum = GetTexNum(1).x;
+  vBumpMapTexNum = GetTexNum(1).y;  
   vBaseDiffuse = GetDiffuseInfo().x;
   vBaseAlpha = GetDiffuseInfo().z;
   vBumpMapSpecular = GetBumpMapInfo().y;
@@ -157,8 +157,8 @@ void main(void)
   vDistanceFogInfo = GetDistanceFogInfo();
   vDistanceFogColor = GetDistanceFogColor();
   vDistanceFogMode = GetDistanceFogMode();
-  vEnviroMapTexNum = GetTexNum(6);
-  vHeightMapTexNum = GetTexNum(7);
+  vEnviroMapTexNum = GetTexNum(1).z;
+  vHeightMapTexNum = GetTexNum(1).w;
 )";
 #endif
 

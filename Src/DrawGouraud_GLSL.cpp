@@ -32,7 +32,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     {"int", "DistanceFogMode", 0},
     {"uint", "Padding0", 0},
     {"uint", "Padding1", 0},
-    {"uint", "TexNum", 4},
+    {"uvec4", "TexNum", 0}, // Mirrored as a uvec4 to ensure tight packing in std140
     { nullptr, nullptr, 0}
 };
 
@@ -103,10 +103,10 @@ out VertexData
 
 void main(void)
 {
-  Out.TexNum = GetTexNum(0);
-  Out.DetailTexNum = GetTexNum(1);
-  Out.BumpTexNum = GetTexNum(2);
-  Out.MacroTexNum = GetTexNum(3);
+  Out.TexNum = GetTexNum().x;
+  Out.DetailTexNum = GetTexNum().y;
+  Out.BumpTexNum = GetTexNum().z;
+  Out.MacroTexNum = GetTexNum().w;
   Out.DrawFlags = GetDrawFlags();
   Out.TextureFormat = GetTextureFormat();
   Out.PolyFlags = GetPolyFlags();

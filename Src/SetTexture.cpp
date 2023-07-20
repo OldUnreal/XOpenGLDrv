@@ -137,6 +137,10 @@ BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info,
 	if (!Result && !CanMakeBindlessResident)
 		return TRUE;
 
+	// The texture number in our drawcall UBO buffer will change => stop batching
+	if (Result && TexInfo[Multi].TexNum != Result->TexNum && !UsingShaderDrawParameters)
+		return TRUE;
+
 	return FALSE;
 }
 
