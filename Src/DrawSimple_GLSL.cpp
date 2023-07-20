@@ -59,10 +59,8 @@ void main(void)
 	Out << "}" END_LINE;
 }
 
-/* 
-
-stijn: I don't think we need this anymore + it breaks DrawSimple on macOS because
-the geoshader expects lines as input, but EndFlash and 2DPoint draw triangles
+// stijn: I don't think we need this anymore + it breaks DrawSimple on macOS because
+// the geoshader expects lines as input, but EndFlash and 2DPoint draw triangles
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
@@ -90,7 +88,6 @@ void main()
 }
 )";
 }
-*/
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
@@ -126,7 +123,7 @@ void main(void)
 
 	if (GIsEditor)
 	{
-		Out << "  if (!bHitTesting) {" END_LINE;
+		Out << "  if (!bool(HitTesting)) {" END_LINE;
 	}
 
 	Out << R"(
@@ -143,5 +140,6 @@ void main(void)
 		Out << "  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;" END_LINE;
 	else
 		Out << "  FragColor = TotalColor;" END_LINE;
+
 	Out << "}" END_LINE;
 }

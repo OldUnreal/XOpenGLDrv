@@ -92,10 +92,10 @@
 
 #define DRAWCALL_BUFFER_USAGE_PATTERN GL_STATIC_DRAW
 
-#define DRAWSIMPLE_SIZE 524288
-#define DRAWTILE_SIZE 1048576
+#define DRAWSIMPLE_SIZE 16 * 1024
+#define DRAWTILE_SIZE 16 * 1024
 #define DRAWCOMPLEX_SIZE 8 * 32 * MAX_DRAWCOMPLEX_BATCH
-#define DRAWGOURAUDPOLY_SIZE 2097152
+#define DRAWGOURAUDPOLY_SIZE 256 * 1024
 #define NUMBUFFERS 6
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
@@ -681,12 +681,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Information about a cached texture.
 	struct FCachedTexture
 	{
-		GLuint Ids[2];					// 0:Unmasked, 1:Masked.
+		GLuint Id;					
 		INT BaseMip;
 		INT MaxLevel;
-		GLuint Sampler[2];				// Sampler object
-		GLuint64 BindlessTexHandle[2];	// Bindless handles
-		GLuint TexNum[2];				// TMU num
+		GLuint Sampler;				// Sampler object
+		GLuint64 BindlessTexHandle;	// Bindless handle
+		GLuint TexNum;				// TMU num
 		INT RealtimeChangeCount{};
 	};
 
@@ -698,7 +698,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	struct FTexInfo
 	{
 		QWORD CurrentCacheID{};
-		INT CurrentCacheSlot{};
 		FLOAT UMult{};
 		FLOAT VMult{};
 		FLOAT UPan{};
@@ -939,8 +938,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			*BindingPoint = this;
 
-			debugf(TEXT("BufferType %d - BufferObject %016lx bind"), BufferType, this);
-
 		}
 
 		void Unbind()
@@ -948,7 +945,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!bBound)
 				return;
 
-			debugf(TEXT("BufferType %d - BufferObject %016lx unbind"), BufferType, this);
 			glBindBuffer(BufferType, 0);
 			bBound = false;
 
@@ -1728,6 +1724,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	void  DrawGouraudTriangles(const FSceneNode* Frame, const FTextureInfo& Info, FTransTexture* const Pts, INT NumPts, DWORD PolyFlags, DWORD DataFlags, FSpanBuffer* Span);
 	UBOOL SupportsTextureFormat(ETextureFormat Format);
+	void  UpdateTextureRect(FTextureInfo& Info, INT U, INT V, INT UL, INT VL);
 #endif
 
 	//
@@ -1780,7 +1777,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
 	DWORD SetDepth(DWORD PolyFlags);
 	void  SetSampler(GLuint Multi, FTextureInfo& Info, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags);
-	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture);
+	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture, BOOL PartialUpload=FALSE, INT U=0, INT V=0, INT UL=0, INT VL=0, BYTE* TextureData=nullptr);
 	void  GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, DWORD DrawFlags);
 	void  BindTextureAndSampler(INT Multi, FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags);
 

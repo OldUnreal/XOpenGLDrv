@@ -242,6 +242,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	UseLightmapAtlas = 1;
+	SupportsUpdateTextureRect = 1;
 #endif
 
 	unguard;
@@ -1481,23 +1482,20 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	for (TOpenGLMap<QWORD, FCachedTexture>::TIterator It(*BindMap); It; ++It)
 	{
 		CHECK_GL_ERROR();
-		for (INT i = 0; i < 2; i++)
+		glDeleteSamplers(1, &It.Value().Sampler);
+
+		if (UsingBindlessTextures)
 		{
-			glDeleteSamplers(1, &It.Value().Sampler[i]);
+			if (It.Value().BindlessTexHandle && glIsTextureHandleResidentARB(It.Value().BindlessTexHandle))
+				glMakeTextureHandleNonResidentARB(It.Value().BindlessTexHandle);
+		}
 
-			if (UsingBindlessTextures)
-			{
-				if (It.Value().BindlessTexHandle[i] && glIsTextureHandleResidentARB(It.Value().BindlessTexHandle[i]))
-					glMakeTextureHandleNonResidentARB(It.Value().BindlessTexHandle[i]);
-			}
-
-			It.Value().BindlessTexHandle[i] = 0;
-			It.Value().TexNum[i] = 1;
-			if (It.Value().Ids[i])
-			{
-				glDeleteTextures(1, &It.Value().Ids[i]);
-				Binds.AddItem(It.Value().Ids[i]);
-			}
+		It.Value().BindlessTexHandle = 0;
+		It.Value().TexNum = 1;
+		if (It.Value().Id)
+		{
+			glDeleteTextures(1, &It.Value().Id);
+			Binds.AddItem(It.Value().Id);
 		}
 		CHECK_GL_ERROR();
 	}

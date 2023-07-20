@@ -953,7 +953,7 @@ void main(void)
   }
 
   // HitSelection, Zoneview etc.
-  if (vHitTesting)
+  if (bool(vHitTesting))
     TotalColor = vDrawColor; // Use ONLY DrawColor.
 )";
 	}
