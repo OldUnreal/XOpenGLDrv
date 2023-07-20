@@ -28,7 +28,11 @@ static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 		else
 			Out << "#version 330 core" END_LINE;
 	}
-	else Out << "#version 310 es" END_LINE;
+	else
+        {	  
+	  Out << "#version 310 es" END_LINE;
+	  Out << "#extension GL_OES_shader_io_blocks : require" END_LINE;
+	}
 
 	if (GL->UsingBindlessTextures) // defined for all variants of our bindlesstextures support
 	{
@@ -61,8 +65,8 @@ static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 // Not every option is available on any platform. 
 // TODO: separate option for vert and frag?
 // options: lowp/mediump/highp, should be mediump for performance reasons, but appears to cause trouble determining DrawFlags then !?! (Currently on NVIDIA 470.103.01).
-precision highp float;
-precision highp int;
+precision lowp float;
+precision lowp int;
 )";
 	}
 
