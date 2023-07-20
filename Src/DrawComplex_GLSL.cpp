@@ -707,7 +707,7 @@ void main(void)
   {
     LightColor = GetTexel(vLightMapTexNum, Texture1, vLightMapCoords);
     // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
-    LightColor.)" << LightColorOrder << R"( = LightColor.)" << LightColorOrder << R"( * (2.0 * 255.0 / 127.0);
+    LightColor.rgb = LightColor.)" << LightColorOrder << R"( * (2.0 * 255.0 / 127.0);
     LightColor.a = 1.0;
   }
 )";
