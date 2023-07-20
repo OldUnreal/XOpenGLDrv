@@ -1439,6 +1439,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		struct DrawCallParameters
 		{
 			glm::vec4 DrawColor;
+			glm::float32 Gamma;
 			glm::uint HitTesting;
 			glm::uint LineFlags;
 			glm::uint DrawMode;
@@ -1446,7 +1447,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::uint Padding0;		// Manually inserted padding to ensure sizeof(DrawCallParameters) is a multiple of GLSL vec4 alignment
 			glm::uint Padding1;
 			glm::uint Padding2;
-			glm::float32 Gamma;
 		} DrawCallParams{};
 
 		struct BufferedVert

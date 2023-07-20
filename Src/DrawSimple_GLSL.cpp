@@ -21,15 +21,15 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::EmitHeader(GLuint ShaderType, UXOp
 	Out << R"(
 layout(std140) uniform DrawCallParameters
 {
-	vec4 DrawColor;	
+	vec4 DrawColor;
+	float Gamma;
 	uint HitTesting;
 	uint LineFlags;
 	uint DrawMode;
 	uint BlendMode;
 	uint Padding0;
 	uint Padding1;
-	uint Padding2;
-	float Gamma;
+	uint Padding2;	
 };
 )";
 }
@@ -138,8 +138,7 @@ void main(void)
 
 	if (GL->SimulateMultiPass)
 		Out << "  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;" END_LINE;
-	else
-		Out << "  FragColor = TotalColor;" END_LINE;
+	Out << "  FragColor = TotalColor;" END_LINE;
 
 	Out << "}" END_LINE;
 }
