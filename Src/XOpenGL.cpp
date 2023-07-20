@@ -124,7 +124,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	// OpenGL 4
-	// new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
+	//	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
     new(GetClass(), TEXT("UseBindlessLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessLightmaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
@@ -171,8 +171,10 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseAA = 1;
 	UseAASmoothing = 0;
 	GammaCorrectScreenshots = 1;
+#if !__LINUX_ARM__
 	MacroTextures = 1;
 	BumpMaps = 1;
+#endif
 	GammaMultiplier = 1.f;
 	GammaMultiplierUED  = 1.f;
 #ifdef __EMSCRIPTEN__
@@ -204,20 +206,20 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	MaxTextureSize = 4096;
 #ifdef __EMSCRIPTEN__
 	OpenGLVersion = GL_ES;
-    UseEnhancedLightmaps = 0; // CHECK ME! GL_ES and UseEnhancedLightmaps don't like each other very much (yet?).
+	UseEnhancedLightmaps = 0; // CHECK ME! GL_ES and UseEnhancedLightmaps don't like each other very much (yet?).
 #elif __LINUX_ARM__
 	OpenGLVersion = GL_ES;
-    UseEnhancedLightmaps = 0;
+	UseEnhancedLightmaps = 0;
 #else
 	OpenGLVersion = GL_Core;
-    UseEnhancedLightmaps = 1;
+	UseEnhancedLightmaps = 1;
 #endif
 	UseVSync = VS_Adaptive;
 
 #if ENGINE_VERSION==227
 	UseBindlessLightmaps = 0; //On modern hardware this may be working despite the very huge amount, so let the user decide if to enable.
 #elif UNREAL_TOURNAMENT_OLDUNREAL
-    UseBindlessLightmaps = 1;
+	UseBindlessLightmaps = 1;
 #endif
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -233,7 +235,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	NoDrawTile = 0;
 	NoDrawSimple = 0;
 
+#if !__LINUX_ARM__
 	DetailTextures = 1;
+#endif
 	DescFlags |= RDDESCF_Certified;
 	HighDetailActors = 1;
 	Coronas = 1;
@@ -521,8 +525,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
 
-	UsingPersistentBuffersTile = false;
-	UsingPersistentBuffersComplex = false;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
+	UsingPersistentBuffersTile = UsingPersistentBuffers;
+	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
 
 	// Init shaders
@@ -1952,8 +1956,8 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	CHECK_GL_ERROR();
 	glPolygonOffset(-1.f, -1.f);
     SetBlend(PF_Occlude, false);
-#if MACOSX // stijn: on macOS, it's much faster to just clear everything
-	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+#if MACOSX || __LINUX_ARM__ // stijn: on macOS, it's much faster to just clear everything
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 #else
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags & LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
 #endif

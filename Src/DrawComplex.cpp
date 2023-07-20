@@ -56,13 +56,13 @@ void UXOpenGLRenderDevice::DrawComplexProgram::SetTexture
 	glm::vec4* TextureInfo
 )
 {
-	DrawCallParams.DrawFlags |= DrawFlags;
+	DrawCallParams->DrawFlags |= DrawFlags;
 	RenDev->SetTexture(Multi, Info, PolyFlags, PanBias, DrawFlags);
 	if (TextureCoords)
 		*TextureCoords = glm::vec4(RenDev->TexInfo[Multi].UMult, RenDev->TexInfo[Multi].VMult, RenDev->TexInfo[Multi].UPan, RenDev->TexInfo[Multi].VPan);
 	if (TextureInfo)
 		*TextureInfo = glm::vec4(Info.Texture->Diffuse, Info.Texture->Specular, Info.Texture->Alpha, Info.Texture->TEXTURE_SCALE_NAME);
-	DrawCallParams.TexNum[Multi] = RenDev->TexInfo[Multi].TexNum;
+	DrawCallParams->TexNum[Multi] = RenDev->TexInfo[Multi].TexNum;
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, const FSurfaceFacet& Facet)
@@ -81,11 +81,11 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 #endif
 
 	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
-
+	
 	// Check if the uniforms will change
 	if (!RenDev->UsingShaderDrawParameters || RenDev->HitTesting() ||
 		// Check if the blending mode will change
-		WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
+		WillBlendStateChange(DrawCallParams->PolyFlags, NextPolyFlags) ||
 		// Check if the surface textures will change
 		RenDev->WillTextureStateChange(0, *Surface.Texture, NextPolyFlags) ||
 		(Surface.LightMap && RenDev->WillTextureStateChange(1, *Surface.LightMap, NextPolyFlags)) ||
@@ -103,38 +103,38 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		RenDev->SetBlend(NextPolyFlags, false);
 	}
 
-	DrawCallParams.PolyFlags = NextPolyFlags;
-	DrawCallParams.DrawFlags = 0;
+	DrawCallParams->PolyFlags = NextPolyFlags;
+	DrawCallParams->DrawFlags = 0;
 
 	// Editor Support.
-	DrawCallParams.HitTesting = (GIsEditor && RenDev->HitTesting()) ? 1 : 0;
+	DrawCallParams->HitTesting = (GIsEditor && RenDev->HitTesting()) ? 1 : 0;
 	if (GIsEditor)
 	{
-		DrawCallParams.DrawColor = 
+		DrawCallParams->DrawColor = 
 			RenDev->HitTesting() ? FPlaneToVec4(RenDev->HitColor) : FPlaneToVec4(Surface.FlatColor.Plane());
 		
 		if (Frame->Viewport->Actor) // needed? better safe than sorry.
-			DrawCallParams.RendMap = Frame->Viewport->Actor->RendMap;
+			DrawCallParams->RendMap = Frame->Viewport->Actor->RendMap;
 	}
 
 	// Set Textures
-	SetTexture(0, *Surface.Texture, DrawCallParams.PolyFlags, 0.0, DF_DiffuseTexture, &DrawCallParams.DiffuseUV, Surface.Texture->Texture ? &DrawCallParams.DiffuseInfo : nullptr);
-	DrawCallParams.TextureFormat = Surface.Texture->Format;
+	SetTexture(0, *Surface.Texture, DrawCallParams->PolyFlags, 0.0, DF_DiffuseTexture, &DrawCallParams->DiffuseUV, Surface.Texture->Texture ? &DrawCallParams->DiffuseInfo : nullptr);
+	DrawCallParams->TextureFormat = Surface.Texture->Format;
 
 	if (!Surface.Texture->Texture)
-		DrawCallParams.DiffuseInfo = glm::vec4(1.f, 0.f, 0.f, 1.f);
+		DrawCallParams->DiffuseInfo = glm::vec4(1.f, 0.f, 0.f, 1.f);
 
 	if (Surface.LightMap)
-		SetTexture(1, *Surface.LightMap, DrawCallParams.PolyFlags, -0.5, DF_LightMap, &DrawCallParams.LightMapUV);
+		SetTexture(1, *Surface.LightMap, DrawCallParams->PolyFlags, -0.5, DF_LightMap, &DrawCallParams->LightMapUV);
 
 	if (Surface.FogMap)
-		SetTexture(2, *Surface.FogMap, PF_AlphaBlend, -0.5, DF_FogMap, &DrawCallParams.FogMapUV);
+		SetTexture(2, *Surface.FogMap, PF_AlphaBlend, -0.5, DF_FogMap, &DrawCallParams->FogMapUV);
 	
 	if (Surface.DetailTexture && RenDev->DetailTextures)
-		SetTexture(3, *Surface.DetailTexture, DrawCallParams.PolyFlags, 0.0, DF_DetailTexture, &DrawCallParams.DetailUV);
+		SetTexture(3, *Surface.DetailTexture, DrawCallParams->PolyFlags, 0.0, DF_DetailTexture, &DrawCallParams->DetailUV);
 
 	if (Surface.MacroTexture && RenDev->MacroTextures)
-		SetTexture(4, *Surface.MacroTexture, DrawCallParams.PolyFlags, 0.0, DF_MacroTexture, &DrawCallParams.MacroUV, &DrawCallParams.MacroInfo);
+		SetTexture(4, *Surface.MacroTexture, DrawCallParams->PolyFlags, 0.0, DF_MacroTexture, &DrawCallParams->MacroUV, &DrawCallParams->MacroInfo);
 	
 #if ENGINE_VERSION==227
 	if (Surface.BumpMap && RenDev->BumpMaps)
@@ -149,27 +149,25 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		Surface.Texture->Texture->BumpMap->Lock(BumpMapInfo, FTime(), 0, RenDev);
 # endif
 #endif
-		SetTexture(5, FTEXTURE_GET(BumpMapInfo), DrawCallParams.PolyFlags, 0.0, DF_BumpMap, nullptr, &DrawCallParams.BumpMapInfo);
+		SetTexture(5, FTEXTURE_GET(BumpMapInfo), DrawCallParams->PolyFlags, 0.0, DF_BumpMap, nullptr, &DrawCallParams->BumpMapInfo);
 	}
 		
 #if ENGINE_VERSION==227
 	if (Surface.EnvironmentMap && RenDev->EnvironmentMaps)
-		SetTexture(6, *Surface.EnvironmentMap, DrawCallParams.PolyFlags, 0.0, DF_EnvironmentMap, &DrawCallParams.EnviroMapUV);
+		SetTexture(6, *Surface.EnvironmentMap, DrawCallParams->PolyFlags, 0.0, DF_EnvironmentMap, &DrawCallParams->EnviroMapUV);
 
     if (Surface.HeightMap && RenDev->ParallaxVersion != Parallax_Disabled)
-		SetTexture(7, *Surface.HeightMap, DrawCallParams.PolyFlags, 0.0, DF_HeightMap, nullptr, &DrawCallParams.HeightMapInfo);
+		SetTexture(7, *Surface.HeightMap, DrawCallParams->PolyFlags, 0.0, DF_HeightMap, nullptr, &DrawCallParams->HeightMapInfo);
 #endif
 
 	// Other draw data
-	DrawCallParams.XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
-	DrawCallParams.YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
-	DrawCallParams.ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, RenDev->Gamma);
-	DrawCallParams.DistanceFogColor = RenDev->DistanceFogColor;
-	DrawCallParams.DistanceFogInfo = RenDev->DistanceFogValues;
-	DrawCallParams.DistanceFogMode = RenDev->DistanceFogMode;
+	DrawCallParams->XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
+	DrawCallParams->YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
+	DrawCallParams->ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, RenDev->Gamma);
+	DrawCallParams->DistanceFogColor = RenDev->DistanceFogColor;
+	DrawCallParams->DistanceFogInfo = RenDev->DistanceFogValues;
+	DrawCallParams->DistanceFogMode = RenDev->DistanceFogMode;
 
-	if (RenDev->UsingShaderDrawParameters)
-		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
 	MultiDrawFacetArray[MultiDrawCount] = MultiDrawVertices;
 
 	INT FacetVertexCount = 0;
@@ -182,13 +180,18 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		if (!VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
 			MultiDrawFacetArray[MultiDrawCount++] = FacetVertexCount;
+			DrawCallParameters TmpParams;
 			if (RenDev->UsingShaderDrawParameters)
+			  {
+			    memcpy(&TmpParams, DrawCallParams, sizeof(DrawCallParameters));
 				ParametersBuffer.Advance(1);
+				DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
+			  }			
 			
 			Flush(true);
 
 			if (RenDev->UsingShaderDrawParameters)
-				memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
+			    memcpy(DrawCallParams, &TmpParams, sizeof(DrawCallParameters));
 			
 			// just in case...
 			if (sizeof(BufferedVert) * (NumPts - 2) * 3 >= DRAWCOMPLEX_SIZE)
@@ -219,10 +222,13 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 
 	MultiDrawVertexCountArray[MultiDrawCount++] = FacetVertexCount;
 	if (RenDev->UsingShaderDrawParameters)
+	  {
 		ParametersBuffer.Advance(1);
+		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
+	  }
 
 #if ENGINE_VERSION!=227
-	if(DrawCallParams.DrawFlags & DF_BumpMap)
+	if(DrawCallParams->DrawFlags & DF_BumpMap)
 		Surface.Texture->Texture->BumpMap->Unlock(BumpMapInfo);
 #endif
 
@@ -235,11 +241,6 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 		return;
 
 	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
-	if (!RenDev->UsingShaderDrawParameters)
-	{
-		auto Out = ParametersBuffer.GetElementPtr(0);
-		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
-	}
 	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 
 	if (!VertBuffer.IsInputLayoutCreated())
@@ -262,6 +263,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 	{
 		ParametersBuffer.Lock();
 		ParametersBuffer.Rotate(Wait);
+		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
 	}
 }
 
@@ -285,7 +287,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::ActivateShader()
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 
-	DrawCallParams.PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
+	DrawCallParams->PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::DeactivateShader()
@@ -322,12 +324,14 @@ void UXOpenGLRenderDevice::DrawComplexProgram::MapBuffers()
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, ComplexParametersIndex);
 		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		DrawCallParams = ParametersBuffer.GetCurrentElementPtr();
 	}
 	else
 	{
 		ParametersBuffer.GenerateUBOBuffer(RenDev, ComplexParametersIndex);
 		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
+		DrawCallParams = ParametersBuffer.GetElementPtr(0);
 	}
 }
 

@@ -90,7 +90,7 @@
 // size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
 #define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
-#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STATIC_DRAW
+#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
 
 #define DRAWSIMPLE_SIZE 16 * 1024
 #define DRAWTILE_SIZE 16 * 1024
@@ -1091,8 +1091,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 				memset(Sync, 0, sizeof(GLsync) * SubBufferCount);
 
 				glBindBuffer(Target, BufferObjectName);
+#if __LINUX_ARM__
+				glBufferData(Target, SubBufferCount * BufferSize * sizeof(T), nullptr, ExpectedUsage);
+				// OpenGL ES doesn't support persistent or coherent mappings
+#else
 				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), 0, PersistentBufferFlags);
-				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize, PersistentBufferFlags));
+				Buffer = static_cast<T*>(glMapBufferRange(Target, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
+#endif
 				glBindBuffer(Target, 0);
 			}
 			else
@@ -1366,7 +1371,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::uint		Padding0;		// Manually inserted padding to ensure the size of DrawCallParameters is a multiple of GLSL vec4 alignment
 			glm::uint		Padding1;
 			glm::float32	Gamma;
-		} DrawCallParams{};
+		};
+	        DrawCallParameters* DrawCallParams{};
 
 		struct BufferedVertES
 		{
@@ -1447,7 +1453,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::uint Padding0;		// Manually inserted padding to ensure sizeof(DrawCallParameters) is a multiple of GLSL vec4 alignment
 			glm::uint Padding1;
 			glm::uint Padding2;
-		} DrawCallParams{};
+		};
+	        DrawCallParameters* DrawCallParams{};
 
 		struct BufferedVert
 		{
@@ -1524,7 +1531,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::uint Padding0;				// Intentionally inserted padding to make the struct layout consistent in C++, GLSL std140, and GLSL std430
 			glm::uint Padding1;
 			glm::uint TexNum[4];
-		} DrawCallParams{};
+		};
+	  DrawCallParameters* DrawCallParams{};
 
 		struct BufferedVert
 		{
@@ -1621,10 +1629,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::int32 DistanceFogMode;
 			glm::uint Padding0; // This manually inserted padding ensures this struct layout is identical in C++, GLSL std140, and GLSL std430
 			glm::uint Padding1;
-			glm::uint TexNum[8];
-			
-			
-		} DrawCallParams{};
+			glm::uint TexNum[8];			
+		};
+	  DrawCallParameters* DrawCallParams{};
 
 		// Sets texture and updates corresponding drawcall data
 		void SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags, glm::vec4* TextureCoords = nullptr, glm::vec4* TextureInfo = nullptr);
