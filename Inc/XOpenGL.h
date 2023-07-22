@@ -87,6 +87,8 @@
 #define MAX_DRAWGOURAUD_BATCH 16384
 // maximum number of tiles in one drawtile multi-draw
 #define MAX_DRAWTILE_BATCH 16384
+// maximum number of lines/triangles in one drawsimple multi-draw
+#define MAX_DRAWSIMPLE_BATCH 16384
 // size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
 #define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
@@ -1461,8 +1463,18 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<BufferedVert> TriangleVertBuffer;
 		BufferObject<DrawCallParameters> ParametersBuffer;
 
+		GLint MultiDrawLineArray[MAX_DRAWSIMPLE_BATCH]{};
+		GLsizei MultiDrawLineVertexCountArray[MAX_DRAWSIMPLE_BATCH]{};
+		INT MultiDrawLineCount{};
+		INT MultiDrawLineVertices{};
+
+		GLint MultiDrawTriangleArray[MAX_DRAWSIMPLE_BATCH]{};
+		GLsizei MultiDrawTriangleVertexCountArray[MAX_DRAWSIMPLE_BATCH]{};
+		INT MultiDrawTriangleCount{};
+		INT MultiDrawTriangleVertices{};
+
 		// Helpers
-		void PrepareDrawCall(UViewport* Viewport, glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);
+		void PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);
 	};
 
 	//
