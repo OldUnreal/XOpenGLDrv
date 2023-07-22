@@ -592,12 +592,14 @@ void main(void)
       TotalColor.a = 0.51;
   }
 
+  if ((In.PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && In.DrawColor.a > 0.0)
+    TotalColor.a *= In.DrawColor.a;
+
   // HitSelection, Zoneview etc.
   if (bool(In.HitTesting))
     TotalColor = In.DrawColor; // Use DrawColor.
-
-  if ((In.PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && In.DrawColor.a > 0.0)
-    TotalColor.a *= In.DrawColor.a;
+  else if ((In.PolyFlags&)" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+    TotalColor = GammaCorrect(In.Gamma, TotalColor);
 )";
     }
     if (GL->SimulateMultiPass)
@@ -609,10 +611,14 @@ void main(void)
     }
     else Out << "  FragColor = TotalColor;" END_LINE;
 
-    Out << R"(
+    if (!GIsEditor)
+    {
+        Out << R"(
   if ((In.PolyFlags&)" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
     FragColor = GammaCorrect(In.Gamma, FragColor);
  )";
+    }
+
     Out << "}" END_LINE;
 
     // Blending translation table

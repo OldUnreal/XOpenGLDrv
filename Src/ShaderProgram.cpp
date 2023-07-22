@@ -184,12 +184,12 @@ float PlaneDot(vec4 Plane, vec3 Point)
   return dot(Plane.xyz, Point) - Plane.w;
 }
 
-vec4 GammaCorrect(float BaseGamma, vec4 Color)
+vec4 GammaCorrect(float Gamma, vec4 Color)
 {
-    float Gamma = 1.0 / (BaseGamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
-    Color.r = pow(Color.r, Gamma);
-    Color.g = pow(Color.g, Gamma);
-    Color.b = pow(Color.b, Gamma);
+    float InvGamma = 1.0 / Gamma;
+    Color.r = pow(Color.r, InvGamma);
+    Color.g = pow(Color.g, InvGamma);
+    Color.b = pow(Color.b, InvGamma);
     return Color;
 }
 

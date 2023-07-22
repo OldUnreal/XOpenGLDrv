@@ -1462,7 +1462,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters> ParametersBuffer;
 
 		// Helpers
-		void PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);
+		void PrepareDrawCall(UViewport* Viewport, glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);
 	};
 
 	//
@@ -1791,6 +1791,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  BuildGammaRamp(FLOAT GammaCorrection, FGammaRamp& Ramp);
 	void  BuildGammaRamp(FLOAT GammaCorrection, FByteGammaRamp& Ramp);
 	void  SetGamma(FLOAT GammaCorrection);
+	FLOAT GetViewportGamma(UViewport* Viewport) const;
 
 	//
 	// Editor Hit Testing

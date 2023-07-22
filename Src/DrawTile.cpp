@@ -133,7 +133,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 	DrawCallParams.TexNum		= TexInfo.TexNum;
 	DrawCallParams.PolyFlags	= NextPolyFlags;
 	DrawCallParams.HitTesting	= bHitTesting;
-	DrawCallParams.Gamma		= RenDev->Gamma;
+	DrawCallParams.Gamma		= RenDev->GetViewportGamma(Frame->Viewport);
 	
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
@@ -324,17 +324,20 @@ void UXOpenGLRenderDevice::DrawTileProgram::ActivateShader()
 	if (!RenDev->UsingGeometryShaders)
 	{
 		VertBufferES.Bind();
+		VertBufferES.Wait();
 		for (INT i = 0; i < 2; ++i)
 			glEnableVertexAttribArray(i);
 	}
 	else
 	{
 		VertBufferCore.Bind();
+		VertBufferCore.Wait();
 		for (INT i = 0; i < 4; ++i)
 			glEnableVertexAttribArray(i);
 	}
 
 	ParametersBuffer.Bind();
+	ParametersBuffer.Wait();
     DrawCallParams.BlendPolyFlags = RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
 	DrawCallParams.PolyFlags = 0;
 }

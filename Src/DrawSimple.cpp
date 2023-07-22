@@ -69,7 +69,7 @@ void UXOpenGLRenderDevice::EndFlash()
 	ShaderProgram Implementation
 -----------------------------------------------------------------------------*/
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount)
+void UXOpenGLRenderDevice::DrawSimpleProgram::PrepareDrawCall(UViewport* Viewport, glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount)
 {
 	if (DrawCallParams.LineFlags != LineFlags ||
 		DrawCallParams.DrawColor != DrawColor ||
@@ -83,7 +83,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::PrepareDrawCall(glm::uint LineFlag
 		DrawCallParams.BlendMode = BlendMode;
 	}
 	DrawCallParams.HitTesting = GIsEditor && RenDev->HitTesting();
-	DrawCallParams.Gamma = RenDev->Gamma;
+	DrawCallParams.Gamma = RenDev->GetViewportGamma(Viewport);
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DLine(const FSceneNode* Frame, FPlane& Color, DWORD LineFlags, const FVector& P1, const FVector& P2)
@@ -94,7 +94,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DLine(const FSceneNode* Frame
 	const auto DrawColor = (GIsEditor && RenDev->HitTesting()) ? FPlaneToVec4(RenDev->HitColor) : FPlaneToVec4(Color);
 	constexpr auto BlendMode = PF_AlphaBlend;
 
-	PrepareDrawCall(LineFlags, DrawColor, BlendMode, LineVertBuffer, 2);
+	PrepareDrawCall(Frame->Viewport, LineFlags, DrawColor, BlendMode, LineVertBuffer, 2);
 
 	auto Out = LineVertBuffer.GetCurrentElementPtr();
 	(Out++)->Point = glm::vec3(RenDev->RFX2 * P1.Z * (P1.X - Frame->FX2), RenDev->RFY2 * P1.Z * (P1.Y - Frame->FY2), P1.Z);
@@ -135,7 +135,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw3DLine( FSceneNode* Frame, FPl
 	}
 	else
 	{
-		PrepareDrawCall(LineFlags, DrawColor, BlendMode, LineVertBuffer, 2);
+		PrepareDrawCall(Frame->Viewport, LineFlags, DrawColor, BlendMode, LineVertBuffer, 2);
 
 		auto Out = LineVertBuffer.GetCurrentElementPtr();
 		(Out++)->Point = glm::vec3(P1.X, P1.Y, P1.Z);
@@ -159,7 +159,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::EndFlash()
 		constexpr auto BlendMode = PF_Highlighted;
 		constexpr DWORD LineFlags = LINE_Transparent;
 
-		PrepareDrawCall(LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
+		PrepareDrawCall(RenDev->Viewport, LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
 
 		const FLOAT RFX2 = 2.f * RenDev->RProjZ                  / RenDev->Viewport->SizeX;
 		const FLOAT RFY2 = 2.f * RenDev->RProjZ * RenDev->Aspect / RenDev->Viewport->SizeY;
@@ -191,7 +191,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DPoint(const FSceneNode* Fram
 	else if (Z < 0.f)
 		Z = -Z;
 
-	PrepareDrawCall(LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
+	PrepareDrawCall(Frame->Viewport, LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
 
 	auto Out = TriangleVertBuffer.GetCurrentElementPtr();
 	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);

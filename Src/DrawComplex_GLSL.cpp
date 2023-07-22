@@ -947,6 +947,8 @@ void main(void)
   // HitSelection, Zoneview etc.
   if (bool(vHitTesting))
     TotalColor = vDrawColor; // Use ONLY DrawColor.
+  else if ((vPolyFlags&)" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+    TotalColor = GammaCorrect(vGamma, TotalColor);    
 )";
 	}
 
@@ -958,10 +960,15 @@ void main(void)
 )";
 	}
 	else Out << "  FragColor = TotalColor;" END_LINE;
-    Out << R"(
+
+    if (!GIsEditor)
+    {
+        Out << R"(
   if ((vPolyFlags&)" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
     FragColor = GammaCorrect(vGamma, FragColor);
  )";
+    }
+
 	Out << "}" END_LINE;
 #else
 	Out << R"(

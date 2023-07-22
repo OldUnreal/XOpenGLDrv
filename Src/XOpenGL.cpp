@@ -2107,9 +2107,16 @@ void UXOpenGLRenderDevice::SetGamma(FLOAT GammaCorrection)
 	guard(UXOpenGLRenderDevice::SetGamma);
 
 	GammaCorrection += 0.1f; // change range from 0.0-0.9 to 0.1 to 1.0
-	Gamma = GammaCorrection;
+	Gamma = GammaCorrection * (GIsEditor ? GammaMultiplierUED : GammaMultiplier);
 
 	unguard;
+}
+
+FLOAT UXOpenGLRenderDevice::GetViewportGamma(UViewport* Viewport) const
+{
+	if (Viewport->IsOrtho())
+		return 1.f;
+	return Gamma;
 }
 
 void UXOpenGLRenderDevice::SetProgram(INT NextProgram)

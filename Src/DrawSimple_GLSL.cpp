@@ -120,6 +120,10 @@ void main(void)
   }
 )";
 #endif
+	
+	if (GL->SimulateMultiPass)
+		Out << "  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;" END_LINE;
+	Out << "  FragColor = TotalColor;" END_LINE;
 
 	if (GIsEditor)
 	{
@@ -127,15 +131,11 @@ void main(void)
 	}
 
 	Out << R"(
-  TotalColor = GammaCorrect(Gamma, TotalColor);
+  FragColor = GammaCorrect(Gamma, FragColor);
 )";
 
 	if (GIsEditor)
 		Out << "  }" END_LINE;
-
-	if (GL->SimulateMultiPass)
-		Out << "  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;" END_LINE;
-	Out << "  FragColor = TotalColor;" END_LINE;
 
 	Out << "}" END_LINE;
 }

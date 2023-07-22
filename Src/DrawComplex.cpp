@@ -83,7 +83,8 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
 
 	// Check if the uniforms will change
-	if (!RenDev->UsingShaderDrawParameters || RenDev->HitTesting() ||
+	if (!RenDev->UsingShaderDrawParameters || 
+		DrawCallParams.HitTesting != RenDev->HitTesting() ||
 		// Check if the blending mode will change
 		WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
 		// Check if the surface textures will change
@@ -163,7 +164,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 	// Other draw data
 	DrawCallParams.XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
 	DrawCallParams.YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
-	DrawCallParams.ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, RenDev->Gamma);
+	DrawCallParams.ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, RenDev->GetViewportGamma(Frame->Viewport));
 	DrawCallParams.DistanceFogColor = RenDev->DistanceFogColor;
 	DrawCallParams.DistanceFogInfo = RenDev->DistanceFogValues;
 	DrawCallParams.DistanceFogMode = RenDev->DistanceFogMode;

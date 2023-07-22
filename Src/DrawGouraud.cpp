@@ -202,7 +202,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 		DrawCallParams.DetailMacroInfo.y = RenDev->TexInfo[1].VMult;
 	}
 
-	DrawCallParams.MiscInfo = glm::vec4(0.f, RenDev->Gamma, 0.f, 0.f);
+	DrawCallParams.MiscInfo = glm::vec4(0.f, RenDev->GetViewportGamma(Frame->Viewport), 0.f, 0.f);
 #if ENGINE_VERSION==227
 	if (Info.Texture->BumpMap && RenDev->BumpMaps)
 	{
