@@ -176,8 +176,8 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	GammaCorrectScreenshots = 1;
 	MacroTextures = 1;
 	BumpMaps = 1;
-	GammaMultiplier = 1.f;
-	GammaMultiplierUED  = 1.f;
+	GammaMultiplier = 1.75f;
+	GammaMultiplierUED  = 1.75f;
 #ifdef __EMSCRIPTEN__
 	ParallaxVersion = Parallax_Disabled;
 #elif __LINUX_ARM__

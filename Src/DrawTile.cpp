@@ -335,7 +335,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::ActivateShader()
 
 	ParametersBuffer.Bind();
 	ParametersBuffer.Wait();
-    DrawCallParams.BlendPolyFlags = RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
+	DrawCallParams.BlendPolyFlags = 0;// RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
 	DrawCallParams.PolyFlags = 0;
 }
 
