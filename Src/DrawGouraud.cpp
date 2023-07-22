@@ -150,7 +150,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 		// Check if NoNearZ will change
 		((DrawCallParams.DrawFlags^NoNearZFlag) & DF_NoNearZ) ||
 		// Check if we have room left in the multi-draw array
-		MultiDrawCount+1 >= MAX_DRAWGOURAUD_BATCH)
+		DrawBuffer.IsFull())
 	{
 		// Dispatch buffered data
 		Flush(true);
@@ -275,8 +275,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolygon(FSceneNode* Fr
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
 	
-	MultiDrawPolyListArray[MultiDrawCount] = MultiDrawVertices;
-
+	DrawBuffer.StartDrawCall();
 	auto Out = VertBuffer.GetCurrentElementPtr();
 
 	// Unfan and buffer
@@ -287,8 +286,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolygon(FSceneNode* Fr
 		BufferVert(Out++, Pts[i + 2]);
     }
 
-	MultiDrawVertices += OutVertexCount;
-	MultiDrawVertexCountArray[MultiDrawCount++] = OutVertexCount;
+	DrawBuffer.EndDrawCall(OutVertexCount);
 	VertBuffer.Advance(OutVertexCount);
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Advance(1);
@@ -318,8 +316,8 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParams));
-	MultiDrawPolyListArray[MultiDrawCount] = MultiDrawVertices;
 
+	DrawBuffer.StartDrawCall();
 	auto Out = VertBuffer.GetCurrentElementPtr();
 	auto End = VertBuffer.GetLastElementPtr();
 
@@ -330,8 +328,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 		// need to split the mesh up into separate drawcalls
 		if ((i % 3 == 0) && (Out + 2 > End))
 		{
-			MultiDrawVertices += PolyListSize;
-			MultiDrawVertexCountArray[MultiDrawCount++] = PolyListSize;
+			DrawBuffer.EndDrawCall(PolyListSize);
 			VertBuffer.Advance(PolyListSize);
 			if (RenDev->UsingShaderDrawParameters)
 				ParametersBuffer.Advance(1);
@@ -352,8 +349,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolyList(FSceneNode* F
 		PolyListSize++;
     }
 
-	MultiDrawVertices                          += PolyListSize;
-	MultiDrawVertexCountArray[MultiDrawCount++] = PolyListSize;
+	DrawBuffer.EndDrawCall(PolyListSize);
 	VertBuffer.Advance(PolyListSize);
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Advance(1);
@@ -459,14 +455,12 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 
 	// Draw
 	if (RenDev->OpenGLVersion == GL_Core)
-		glMultiDrawArrays(GL_TRIANGLES, MultiDrawPolyListArray, MultiDrawVertexCountArray, MultiDrawCount);
+		glMultiDrawArrays(GL_TRIANGLES, &DrawBuffer.IndexArray(0), &DrawBuffer.CountArray(0), DrawBuffer.TotalDrawCalls);
 	else
-		for (INT i = 0; i < MultiDrawCount; ++i)
-			glDrawArrays(GL_TRIANGLES, MultiDrawPolyListArray[i], MultiDrawVertexCountArray[i]);
+		for (INT i = 0; i < DrawBuffer.TotalDrawCalls; ++i)
+			glDrawArrays(GL_TRIANGLES, DrawBuffer.IndexArray(i), DrawBuffer.CountArray(i));
 
-	// reset
-	MultiDrawVertices = MultiDrawCount = 0;
-
+	DrawBuffer.Reset();
 	VertBuffer.Lock();
 	VertBuffer.Rotate(Wait);
 

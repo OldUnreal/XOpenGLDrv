@@ -93,21 +93,18 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DLine(const FSceneNode* Frame
 	const auto DrawColor = (GIsEditor && RenDev->HitTesting()) ? FPlaneToVec4(RenDev->HitColor) : FPlaneToVec4(Color);
 	constexpr auto BlendMode = PF_AlphaBlend;
 
-	if (MultiDrawLineCount + 1 >= MAX_DRAWSIMPLE_BATCH)
+	if (LineDrawBuffer.IsFull())
 		Flush(true);
 
 	PrepareDrawCall(LineFlags, DrawColor, BlendMode, LineVertBuffer, 2);
 	DrawCallParams.Gamma = 1.f;
 
-	MultiDrawLineArray[MultiDrawLineCount] = MultiDrawLineVertices;
-
+	LineDrawBuffer.StartDrawCall();
 	auto Out = LineVertBuffer.GetCurrentElementPtr();
 	(Out++)->Point = glm::vec3(RenDev->RFX2 * P1.Z * (P1.X - Frame->FX2), RenDev->RFY2 * P1.Z * (P1.Y - Frame->FY2), P1.Z);
 	(Out  )->Point = glm::vec3(RenDev->RFX2 * P2.Z * (P2.X - Frame->FX2), RenDev->RFY2 * P2.Z * (P2.Y - Frame->FY2), P2.Z);
 	LineVertBuffer.Advance(2);
-
-	MultiDrawLineVertices += 2;
-	MultiDrawLineVertexCountArray[MultiDrawLineCount++] = 2;
+	LineDrawBuffer.EndDrawCall(2);
 
 	if (RenDev->NoBuffering)
 		Flush(true);
@@ -143,22 +140,19 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw3DLine( FSceneNode* Frame, FPl
 	}
 	else
 	{
-		if (MultiDrawLineCount + 1 >= MAX_DRAWSIMPLE_BATCH)
+		if (LineDrawBuffer.IsFull())
 			Flush(true);
 
 		PrepareDrawCall(LineFlags, DrawColor, BlendMode, LineVertBuffer, 2);
 		DrawCallParams.Gamma = 1.f;
 
 
-		MultiDrawLineArray[MultiDrawLineCount] = MultiDrawLineVertices;
-
+		LineDrawBuffer.StartDrawCall();
 		auto Out = LineVertBuffer.GetCurrentElementPtr();
 		(Out++)->Point = glm::vec3(P1.X, P1.Y, P1.Z);
 		(Out  )->Point = glm::vec3(P2.X, P2.Y, P2.Z);
 		LineVertBuffer.Advance(2);
-
-		MultiDrawLineVertices += 2;
-		MultiDrawLineVertexCountArray[MultiDrawLineCount++] = 2;
+		LineDrawBuffer.EndDrawCall(2);
 
 		if (RenDev->NoBuffering)
 			Flush(true);
@@ -177,7 +171,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::EndFlash()
 		constexpr auto BlendMode = PF_Highlighted;
 		constexpr DWORD LineFlags = LINE_Transparent;
 
-		if (MultiDrawTriangleCount + 1 >= MAX_DRAWSIMPLE_BATCH)
+		if (TriangleDrawBuffer.IsFull())
 			Flush(true);
 
 		PrepareDrawCall(LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
@@ -186,8 +180,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::EndFlash()
 		const FLOAT RFX2 = 2.f * RenDev->RProjZ                  / RenDev->Viewport->SizeX;
 		const FLOAT RFY2 = 2.f * RenDev->RProjZ * RenDev->Aspect / RenDev->Viewport->SizeY;
 
-		MultiDrawTriangleArray[MultiDrawTriangleCount] = MultiDrawTriangleVertices;
-
+		TriangleDrawBuffer.StartDrawCall();
 		auto Out = TriangleVertBuffer.GetCurrentElementPtr();
 		(Out++)->Point = glm::vec3(RFX2 * (-RenDev->Viewport->SizeX / 2.0), RFY2 * (-RenDev->Viewport->SizeY / 2.0), 1.f);
 		(Out++)->Point = glm::vec3(RFX2 * (+RenDev->Viewport->SizeX / 2.0), RFY2 * (-RenDev->Viewport->SizeY / 2.0), 1.f);
@@ -196,9 +189,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::EndFlash()
 		(Out++)->Point = glm::vec3(RFX2 * (+RenDev->Viewport->SizeX / 2.0), RFY2 * (+RenDev->Viewport->SizeY / 2.0), 1.f);
 		(Out  )->Point = glm::vec3(RFX2 * (-RenDev->Viewport->SizeX / 2.0), RFY2 * (+RenDev->Viewport->SizeY / 2.0), 1.f);
 		TriangleVertBuffer.Advance(6);
-
-		MultiDrawTriangleVertices += 6;
-		MultiDrawTriangleVertexCountArray[MultiDrawTriangleCount++] = 6;
+		TriangleDrawBuffer.EndDrawCall(6);
 
 		if (RenDev->NoBuffering)
 			Flush(true);
@@ -220,14 +211,13 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DPoint(const FSceneNode* Fram
 	else if (Z < 0.f)
 		Z = -Z;
 
-	if (MultiDrawTriangleCount + 1 >= MAX_DRAWSIMPLE_BATCH)
+	if (TriangleDrawBuffer.IsFull())
 		Flush(true);
 
 	PrepareDrawCall( LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
 	DrawCallParams.Gamma = 1.f;
 
-	MultiDrawTriangleArray[MultiDrawTriangleCount] = MultiDrawTriangleVertices;
-
+	TriangleDrawBuffer.StartDrawCall();
 	auto Out = TriangleVertBuffer.GetCurrentElementPtr();
 	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
 	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
@@ -236,9 +226,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DPoint(const FSceneNode* Fram
 	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
 	(Out  )->Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
 	TriangleVertBuffer.Advance(6);
-
-	MultiDrawTriangleVertices += 6;
-	MultiDrawTriangleVertexCountArray[MultiDrawTriangleCount++] = 6;
+	TriangleDrawBuffer.EndDrawCall(6);
 
 	if (RenDev->NoBuffering)
 		Flush(true);
@@ -274,8 +262,13 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 		}
 
 		LineVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
-		glMultiDrawArrays(GL_LINES, MultiDrawLineArray, MultiDrawLineVertexCountArray, MultiDrawLineCount);
+		if (RenDev->OpenGLVersion == GL_Core)
+			glMultiDrawArrays(GL_LINES, &LineDrawBuffer.IndexArray(0), &LineDrawBuffer.CountArray(0), LineDrawBuffer.TotalDrawCalls);
+		else
+			for (INT i = 0; i < LineDrawBuffer.TotalDrawCalls; ++i)
+				glDrawArrays(GL_LINES, LineDrawBuffer.IndexArray(i), LineDrawBuffer.CountArray(i));
 		LineVertBuffer.Rotate(Wait);
+		LineDrawBuffer.Reset();
 	}
 
 	if (TriangleVertBuffer.Size() > 0)
@@ -290,12 +283,14 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 		}
 
 		TriangleVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
-		glMultiDrawArrays(GL_TRIANGLES, MultiDrawTriangleArray, MultiDrawTriangleVertexCountArray, MultiDrawTriangleCount);
+		if (RenDev->OpenGLVersion == GL_Core)
+			glMultiDrawArrays(GL_TRIANGLES, &TriangleDrawBuffer.IndexArray(0), &TriangleDrawBuffer.CountArray(0), TriangleDrawBuffer.TotalDrawCalls);
+		else
+			for (INT i = 0; i < TriangleDrawBuffer.TotalDrawCalls; ++i)
+				glDrawArrays(GL_TRIANGLES, TriangleDrawBuffer.IndexArray(i), TriangleDrawBuffer.CountArray(i));
 		TriangleVertBuffer.Rotate(Wait);
+		TriangleDrawBuffer.Reset();
 	}
-
-	MultiDrawLineCount = MultiDrawLineVertices = 0;
-	MultiDrawTriangleCount = MultiDrawTriangleVertices = 0;
 
 	unguard;
 }

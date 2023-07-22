@@ -1320,6 +1320,47 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool bFogEnabled = false;
 
 	//
+	// Helper class for glMultiDrawArray batching
+	//
+	class MultiDrawBuffer
+	{
+	public:
+		MultiDrawBuffer(INT MaxMultiDraw)
+		{
+			IndexArray.AddZeroed(MaxMultiDraw);
+			CountArray.AddZeroed(MaxMultiDraw);
+			TotalVertices = 0;
+			TotalDrawCalls = 0;
+		}
+
+		void StartDrawCall()
+		{
+			IndexArray(TotalDrawCalls) = TotalVertices;
+		}
+
+		void EndDrawCall(INT Vertices)
+		{
+			TotalVertices += Vertices;
+			CountArray(TotalDrawCalls++) = Vertices;
+		}
+
+		bool IsFull() const
+		{
+			return TotalDrawCalls + 1 >= IndexArray.Num();
+		}
+
+		void Reset()
+		{
+			TotalVertices = TotalDrawCalls = 0;
+		}
+
+		TArray<GLint>	IndexArray;		// Index of the first vertex for each sub-drawcall
+		TArray<GLsizei> CountArray;		// Number of vertices for each sub-drawcall
+		INT				TotalVertices;
+		INT				TotalDrawCalls;
+	};
+
+	//
 	// DrawTile Shader
 	//
 	class DrawTileProgram : public ShaderProgram
@@ -1327,6 +1368,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawTileProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 			: ShaderProgram(Name, RenDev)
+			, DrawBuffer(MAX_DRAWTILE_BATCH)
 		{
 		}
 
@@ -1391,11 +1433,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters>	ParametersBuffer;
 		BufferObject<BufferedVertES>		VertBufferES;
 		BufferObject<BufferedVertCore>		VertBufferCore;
-
-		GLint MultiDrawFacetArray[MAX_DRAWTILE_BATCH]{};
-		GLsizei MultiDrawVertexCountArray[MAX_DRAWTILE_BATCH]{};
-		INT MultiDrawCount{};
-		INT MultiDrawVertices{};
+		MultiDrawBuffer DrawBuffer;
 	};
 
 	//
@@ -1406,6 +1444,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawSimpleProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 			: ShaderProgram(Name, RenDev)
+			, LineDrawBuffer(MAX_DRAWSIMPLE_BATCH)
+			, TriangleDrawBuffer(MAX_DRAWSIMPLE_BATCH)
 		{
 		}
 
@@ -1463,15 +1503,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<BufferedVert> TriangleVertBuffer;
 		BufferObject<DrawCallParameters> ParametersBuffer;
 
-		GLint MultiDrawLineArray[MAX_DRAWSIMPLE_BATCH]{};
-		GLsizei MultiDrawLineVertexCountArray[MAX_DRAWSIMPLE_BATCH]{};
-		INT MultiDrawLineCount{};
-		INT MultiDrawLineVertices{};
-
-		GLint MultiDrawTriangleArray[MAX_DRAWSIMPLE_BATCH]{};
-		GLsizei MultiDrawTriangleVertexCountArray[MAX_DRAWSIMPLE_BATCH]{};
-		INT MultiDrawTriangleCount{};
-		INT MultiDrawTriangleVertices{};
+		MultiDrawBuffer LineDrawBuffer;
+		MultiDrawBuffer TriangleDrawBuffer;
 
 		// Helpers
 		void PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);
@@ -1485,6 +1518,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 			: ShaderProgram(Name, RenDev)
+			, DrawBuffer(MAX_DRAWGOURAUD_BATCH)
 		{
 		}
 
@@ -1559,11 +1593,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters> ParametersBuffer;
 		BufferObject<BufferedVert> VertBuffer;
 
-		// Drawcall batching
-		GLint MultiDrawPolyListArray[MAX_DRAWGOURAUD_BATCH]{};
-		GLsizei MultiDrawVertexCountArray[MAX_DRAWGOURAUD_BATCH]{};
-		INT MultiDrawCount{};
-		INT MultiDrawVertices{};
+		MultiDrawBuffer DrawBuffer;
 
 		// Cached Texture Infos
 		FTEXTURE_PTR DetailTextureInfo{};
@@ -1579,6 +1609,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 			: ShaderProgram(Name, RenDev)
+			, DrawBuffer(MAX_DRAWCOMPLEX_BATCH)
 		{
 		}
 
@@ -1653,10 +1684,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters> ParametersBuffer;
 		BufferObject<BufferedVert> VertBuffer;
 
-		GLint MultiDrawFacetArray[MAX_DRAWCOMPLEX_BATCH]{};
-		GLsizei MultiDrawVertexCountArray[MAX_DRAWCOMPLEX_BATCH]{};
-		INT MultiDrawCount{};
-		INT MultiDrawVertices{};
+		MultiDrawBuffer DrawBuffer;
 
 		// Cached texture Info
 		FTEXTURE_PTR BumpMapInfo{};

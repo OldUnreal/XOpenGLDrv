@@ -95,7 +95,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		(Surface.EnvironmentMap && RenDev->EnvironmentMaps && RenDev->WillTextureStateChange(6, *Surface.EnvironmentMap, NextPolyFlags)) ||
 #endif
 		// Check if we have room left in the multi-draw array
-		MultiDrawCount+1 >= MAX_DRAWCOMPLEX_BATCH)
+		DrawBuffer.IsFull())
 	{
 		// Dispatch buffered data
 		Flush(true);
@@ -171,7 +171,8 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
-	MultiDrawFacetArray[MultiDrawCount] = MultiDrawVertices;
+
+	DrawBuffer.StartDrawCall();
 
 	INT FacetVertexCount = 0;
 	for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
@@ -182,7 +183,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 
 		if (!VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
-			MultiDrawFacetArray[MultiDrawCount++] = FacetVertexCount;
+			DrawBuffer.EndDrawCall(FacetVertexCount);
 			if (RenDev->UsingShaderDrawParameters)
 				ParametersBuffer.Advance(1);
 			
@@ -214,11 +215,10 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		}
 
 		FacetVertexCount  += (NumPts - 2) * 3;
-		MultiDrawVertices += (NumPts - 2) * 3;
 		VertBuffer.Advance((NumPts - 2) * 3);
 	}
 
-	MultiDrawVertexCountArray[MultiDrawCount++] = FacetVertexCount;
+	DrawBuffer.EndDrawCall(FacetVertexCount);
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Advance(1);
 
@@ -248,13 +248,12 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 
 	// Issue draw calls
 	if (RenDev->OpenGLVersion == GL_Core)
-		glMultiDrawArrays(GL_TRIANGLES, MultiDrawFacetArray, MultiDrawVertexCountArray, MultiDrawCount);
+		glMultiDrawArrays(GL_TRIANGLES, &DrawBuffer.IndexArray(0), &DrawBuffer.CountArray(0), DrawBuffer.TotalDrawCalls);
 	else
-		for (INT i = 0; i < MultiDrawCount; ++i)
-			 glDrawArrays(GL_TRIANGLES, MultiDrawFacetArray[i], MultiDrawVertexCountArray[i]);
+		for (INT i = 0; i < DrawBuffer.TotalDrawCalls; ++i)
+			 glDrawArrays(GL_TRIANGLES, DrawBuffer.IndexArray(i), DrawBuffer.CountArray(i));
 	
-	// reset
-	MultiDrawVertices = MultiDrawCount = 0;
+	DrawBuffer.Reset();
 
 	VertBuffer.Lock();
 	VertBuffer.Rotate(Wait);

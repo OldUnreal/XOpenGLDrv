@@ -91,7 +91,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 	glm::vec4 DrawColor = FPlaneToVec4(Color);
 	const auto CanBuffer = 
 		(RenDev->OpenGLVersion == GL_Core ? VertBufferCore.CanBuffer(3) : VertBufferES.CanBuffer(6)) && 
-		MultiDrawCount+1 < MAX_DRAWTILE_BATCH;
+		!DrawBuffer.IsFull();
 
 	// Check if the draw call parameters will change
 	if ((!RenDev->UsingShaderDrawParameters &&
@@ -137,7 +137,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 	
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
-	MultiDrawFacetArray[MultiDrawCount] = MultiDrawVertices;
 	
 	if (GIsEditor && 
 		Frame->Viewport->Actor && 
@@ -145,8 +144,9 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 	{
 		Z = 1.0f; // Probably just needed because projection done below assumes non ortho projection.
 	}
-	
+
     // Buffer the tile
+	DrawBuffer.StartDrawCall();
 	if (VertBufferES.IsBound())
 	{
 		// ES doesn't have geo shaders so we manually emit two triangles here
@@ -185,7 +185,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 #endif
 
 		VertBufferES.Advance(6);
-		MultiDrawVertices += 6;
 	}
 	else
 	{
@@ -204,10 +203,9 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 #endif
 
 		VertBufferCore.Advance(6);
-		MultiDrawVertices += 6;
 	}
 
-	MultiDrawVertexCountArray[MultiDrawCount++] = 6;
+	DrawBuffer.EndDrawCall(6);
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Advance(1);
 
@@ -247,22 +245,21 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		
 	if (VertBufferES.IsBound())
 	{
-		for (INT i = 0; i < MultiDrawCount; ++i)
-			glDrawArrays(GL_TRIANGLES, MultiDrawFacetArray[i], MultiDrawVertexCountArray[i]);
+		for (INT i = 0; i < DrawBuffer.TotalDrawCalls; ++i)
+			glDrawArrays(GL_TRIANGLES, DrawBuffer.IndexArray(i), DrawBuffer.CountArray(i));
 
 		VertBufferES.Lock();
 		VertBufferES.Rotate(Wait);
 	}
 	else
 	{
-		glMultiDrawArrays(GL_TRIANGLES, MultiDrawFacetArray, MultiDrawVertexCountArray, MultiDrawCount);
+		glMultiDrawArrays(GL_TRIANGLES, &DrawBuffer.IndexArray(0), &DrawBuffer.CountArray(0), DrawBuffer.TotalDrawCalls);
 
 		VertBufferCore.Lock();
 		VertBufferCore.Rotate(Wait);
 	}
 
-	// reset
-	MultiDrawVertices = MultiDrawCount = 0;
+	DrawBuffer.Reset();
 
 	if (RenDev->UsingShaderDrawParameters)
 	{
