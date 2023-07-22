@@ -294,6 +294,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudPolygon(FSceneNode* Fr
 		ParametersBuffer.Advance(1);
 
 	FinishDrawCall(Info);
+
 	unguard;
 }
 

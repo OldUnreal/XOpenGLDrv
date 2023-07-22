@@ -707,7 +707,7 @@ void main(void)
   {
     LightColor = GetTexel(vLightMapTexNum, Texture1, vLightMapCoords);
     // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
-    LightColor.rgb = LightColor.)" << LightColorOrder << R"( * (2.0 * 255.0 / 127.0);
+    LightColor.rgb = LightColor.)" << LightColorOrder << R"( * ()" << (GL->OneXBlending ? 1.f : 2.f) << R"(* 255.0 / 127.0);
     LightColor.a = 1.0;
   }
 )";
@@ -870,15 +870,7 @@ void main(void)
 	Out << R"(
   //TotalColor=clamp(TotalColor,0.0,1.0); //saturate.
   if ((vPolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
-  {
-    // Gamma
-    float InGamma = 1.0 / (vGamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
-    TotalColor.r = pow(TotalColor.r, InGamma);
-    TotalColor.g = pow(TotalColor.g, InGamma);
-    TotalColor.b = pow(TotalColor.b, InGamma);
-
     TotalColor = TotalColor * LightColor;
-  }
 
   TotalColor += FogColor;
 
@@ -966,7 +958,10 @@ void main(void)
 )";
 	}
 	else Out << "  FragColor = TotalColor;" END_LINE;
-
+    Out << R"(
+  if ((vPolyFlags&)" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+    FragColor = GammaCorrect(vGamma, FragColor);
+ )";
 	Out << "}" END_LINE;
 #else
 	Out << R"(

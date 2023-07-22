@@ -127,10 +127,7 @@ void main(void)
 	}
 
 	Out << R"(
-  float InGamma = 1.0 / (Gamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"(); // Gamma
-  TotalColor.r = pow(TotalColor.r, InGamma);
-  TotalColor.g = pow(TotalColor.g, InGamma);
-  TotalColor.b = pow(TotalColor.b, InGamma);
+  TotalColor = GammaCorrect(Gamma, TotalColor);
 )";
 
 	if (GIsEditor)

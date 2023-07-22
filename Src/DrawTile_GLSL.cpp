@@ -288,13 +288,7 @@ void main(void)
   TotalColor = Color * In.DrawColor;
 
   if ((In.PolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
-  {
-    float InGamma = 1.0 / (In.Gamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
-	
-    TotalColor.r = pow(TotalColor.r, InGamma);
-    TotalColor.g = pow(TotalColor.g, InGamma);
-    TotalColor.b = pow(TotalColor.b, InGamma);
-  }
+    TotalColor = GammaCorrect(In.Gamma, TotalColor);
 )";
 
 	if (GIsEditor)

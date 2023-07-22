@@ -122,7 +122,7 @@ void main(void)
   Out.TexCoords = TexCoords * GetDiffuseInfo().xy;
   Out.DetailTexCoords = TexCoords * GetDetailMacroInfo().xy;
   Out.MacroTexCoords = TexCoords * GetDetailMacroInfo().zw;
-  Out.LightColor = LightColor;
+  Out.LightColor = LightColor * )" << (GL->ActorXBlending ? 1.5f : 1.f) << R"(;
   Out.FogColor = FogColor;
 )";
 
@@ -518,17 +518,6 @@ void main(void)
 )";
     }
 
-    Out << R"(
-  if ((In.PolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
-  {
-    // Gamma
-    float InGamma = 1.0 / (In.Gamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
-    TotalColor.r = pow(TotalColor.r, InGamma);
-    TotalColor.g = pow(TotalColor.g, InGamma);
-    TotalColor.b = pow(TotalColor.b, InGamma);
-  }
-)";
-
 #if ENGINE_VERSION==227
     // Add DistanceFog
     Out << R"(
@@ -618,7 +607,12 @@ void main(void)
   FragColor1 = ((vec4(1.0) - TotalColor * LightColor)); //no, this is not entirely right, TotalColor has already LightColor applied. But will blow any fog/transparency otherwise. However should not make any (visual) difference here for this equation. Any better idea?
 )";
     }
-    else Out << "FragColor = TotalColor;" END_LINE;
+    else Out << "  FragColor = TotalColor;" END_LINE;
+
+    Out << R"(
+  if ((In.PolyFlags&)" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
+    FragColor = GammaCorrect(In.Gamma, FragColor);
+ )";
     Out << "}" END_LINE;
 
     // Blending translation table

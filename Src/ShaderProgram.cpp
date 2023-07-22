@@ -184,6 +184,15 @@ float PlaneDot(vec4 Plane, vec3 Point)
   return dot(Plane.xyz, Point) - Plane.w;
 }
 
+vec4 GammaCorrect(float BaseGamma, vec4 Color)
+{
+    float Gamma = 1.0 / (BaseGamma * )" << (GIsEditor ? GL->GammaMultiplierUED : GL->GammaMultiplier) << R"();
+    Color.r = pow(Color.r, Gamma);
+    Color.g = pow(Color.g, Gamma);
+    Color.b = pow(Color.b, Gamma);
+    return Color;
+}
+
 // The following directive resets the line number to 1 
 // to have the correct output logging for a possible 
 // error within the shader files.

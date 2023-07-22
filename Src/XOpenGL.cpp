@@ -111,6 +111,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("NoAATiles"), RF_Public)UBoolProperty(CPP_PROPERTY(NoAATiles), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("GenerateMipMaps"), RF_Public)UBoolProperty(CPP_PROPERTY(GenerateMipMaps), TEXT("Options"), CPF_Config);
 
+	new(GetClass(), TEXT("OneXBlending"), RF_Public)UBoolProperty(CPP_PROPERTY(OneXBlending), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("ActorXBlending"), RF_Public)UBoolProperty(CPP_PROPERTY(ActorXBlending), TEXT("Options"), CPF_Config);
+
 	// Experimental stuff (still being worked on).
 	new(GetClass(), TEXT("UseSRGBTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseSRGBTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
@@ -200,6 +203,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	EnvironmentMaps = 0;
 	GenerateMipMaps = 0;
 	//EnableShadows = 0;
+
+	OneXBlending = 0;
+	ActorXBlending = 0;
 
 	MaxTextureSize = 4096;
 #ifdef __EMSCRIPTEN__
@@ -2321,6 +2327,12 @@ void UXOpenGLRenderDevice::Exit()
 
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseVSync"), *FString::Printf(TEXT("%ls"), UseVSync == VS_Off ? TEXT("Off") : UseVSync == VS_On ? TEXT("On") : TEXT("Adaptive")));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("OpenGLVersion"), *FString::Printf(TEXT("%ls"), OpenGLVersion == GL_Core ? TEXT("Core") : TEXT("ES")));
+
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GammaMultiplier"), *FString::Printf(TEXT("%f"), GammaMultiplier));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GammaMultiplierUED"), *FString::Printf(TEXT("%f"), GammaMultiplierUED));
+
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("OneXBlending"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(OneXBlending)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("ActorXBlending"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(ActorXBlending)));
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseLightmapAtlas"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseLightmapAtlas)));

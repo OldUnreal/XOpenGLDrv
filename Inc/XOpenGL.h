@@ -516,6 +516,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD UseHWLighting;
 	BITFIELD UseHWClipping;
 	BITFIELD UseEnhancedLightmaps;
+	BITFIELD OneXBlending;
+	BITFIELD ActorXBlending;
 
 	//OpenGL 4 Config
 	BITFIELD UseBindlessTextures;
