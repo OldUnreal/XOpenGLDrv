@@ -119,10 +119,12 @@ BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info,
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
 	FCachedTexture* Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
 
-	const auto CanMakeBindlessResident = UsingBindlessTextures && GlobalTextureHandlesBufferSSBO.Size() + GlobalTextureHandlesBufferUBO.Size() < MaxBindlessTextures;
+	const auto CanMakeBindlessResident = UsingBindlessTextures && 
+		(GlobalTextureHandlesBufferSSBO.Size() + GlobalTextureHandlesBufferUBO.Size() < MaxBindlessTextures) && 
+		(Info.Texture || UseBindlessLightmaps);
 
 	// We will have to free up a TMU => stop batching
-	if (Result && !UsingBindlessTextures && !IsBoundToTMU)
+	if (Result && !IsResidentBindlessTexture && !IsBoundToTMU)
 		return TRUE;
 
 	// We need to re-upload a texture we're currently using

@@ -241,6 +241,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 		auto Out = ParametersBuffer.GetElementPtr(0);
 		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
 	}
+	ParametersBuffer.Bind();
 	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 
 	if (!VertBuffer.IsInputLayoutCreated())

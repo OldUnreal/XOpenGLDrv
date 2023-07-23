@@ -248,6 +248,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 	// Pass drawcall params
 	auto Out = ParametersBuffer.GetElementPtr(0);
 	memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
+	ParametersBuffer.Bind();
 	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
 	
 	if (LineVertBuffer.Size() > 0)
