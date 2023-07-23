@@ -556,7 +556,7 @@ void main(void)
   else if (In.RendMap == )" << REN_Normals << R"(u)
   {
     // Dot.
-    float T = 0.5 * dot(normalize(In.Coords), gNormals.xyz);
+    float T = 0.5 * dot(normalize(In.Coords), In.Normals.xyz);
     // Selected.
     if ((In.PolyFlags & )" << PF_Selected << R"(u) == )" << PF_Selected << R"(u)
     {
