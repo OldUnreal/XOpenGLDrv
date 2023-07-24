@@ -327,6 +327,15 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 	if (!IsCompiled)
 	{		
 		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
+		glGetShaderiv(ShaderObject, GL_INFO_LOG_LENGTH, &blen);
+		if (blen > 1)
+		{
+			GLchar* compiler_log = new GLchar[blen + 1];
+			glGetShaderInfoLog(ShaderObject, blen, &slen, compiler_log);
+			debugf(TEXT("XOpenGL: ErrorLog compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
+			delete[] compiler_log;
+		}
+
 		FString ShaderSource(*ShOut);
 		TArray<FString> Lines;
 		INT LineNum = 0;
@@ -348,17 +357,18 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 			debugf(TEXT("XOpenGL: %ls"), *Lines(i));
 		Result = false;
 	}
-
-	glGetShaderiv(ShaderObject, GL_INFO_LOG_LENGTH, &blen);
-	if (blen > 1)
+	else 
 	{
-		GLchar* compiler_log = new GLchar[blen + 1];
-		glGetShaderInfoLog(ShaderObject, blen, &slen, compiler_log);
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
-		delete[] compiler_log;
+		glGetShaderiv(ShaderObject, GL_INFO_LOG_LENGTH, &blen);
+		if (blen > 1)
+		{
+			GLchar* compiler_log = new GLchar[blen + 1];
+			glGetShaderInfoLog(ShaderObject, blen, &slen, compiler_log);
+			debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
+			delete[] compiler_log;
+		}
+		else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
 	}
-	else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
-
 	CHECK_GL_ERROR();
 
 	return Result;

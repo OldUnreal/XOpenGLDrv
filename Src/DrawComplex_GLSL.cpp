@@ -481,7 +481,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
   float currentLayerHeight = 0.0; // depth of current layer
   vec2 dtex = vParallaxScale * viewDir.xy / viewDir.z / numLayers; // shift of texture coordinates for each iteration
   vec2 currentTexCoords = ptexCoords; // current texture coordinates
-  float heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;" // depth from heightmap
+  float heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r; // depth from heightmap
 
   // while point is above surface
   while (heightFromTexture > currentLayerHeight)
@@ -610,6 +610,7 @@ void main(void)
   mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
   vec4 TotalColor = vec4(1.0);
+  vec2 texCoords = vTexCoords;
 )";
 
 	if (GL->UseHWLighting || GL->BumpMaps)
@@ -629,7 +630,7 @@ void main(void)
   if ((vDrawFlags & )" << DF_HeightMap << R"(u) == )" << DF_HeightMap << R"(u)
   {
     // get new texture coordinates from Parallax Mapping
-    vTexCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);
+    texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);
     //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
     //discard; // texCoords = vTexCoords;
   }
@@ -638,7 +639,7 @@ void main(void)
 	}
 
 	Out << R"(
-  vec4 Color = GetTexel(vTexNum, Texture0, vTexCoords.xy);
+  vec4 Color = GetTexel(vTexNum, Texture0, texCoords.xy);
 
   if (vBaseDiffuse > 0.0)
     Color *= vBaseDiffuse; // Diffuse factor.
@@ -788,7 +789,7 @@ void main(void)
   if ((vDrawFlags & )" << DF_BumpMap << R"(u) == )" << DF_BumpMap << R"(u)
   {    
     //normal from normal map
-    vec3 TextureNormal = normalize(GetTexel(vBumpMapTexNum, Texture5, vTexCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
+    vec3 TextureNormal = normalize(GetTexel(vBumpMapTexNum, Texture5, texCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
     vec3 BumpColor;
     vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 
