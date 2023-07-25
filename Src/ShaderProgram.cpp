@@ -417,11 +417,14 @@ void UXOpenGLRenderDevice::InitShaders()
 	Shaders[Complex_Prog] = new DrawComplexProgram(TEXT("DrawComplex"), this);
 
 	// (Re)initialize UBOs
-	GlobalMatricesBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::MatricesIndex);
-	GlobalMatricesBuffer.MapUBOBuffer(false, 1);
-	GlobalMatricesBuffer.Advance(1);
-	CHECK_GL_ERROR();
-
+	if (!GlobalMatricesBuffer.Buffer)
+	{
+		GlobalMatricesBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::MatricesIndex);
+		GlobalMatricesBuffer.MapUBOBuffer(false, 1);
+		GlobalMatricesBuffer.Advance(1);
+		CHECK_GL_ERROR();
+	}
+	
 	// Texture Handles. We don't want to re-create this one if we've already done it once!
 	if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
     {
@@ -459,18 +462,27 @@ void UXOpenGLRenderDevice::InitShaders()
 		}
 	}
 
-	StaticLightInfoBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::StaticLightInfoIndex);
-	StaticLightInfoBuffer.MapUBOBuffer(false, 1);
-	StaticLightInfoBuffer.Advance(1);
+	if (!StaticLightInfoBuffer.Buffer)
+	{
+		StaticLightInfoBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::StaticLightInfoIndex);
+		StaticLightInfoBuffer.MapUBOBuffer(false, 1);
+		StaticLightInfoBuffer.Advance(1);
+	}
 
-	GlobalCoordsBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::CoordsIndex);
-	GlobalCoordsBuffer.MapUBOBuffer(false, 1);
-	GlobalCoordsBuffer.Advance(1);
+	if (!GlobalCoordsBuffer.Buffer)
+	{
+		GlobalCoordsBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::CoordsIndex);
+		GlobalCoordsBuffer.MapUBOBuffer(false, 1);
+		GlobalCoordsBuffer.Advance(1);
+	}
 
-	GlobalClipPlaneBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::ClipPlaneIndex);
-	GlobalClipPlaneBuffer.MapUBOBuffer(false, 1);
-	GlobalClipPlaneBuffer.Advance(1);
-
+	if (!GlobalClipPlaneBuffer.Buffer)
+	{
+		GlobalClipPlaneBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::ClipPlaneIndex);
+		GlobalClipPlaneBuffer.MapUBOBuffer(false, 1);
+		GlobalClipPlaneBuffer.Advance(1);
+	}
+	
 	for (const auto Shader : Shaders)
 	{
 		Shader->MapBuffers();
@@ -487,15 +499,12 @@ void UXOpenGLRenderDevice::ResetShaders()
 {
 	guard(UXOpenGLRenderDevice::ResetShaders);
 
+	UBOPoint = SSBOPoint = ArrayPoint = nullptr;
+	
 	for (const auto Shader: Shaders)
 		delete Shader;
 	memset(Shaders, 0, sizeof(ShaderProgram*) * ARRAY_COUNT(Shaders));
-
-	GlobalMatricesBuffer.DeleteBuffer();
-	StaticLightInfoBuffer.DeleteBuffer();
-	GlobalCoordsBuffer.DeleteBuffer();
-	GlobalClipPlaneBuffer.DeleteBuffer();
-	
+		
 	unguard;
 }
 

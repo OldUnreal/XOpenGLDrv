@@ -565,7 +565,7 @@ void UXOpenGLRenderDevice::PostEditChange()
 	guard(UXOpenGLRenderDevice::PostEditChange);
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: PostEditChange"));
 
-	if (AllContexts.Num() == 0)
+//	if (AllContexts.Num() == 0)
 	{
 		// stijn: We shouldn't re-check extensions here unless we recreate the entire renderer!!
 		//CheckExtensions();
@@ -574,7 +574,6 @@ void UXOpenGLRenderDevice::PostEditChange()
 	}
 
 	Flush(UsePrecache);
-
 	unguard;
 }
 
@@ -2266,16 +2265,13 @@ void UXOpenGLRenderDevice::Exit()
 
 	if (hDC)
 		ReleaseDC(hWnd, hDC);
-
-	if (AllContexts.Num() == 0)
+	
+	ResetShaders();
+	if (AllContexts.Num() == 0 && SharedBindMap)
 	{
-		ResetShaders();
-		if (SharedBindMap)
-		{
-			SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
-			delete SharedBindMap;
-			SharedBindMap = NULL;
-		}
+		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
+		delete SharedBindMap;
+		SharedBindMap = NULL;
 	}
 
 	// Shut down global GL.

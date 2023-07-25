@@ -92,7 +92,8 @@
 // size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
 #define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
-#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STATIC_DRAW
+// stijn: this absolutely needs to be dynamic or stream draw on macOS
+#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
 
 #define DRAWSIMPLE_SIZE 16 * 1024
 #define DRAWTILE_SIZE 16 * 1024
@@ -1027,6 +1028,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			delete[] Sync;
 			Sync = nullptr;
 			bBound = bInputLayoutCreated = false;
+			BindingPoint = nullptr;
+			IndexOffset = Index = BeginOffset = 0;
 		}
 
 		// Inserts a fence that makes the GPU signal the active sub-buffer when
