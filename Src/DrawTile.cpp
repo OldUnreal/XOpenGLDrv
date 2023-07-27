@@ -400,6 +400,7 @@ bool UXOpenGLRenderDevice::DrawTileProgram::BuildShaderProgram()
 
 UXOpenGLRenderDevice::DrawTileProgram::~DrawTileProgram()
 {
+	DeleteShader();
 	DrawTileProgram::UnmapBuffers();
 }
 

@@ -565,13 +565,12 @@ void UXOpenGLRenderDevice::PostEditChange()
 	guard(UXOpenGLRenderDevice::PostEditChange);
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: PostEditChange"));
 
-//	if (AllContexts.Num() == 0)
-	{
-		// stijn: We shouldn't re-check extensions here unless we recreate the entire renderer!!
-		//CheckExtensions();
-		ResetShaders();
-		InitShaders();
-	}
+	MakeCurrent();
+
+	// stijn: We shouldn't re-check extensions here unless we recreate the entire renderer!!
+	//CheckExtensions();
+	ResetShaders();
+	InitShaders();
 
 	Flush(UsePrecache);
 	unguard;
@@ -799,6 +798,8 @@ InitContext:
 	{
 		GWarn->Logf(TEXT("XOpenGL: NoBuffering enabled, this WILL cause severe performance drain! This debugging option is useful to find performance critical situations, but should not be used in general."));
 	}
+
+	AllContexts.AddItem(glContext);
 #else
 	if (!bContextInitialized)
 	{
@@ -2247,9 +2248,12 @@ void UXOpenGLRenderDevice::Exit()
 		SharedBindMap = NULL;
 	}
 	CurrentGLContext = NULL;
+
 # if !UNREAL_TOURNAMENT_OLDUNREAL
 	SDL_GL_DeleteContext(glContext);
 # endif
+
+	AllContexts.RemoveItem(glContext);
 #else
 	// Shut down this GL context. May fail if window was already destroyed.
 	check(hRC)

@@ -1030,6 +1030,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			bBound = bInputLayoutCreated = false;
 			BindingPoint = nullptr;
 			IndexOffset = Index = BeginOffset = 0;
+			BufferObjectName = VaoObjectName = 0;
 		}
 
 		// Inserts a fence that makes the GPU signal the active sub-buffer when
@@ -1188,6 +1189,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// @GeoShaderFunc may be nullptr
 		// @EmitHeaderFunc is also optional. If it is not nullptr, BuildShaderProgram will call EmitHeaderFunc before each shader builder func
 		bool  BuildShaderProgram(ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc, ShaderWriterFunc EmitHeaderFunc = nullptr);
+
+		void DeleteShader();
 
 		// Used to describe the layout of the drawcall parameters
 		struct DrawCallParameterInfo

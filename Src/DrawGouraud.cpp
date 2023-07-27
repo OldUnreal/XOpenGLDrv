@@ -559,6 +559,7 @@ bool UXOpenGLRenderDevice::DrawGouraudProgram::BuildShaderProgram()
 
 UXOpenGLRenderDevice::DrawGouraudProgram::~DrawGouraudProgram()
 {
+	DeleteShader();
 	DrawGouraudProgram::UnmapBuffers();
 }
 

@@ -345,6 +345,7 @@ bool UXOpenGLRenderDevice::DrawComplexProgram::BuildShaderProgram()
 
 UXOpenGLRenderDevice::DrawComplexProgram::~DrawComplexProgram()
 {
+	DeleteShader();
 	DrawComplexProgram::UnmapBuffers();
 }
 

@@ -424,6 +424,10 @@ void UXOpenGLRenderDevice::InitShaders()
 		GlobalMatricesBuffer.Advance(1);
 		CHECK_GL_ERROR();
 	}
+	else
+	{
+		GlobalMatricesBuffer.RebindBufferBase(GlobalShaderBindingIndices::MatricesIndex);
+	}
 	
 	// Texture Handles. We don't want to re-create this one if we've already done it once!
 	if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
@@ -468,6 +472,10 @@ void UXOpenGLRenderDevice::InitShaders()
 		StaticLightInfoBuffer.MapUBOBuffer(false, 1);
 		StaticLightInfoBuffer.Advance(1);
 	}
+	else
+	{
+		StaticLightInfoBuffer.RebindBufferBase(GlobalShaderBindingIndices::StaticLightInfoIndex);
+	}
 
 	if (!GlobalCoordsBuffer.Buffer)
 	{
@@ -475,12 +483,20 @@ void UXOpenGLRenderDevice::InitShaders()
 		GlobalCoordsBuffer.MapUBOBuffer(false, 1);
 		GlobalCoordsBuffer.Advance(1);
 	}
+	else
+	{
+		GlobalCoordsBuffer.RebindBufferBase(GlobalShaderBindingIndices::CoordsIndex);
+	}
 
 	if (!GlobalClipPlaneBuffer.Buffer)
 	{
 		GlobalClipPlaneBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::ClipPlaneIndex);
 		GlobalClipPlaneBuffer.MapUBOBuffer(false, 1);
 		GlobalClipPlaneBuffer.Advance(1);
+	}
+	else
+	{
+		GlobalClipPlaneBuffer.RebindBufferBase(GlobalShaderBindingIndices::ClipPlaneIndex);
 	}
 	
 	for (const auto Shader : Shaders)
@@ -542,6 +558,27 @@ bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderWriterFunc Ve
 		return false;
 
 	return true;
+}
+
+void UXOpenGLRenderDevice::ShaderProgram::DeleteShader()
+{
+	if (!ShaderProgramObject)
+		return;
+
+	if (VertexShaderObject)
+		glDetachShader(ShaderProgramObject, VertexShaderObject);
+
+	if (GeoShaderObject)
+		glDetachShader(ShaderProgramObject, GeoShaderObject);
+
+	if (FragmentShaderObject)
+		glDetachShader(ShaderProgramObject, FragmentShaderObject);
+
+	glDeleteProgram(ShaderProgramObject);
+
+	ShaderProgramObject = VertexShaderObject = GeoShaderObject = FragmentShaderObject = 0;
+
+	CHECK_GL_ERROR();
 }
 
 UXOpenGLRenderDevice::ShaderProgram::~ShaderProgram()

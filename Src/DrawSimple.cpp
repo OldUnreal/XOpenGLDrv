@@ -356,5 +356,6 @@ bool UXOpenGLRenderDevice::DrawSimpleProgram::BuildShaderProgram()
 
 UXOpenGLRenderDevice::DrawSimpleProgram::~DrawSimpleProgram()
 {
+	DeleteShader();
 	DrawSimpleProgram::UnmapBuffers();
 }
