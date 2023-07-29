@@ -90,7 +90,8 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 
 	glm::vec4 DrawColor = FPlaneToVec4(Color);
 	const auto CanBuffer = 
-		(RenDev->OpenGLVersion == GL_Core ? VertBufferCore.CanBuffer(3) : VertBufferES.CanBuffer(6)) && 
+		(RenDev->OpenGLVersion == GL_Core ? VertBufferCore.CanBuffer(3) : VertBufferES.CanBuffer(6)) &&
+		(!RenDev->UsingShaderDrawParameters || ParametersBuffer.CanBuffer(1)) &&
 		!DrawBuffer.IsFull();
 
 	// Check if the draw call parameters will change
@@ -185,6 +186,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 #endif
 
 		VertBufferES.Advance(6);
+		DrawBuffer.EndDrawCall(6);
 	}
 	else
 	{
@@ -202,10 +204,10 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
         }
 #endif
 
-		VertBufferCore.Advance(6);
+		VertBufferCore.Advance(3);
+		DrawBuffer.EndDrawCall(3);
 	}
 
-	DrawBuffer.EndDrawCall(6);
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Advance(1);
 
@@ -369,7 +371,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, TileParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWTILE_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
