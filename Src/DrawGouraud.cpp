@@ -173,7 +173,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 #if ENGINE_VERSION==227
 		1.f;
 #else
-		Info.Texture->Alpha;
+		Info.Texture ? Info.Texture->Alpha : 1.f;
 #endif
 
 	DrawCallParams.HitTesting = GIsEditor && RenDev->HitTesting();	
@@ -190,12 +190,12 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 	}
 
 	RenDev->SetTexture(0, Info, DrawCallParams.PolyFlags, 0, DF_DiffuseTexture);
-	DrawCallParams.DiffuseInfo = glm::vec4(RenDev->TexInfo[0].UMult, RenDev->TexInfo[0].VMult, Info.Texture->Diffuse, TextureAlpha);
+	DrawCallParams.DiffuseInfo = glm::vec4(RenDev->TexInfo[0].UMult, RenDev->TexInfo[0].VMult, Info.Texture ? Info.Texture->Diffuse : 1.f, TextureAlpha);
 	DrawCallParams.TexNum[0] = RenDev->TexInfo[0].TexNum;
 	DrawCallParams.DrawFlags = DF_DiffuseTexture | NoNearZFlag;
 
 	DrawCallParams.DetailMacroInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
-	if (Info.Texture->DetailTexture && RenDev->DetailTextures)
+	if (Info.Texture && Info.Texture->DetailTexture && RenDev->DetailTextures)
 	{
 		SetTexture(1, Info.Texture->DetailTexture, DF_DetailTexture, Frame, DetailTextureInfo);
 		DrawCallParams.DetailMacroInfo.x = RenDev->TexInfo[1].UMult;
@@ -204,14 +204,14 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 
 	DrawCallParams.MiscInfo = glm::vec4(0.f, RenDev->GetViewportGamma(Frame->Viewport), 0.f, 0.f);
 #if ENGINE_VERSION==227
-	if (Info.Texture->BumpMap && RenDev->BumpMaps)
+	if (Info.Texture && Info.Texture->BumpMap && RenDev->BumpMaps)
 	{
 		SetTexture(2, Info.Texture->BumpMap, DF_BumpMap, Frame, BumpMapInfo);
 		DrawCallParams.MiscInfo.x = Info.Texture->BumpMap->Specular;
 	}
 #endif
 
-	if (Info.Texture->MacroTexture && RenDev->MacroTextures)
+	if (Info.Texture && Info.Texture->MacroTexture && RenDev->MacroTextures)
 	{
 		SetTexture(3, Info.Texture->MacroTexture, DF_MacroTexture, Frame, MacroTextureInfo);
 		DrawCallParams.DetailMacroInfo.z = RenDev->TexInfo[3].UMult;

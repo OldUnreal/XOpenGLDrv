@@ -991,16 +991,23 @@ BOOL UXOpenGLRenderDevice::WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPol
 	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog)) ? TRUE : FALSE;
 }
 
+constexpr GLenum ModeList[] = { GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_NOTEQUAL, GL_ALWAYS };
 BYTE UXOpenGLRenderDevice::SetZTestMode(BYTE Mode)
 {
+	guard(UXOpenGLRenderDevice::SetZTestMode);
 	if (LastZMode == Mode || Mode > 6)
 		return Mode;
 
-	static GLenum ModeList[] = { GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_NOTEQUAL, GL_ALWAYS };
+	// Flush any pending render.
+	auto CurrentProgram = ActiveProgram;
+	SetProgram(No_Prog);
+	SetProgram(ActiveProgram);
+
 	glDepthFunc(ModeList[Mode]);
 	BYTE Prev = LastZMode;
 	LastZMode = Mode;
 	return Prev;
+	unguard;
 }
 
 // SetBlend inspired approach to handle LineFlags.
@@ -1014,7 +1021,8 @@ DWORD UXOpenGLRenderDevice::SetDepth(DWORD LineFlags)
 	{
 		if (LineFlags & LINE_DepthCued)
 		{
-			SetZTestMode(ZTEST_LessEqual);
+			LastZMode = ZTEST_LessEqual;
+			glDepthFunc(GL_LEQUAL);
 			glDepthMask(GL_TRUE);
 
 			// Sync with SetBlend.
@@ -1022,7 +1030,8 @@ DWORD UXOpenGLRenderDevice::SetDepth(DWORD LineFlags)
 		}
 		else
 		{
-			SetZTestMode(ZTEST_Always);
+			LastZMode = ZTEST_Always;
+			glDepthFunc(GL_ALWAYS);
 			glDepthMask(GL_FALSE);
 
 			// Sync with SetBlend.

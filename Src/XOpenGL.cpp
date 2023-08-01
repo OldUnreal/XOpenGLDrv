@@ -1965,12 +1965,8 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 #endif
 	CHECK_GL_ERROR();
 
-#if ENGINE_VERSION==227
-	LastZMode = 255;
-	SetZTestMode(ZTEST_LessEqual);
-#else
+	LastZMode = ZTEST_LessEqual;
 	glDepthFunc(GL_LEQUAL);
-#endif
 
 	// Remember stuff.
 	FlashScale = InFlashScale;
