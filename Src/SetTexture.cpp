@@ -1001,7 +1001,7 @@ BYTE UXOpenGLRenderDevice::SetZTestMode(BYTE Mode)
 	// Flush any pending render.
 	auto CurrentProgram = ActiveProgram;
 	SetProgram(No_Prog);
-	SetProgram(ActiveProgram);
+	SetProgram(CurrentProgram);
 
 	glDepthFunc(ModeList[Mode]);
 	BYTE Prev = LastZMode;
