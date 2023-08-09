@@ -62,7 +62,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::SetTexture
 		*TextureCoords = glm::vec4(RenDev->TexInfo[Multi].UMult, RenDev->TexInfo[Multi].VMult, RenDev->TexInfo[Multi].UPan, RenDev->TexInfo[Multi].VPan);
 	if (TextureInfo)
 		*TextureInfo = glm::vec4(Info.Texture->Diffuse, Info.Texture->Specular, Info.Texture->Alpha, Info.Texture->TEXTURE_SCALE_NAME);
-	DrawCallParams.TexNum[Multi] = RenDev->TexInfo[Multi].TexNum;
+	StoreTexHandle(Multi, DrawCallParams.TexHandles, RenDev->TexInfo[Multi].BindlessTexHandle);
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, const FSurfaceFacet& Facet)

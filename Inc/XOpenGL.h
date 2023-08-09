@@ -89,8 +89,6 @@
 #define MAX_DRAWTILE_BATCH 16384
 // maximum number of lines/triangles in one drawsimple multi-draw
 #define MAX_DRAWSIMPLE_BATCH 16384
-// size of the Bindless Texture Handles SSBO. The GL spec guarantees we can make this 128MiB, but 16MiB should be more than enough...
-#define BINDLESS_SSBO_SIZE (16 * 1024 * 1024)
 
 // stijn: this absolutely needs to be dynamic or stream draw on macOS
 #define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
@@ -524,7 +522,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	//OpenGL 4 Config
 	BITFIELD UseBindlessTextures;
-	BITFIELD UseBindlessLightmaps;
 	BITFIELD UsePersistentBuffers;
 	BITFIELD UseBufferInvalidation;
 	BITFIELD UseShaderDrawParameters;
@@ -691,7 +688,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		INT MaxLevel;
 		GLuint Sampler;				// Sampler object
 		GLuint64 BindlessTexHandle;	// Bindless handle
-		GLuint TexNum;				// TMU num
 		INT RealtimeChangeCount{};
 	};
 
@@ -707,52 +703,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FLOAT VMult{};
 		FLOAT UPan{};
 		FLOAT VPan{};
-		INT TexNum{};					// TMU number or index in the bindless texture array
+		GLuint64 BindlessTexHandle{};
 		INT RealTimeChangeCount{};
 	} TexInfo[8];
-
-	enum EBindlessHandleStorage
-	{
-		//
-		// Store handles in a uniform buffer object.
-		//
-		// * Pro: Supported by all GPUs with GL_ARB_bindless_texture capabilities
-		//
-		// * Con: UBOs are small. Even on modern GPUs, we often have a max UBO size
-		// of only 64KiB. That only gives us enough space to store 4096 bindless
-		// texture handles
-		//
-		STORE_UBO,
-
-		//
-		// Store handles in a shader storage buffer object.
-		//
-		// Requires: GL_ARB_shader_storage_buffer_object
-		//
-		// * Pro: Much bigger than UBOs. The spec guarantees that SSBOs can be
-		// at least 128MiB. That gives us enough room for over 8 million bindless
-		// texture handles
-		//
-		// * Con: requires SSBO support
-		// * Con: SSBO access is usually slower than UBO access
-		//
-		STORE_SSBO,
-
-		//
-		// Passes bindless handles as integer parameters to the shaders
-		//
-		// Requires: GL_ARB_gpu_shader_int64
-		//
-		// * Pro: Unlimited bindless handles
-		// * Pro: Faster than UBOs or SSBOs
-		//
-		// * Con: Not supported by Intel iGPUs or on macOS
-		//
-		STORE_INT
-	} BindlessHandleStorage;
 	
 	bool UsingBindlessTextures;		// Are we currently using bindless textures?
-	INT	 MaxBindlessTextures;		// How many bindless textures can we store?
 
 	//
 	// Hit Testing State
@@ -1264,20 +1219,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	};
 	BufferObject<GlobalMatrices> GlobalMatricesBuffer;
 	
-	// Global bindless textures.
-	struct TextureHandleUBO
-	{
-		GLuint64 TextureHandle;
-		GLuint64 Padding;
-	};
-	BufferObject<TextureHandleUBO> GlobalTextureHandlesBufferUBO;
-
-	struct TextureHandleSSBO
-	{
-		GLuint64 TextureHandle;
-	};
-	BufferObject<TextureHandleSSBO> GlobalTextureHandlesBufferSSBO;
-
 	// Static light info
 	TArray<AActor*> StaticLightList;
 	TArray<AActor*> LightList;
@@ -1324,6 +1265,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	glm::int32 DistanceFogMode = -1;
 	bool bFogEnabled = false;
+
+	//
+	// SetTexture helper
+	//
+	static void StoreTexHandle(INT Index, glm::uvec4* Dst, const glm::uint64 TextureHandle)
+	{
+		if (Index % 2)
+			*reinterpret_cast<glm::uint64*>(&Dst[Index / 2].z) = TextureHandle;
+		else
+			*reinterpret_cast<glm::uint64*>(&Dst[Index / 2].x) = TextureHandle;
+	}
 
 	//
 	// Helper class for glMultiDrawArray batching
@@ -1410,14 +1362,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			glm::vec4		DrawColor;
 			glm::vec4		HitColor;
-			glm::uint		TexNum;
 			glm::uint		PolyFlags;
 			glm::uint		BlendPolyFlags;
 			glm::uint		HitTesting;
 			glm::uint		DepthTested;
 			glm::uint		Padding0;		// Manually inserted padding to ensure the size of DrawCallParameters is a multiple of GLSL vec4 alignment
 			glm::uint		Padding1;
+			glm::uint       Padding2;
 			glm::float32	Gamma;
+			glm::uvec4      TexHandles[1];  // Intentionally made this a uvec4 for alignment purposes 
 		} DrawCallParams{};
 
 		struct BufferedVertES
@@ -1577,7 +1530,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::int32 DistanceFogMode;
 			glm::uint Padding0;				// Intentionally inserted padding to make the struct layout consistent in C++, GLSL std140, and GLSL std430
 			glm::uint Padding1;
-			glm::uint TexNum[4];
+			glm::uvec4 TexHandles[2];       // Holds up to 4 glm::uint64 texture handles
 		} DrawCallParams{};
 
 		struct BufferedVert
@@ -1672,9 +1625,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glm::int32 DistanceFogMode;
 			glm::uint Padding0; // This manually inserted padding ensures this struct layout is identical in C++, GLSL std140, and GLSL std430
 			glm::uint Padding1;
-			glm::uint TexNum[8];
-			
-			
+			glm::uvec4 TexHandles[4];  // Holds up to 8 glm::uint64 texture handles			
 		} DrawCallParams{};
 
 		// Sets texture and updates corresponding drawcall data
@@ -1819,7 +1770,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Textures/Sampler Management
 	//
 	static BOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, DWORD BindlessTexNum=~0);
+	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
 	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags);
 	void  SetNoTexture(INT Multi);

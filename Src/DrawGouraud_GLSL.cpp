@@ -32,7 +32,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     {"int", "DistanceFogMode", 0},
     {"uint", "Padding0", 0},
     {"uint", "Padding1", 0},
-    {"uvec4", "TexNum", 0}, // Mirrored as a uvec4 to ensure tight packing in std140
+    {"uvec4", "TexHandles", 2},
     { nullptr, nullptr, 0}
 };
 
@@ -51,10 +51,10 @@ uniform sampler2D Texture3; // MacroTex
 static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
     Out << R"(
-  flat uint TexNum;
-  flat uint DetailTexNum;
-  flat uint BumpTexNum;
-  flat uint MacroTexNum;
+  flat uvec2 TexHandle;
+  flat uvec2 DetailTexHandle;
+  flat uvec2 BumpTexHandle;
+  flat uvec2 MacroTexHandle;
   flat uint DrawFlags;
   flat uint TextureFormat;
   flat uint PolyFlags;
@@ -103,10 +103,10 @@ out VertexData
 
 void main(void)
 {
-  Out.TexNum = GetTexNum().x;
-  Out.DetailTexNum = GetTexNum().y;
-  Out.BumpTexNum = GetTexNum().z;
-  Out.MacroTexNum = GetTexNum().w;
+  Out.TexHandle = GetTexHandles(0).xy;
+  Out.DetailTexHandle = GetTexHandles(0).zw;
+  Out.BumpTexHandle = GetTexHandles(1).xy;
+  Out.MacroTexHandle = GetTexHandles(1).zw;
   Out.DrawFlags = GetDrawFlags();
   Out.TextureFormat = GetTextureFormat();
   Out.PolyFlags = GetPolyFlags();
@@ -235,10 +235,10 @@ void main(void)
     Out.DetailTexCoords = In[i].DetailTexCoords;
     Out.MacroTexCoords = In[i].MacroTexCoords;
     Out.Coords = In[i].Coords;
-    Out.TexNum = In[i].TexNum;
-    Out.DetailTexNum = In[i].DetailTexNum;
-    Out.BumpTexNum = In[i].BumpTexNum;
-    Out.MacroTexNum = In[i].MacroTexNum;
+    Out.TexHandle = In[i].TexHandle;
+    Out.DetailTexHandle = In[i].DetailTexHandle;
+    Out.BumpTexHandle = In[i].BumpTexHandle;
+    Out.MacroTexHandle = In[i].MacroTexHandle;
     Out.TextureInfo = In[i].TextureInfo;
     Out.DrawFlags = In[i].DrawFlags;
     Out.PolyFlags = In[i].PolyFlags;
@@ -318,7 +318,7 @@ void main(void)
   vec4 TotalColor = vec4(0.0, 0.0, 0.0, 0.0);
 
   int NumLights = int(LightData4[0].y);
-  vec4 Color = GetTexel(In.TexNum, Texture0, In.TexCoords);
+  vec4 Color = GetTexel(In.TexHandle, Texture0, In.TexCoords);
 
   if (In.TextureInfo.x > 0.0)
     Color *= In.TextureInfo.x; // Diffuse factor.
@@ -430,7 +430,7 @@ void main(void)
       bNear = clamp(0.65 - NearZ, 0.0, 1.0);
       if (bNear > 0.0)
       {
-        DetailTexColor = GetTexel(In.DetailTexNum, Texture1, In.DetailTexCoords * DetailScale);
+        DetailTexColor = GetTexel(In.DetailTexHandle, Texture1, In.DetailTexCoords * DetailScale);
 
 		vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
         hsvDetailTex.b += (DetailTexColor.r - 0.1);
@@ -449,7 +449,7 @@ void main(void)
         Out << R"(
   if ((In.DrawFlags & )" << DF_MacroTexture << R"(u) == )" << DF_MacroTexture << R"(u && (In.DrawFlags & )" << DF_BumpMap << R"(u) != )" << DF_BumpMap << R"(u)
   {
-    vec4 MacroTexColor = GetTexel(In.MacroTexNum, Texture3, In.MacroTexCoords);
+    vec4 MacroTexColor = GetTexel(In.MacroTexHandle, Texture3, In.MacroTexCoords);
     vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);
     hsvMacroTex.b += (MacroTexColor.r - 0.1);
     hsvMacroTex = hsv2rgb(hsvMacroTex);
@@ -473,7 +473,7 @@ void main(void)
   {
     vec3 TangentViewDir = normalize(In.TangentViewPos - In.TangentFragPos);
     //normal from normal map
-    vec3 TextureNormal = GetTexel(In.BumpTexNum, Texture2, In.TexCoords).rgb * 2.0 - 1.0;
+    vec3 TextureNormal = GetTexel(In.BumpTexHandle, Texture2, In.TexCoords).rgb * 2.0 - 1.0;
     vec3 BumpColor;
     vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 

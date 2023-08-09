@@ -71,7 +71,7 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	FixCacheID(Info, PolyFlags);
 	FCachedTexture* Result = BindMap->Find(Info.CacheID);
 
-	if (UsingBindlessTextures && Result && Result->TexNum)
+	if (UsingBindlessTextures && Result && Result->BindlessTexHandle)
 		IsResidentBindlessTexture = TRUE;
 
 	// The texture is not bindless resident
@@ -114,14 +114,10 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	return Result;
 }
 
-BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags, DWORD BindlessTexNum)
+BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
 {
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
 	FCachedTexture* Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
-
-	const auto CanMakeBindlessResident = UsingBindlessTextures && 
-		(GlobalTextureHandlesBufferSSBO.Size() + GlobalTextureHandlesBufferUBO.Size() < MaxBindlessTextures) && 
-		(Info.Texture || UseBindlessLightmaps);
 
 	// We will have to free up a TMU => stop batching
 	if (Result && !IsResidentBindlessTexture && !IsBoundToTMU)
@@ -132,15 +128,15 @@ BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info,
 		return TRUE;
 
 	// Ditto. We're using the texture and its data is stale => stop batching
-	if (Result && IsResidentBindlessTexture && IsTextureDataStale && (Multi == -1 || TexInfo[Multi].TexNum == Result->TexNum))
+	if (Result && IsResidentBindlessTexture && IsTextureDataStale && (Multi == -1 || TexInfo[Multi].BindlessTexHandle == Result->BindlessTexHandle))
 		return TRUE;
 
 	// We have to upload and will have to bind to a TMU => stop batching
-	if (!Result && !CanMakeBindlessResident)
+	if (!Result && !UsingBindlessTextures)
 		return TRUE;
 
 	// The texture number in our drawcall UBO buffer will change => stop batching
-	if (Result && TexInfo[Multi].TexNum != Result->TexNum && !UsingShaderDrawParameters)
+	if (Result && TexInfo[Multi].BindlessTexHandle != Result->BindlessTexHandle && !UsingShaderDrawParameters)
 		return TRUE;
 
 	return FALSE;
@@ -200,7 +196,7 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	{
 		BindTextureAndSampler(1, Info, Bind, PF_None);
 		TexInfo[1].CurrentCacheID = Info.CacheID;
-		TexInfo[1].TexNum = Bind->TexNum;
+		TexInfo[1].BindlessTexHandle = Bind->BindlessTexHandle;
 	}
 	
 	Info.bRealtimeChanged = 0;
@@ -780,7 +776,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	// Bail out early if the texture is fully up-to-date
 	if (Bind && (IsResidentBindlessTexture || IsBoundToTMU) && !IsTextureDataStale)
 	{
-		Tex.TexNum = Bind->TexNum;
+		Tex.BindlessTexHandle = Bind->BindlessTexHandle;
 		STAT(unclockFast(Stats.BindCycles));
 		return;
 	}
@@ -804,7 +800,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
 		SetSampler(Bind->Sampler, Info, PolyFlags, SkipMipmaps, IsLightOrFogMap, DrawFlags);
 	}
-	else if (Bind->TexNum == 0)
+	else if (Bind->BindlessTexHandle == 0)
 	{
 		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
 	}
@@ -816,21 +812,9 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	if( IsNewBind || Info.bRealtimeChanged || IsTextureDataStale )
 		UploadTexture(Info, Bind, PolyFlags, IsNewBind, IsResidentBindlessTexture);
 
-	// stijn: don't do bindless for lightmaps and fogmaps in 227 (until the atlas is in) - Smirftsch: Added manual override UseBindlessLightmaps
-	const auto ShouldMakeBindlessResident = 
-		UsingBindlessTextures && (UseBindlessLightmaps || Info.Texture);
-
-	const auto BindlessTextureHandleCount =
-		(ShouldMakeBindlessResident && BindlessHandleStorage == STORE_UBO)
-		? GlobalTextureHandlesBufferUBO.Size()
-		: (ShouldMakeBindlessResident && BindlessHandleStorage == STORE_SSBO)
-		? GlobalTextureHandlesBufferSSBO.Size()
-		: 0;
-
-    if (ShouldMakeBindlessResident && Bind->TexNum == 0 && BindlessTextureHandleCount < static_cast<size_t>(MaxBindlessTextures))
+    if (UsingBindlessTextures && Bind->BindlessTexHandle == 0)
     {
         guard(MakeTextureHandleResident);
-        Bind->TexNum            = BindlessTextureHandleCount;
 		Bind->BindlessTexHandle = glGetTextureSamplerHandleARB(Bind->Id, Bind->Sampler);
         CHECK_GL_ERROR();
 
@@ -838,33 +822,21 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
         {
             GWarn->Logf(TEXT("Failed to get sampler for bindless texture: %ls!"), Info.Texture ? Info.Texture->GetFullName() : TEXT("LightMap/FogMap"));
             Bind->BindlessTexHandle = 0;
-            Bind->TexNum = 0;
         }
         else
         {
             glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
             CHECK_GL_ERROR();			
-
-			if (BindlessHandleStorage == STORE_UBO)
-			{
-				GlobalTextureHandlesBufferUBO.GetCurrentElementPtr()->TextureHandle = Bind->BindlessTexHandle;
-				GlobalTextureHandlesBufferUBO.Advance(1);
-			}
-			else if (BindlessHandleStorage == STORE_SSBO)
-			{
-				GlobalTextureHandlesBufferSSBO.GetCurrentElementPtr()->TextureHandle = Bind->BindlessTexHandle;
-				GlobalTextureHandlesBufferSSBO.Advance(1);
-			}
         }
+		
         unguard;
     }
     else if (IsNewBind)
     {
         Bind->BindlessTexHandle = 0;
-        Bind->TexNum = 0;
     }
 
-	Tex.TexNum = Bind->TexNum;
+	Tex.BindlessTexHandle = Bind->BindlessTexHandle;
 
     CHECK_GL_ERROR();
 	STAT(unclockFast(Stats.ImageCycles));

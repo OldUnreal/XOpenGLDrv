@@ -129,10 +129,8 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	// OpenGL 4
 	// new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
-    new(GetClass(), TEXT("UseBindlessLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessLightmaps), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
-	new(GetClass(), TEXT("MaxBindlessTextures"), RF_Public)UIntProperty(CPP_PROPERTY(MaxBindlessTextures), TEXT("Options"), CPF_Config);
-
+	
 	// Debug Options
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("DebugOptions"), CPF_Config);
@@ -190,7 +188,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
-	MaxBindlessTextures = 0;
 	UseShaderDrawParameters = 1;
 #else
 	UseBindlessTextures = 0;
@@ -219,12 +216,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
     UseEnhancedLightmaps = 1;
 #endif
 	UseVSync = VS_Adaptive;
-
-#if ENGINE_VERSION==227
-	UseBindlessLightmaps = 0; //On modern hardware this may be working despite the very huge amount, so let the user decide if to enable.
-#elif UNREAL_TOURNAMENT_OLDUNREAL
-    UseBindlessLightmaps = 1;
-#endif
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	DetailMax = 2;
@@ -313,7 +304,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
-	debugf(NAME_DevLoad, TEXT("MaxBindlessTextures %i"), MaxBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseShaderDrawParameters %i"), UseShaderDrawParameters);
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
@@ -454,51 +444,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 		// Bindless Textures
 		UsingBindlessTextures = UseBindlessTextures ? true : false;
-		if (UsingBindlessTextures)
-		{
-			INT MaxStorageSize = 0;
-			INT HandleSize = 0;
-
-#if 0 // stijn: not implemented yet
-			if (SupportsGLSLInt64)
-			{
-				BindlessHandleStorage = STORE_INT;
-			}
-			else
-#endif
-			if (SupportsSSBO)
-			{
-				BindlessHandleStorage = STORE_SSBO;
-				MaxStorageSize = BINDLESS_SSBO_SIZE;
-				HandleSize = 8; // tightly packed
-			}
-			else
-			{
-				BindlessHandleStorage = STORE_UBO;
-				MaxStorageSize = MaxUniformBlockSize;
-				HandleSize = 16;
-			}
-
-			debugf(TEXT("XOpenGL: BindlessHandleStorage: %ls"),
-				(BindlessHandleStorage == STORE_INT) ? TEXT("GLSL Int64 Parameters")
-				: (BindlessHandleStorage == STORE_SSBO) ? TEXT("Shader Storage Buffer Object")
-				: TEXT("Uniform Buffer Object")
-			);
-
-			if (MaxStorageSize > 0)
-			{
-				if (MaxBindlessTextures == 0)
-				{
-					MaxBindlessTextures = MaxStorageSize / HandleSize;
-					debugf(TEXT("XOpenGL: Initializing MaxBindlessTextures to %i"), MaxBindlessTextures);
-				}
-				else if (MaxStorageSize < MaxBindlessTextures * HandleSize)
-				{
-					debugf(TEXT("XOpenGL: UseBindlessTextures is enabled but MaxBindlessTextures is too high. Reducing from %i to %i"), MaxBindlessTextures, MaxStorageSize / HandleSize);
-					MaxBindlessTextures = MaxStorageSize / HandleSize;
-				}
-			}
-	}
 #else
 		UsingBindlessTextures = false;
 		UsingPersistentBuffers = false;
@@ -1497,7 +1442,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		}
 
 		It.Value().BindlessTexHandle = 0;
-		It.Value().TexNum = 1;
 		if (It.Value().Id)
 		{
 			glDeleteTextures(1, &It.Value().Id);
@@ -2235,8 +2179,6 @@ void UXOpenGLRenderDevice::Exit()
 
 #ifdef SDL2BUILD
 	ResetShaders();
-	GlobalTextureHandlesBufferUBO.DeleteBuffer();
-	GlobalTextureHandlesBufferSSBO.DeleteBuffer();	
 	if (SharedBindMap)
 	{
 		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
@@ -2295,8 +2237,6 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessLightmaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessLightmaps)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("MaxBindlessTextures"), *FString::Printf(TEXT("%d"), MaxBindlessTextures));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
@@ -2351,9 +2291,7 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 #if XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP
 	Flush(0);
 	ResetShaders();
-	GlobalTextureHandlesBufferUBO.DeleteBuffer();
-	GlobalTextureHandlesBufferSSBO.DeleteBuffer();
-	if (SharedBindMap)
+ 	if (SharedBindMap)
 	{
 		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
 		delete SharedBindMap;
@@ -2407,9 +2345,6 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		msPerCycle * Stats.Draw2DPoint,
 		Stats.StallCount
 	);
-
-    if (UsingBindlessTextures)
-		StatsString += *FString::Printf(TEXT("Num bindless Textures: %i\n"), GlobalTextureHandlesBufferSSBO.Size() + GlobalTextureHandlesBufferUBO.Size());
 
 #if ENGINE_VERSION==227
     StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumStaticLights);
@@ -2527,13 +2462,6 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 		glGetError();
 	}
 #endif
-	if (UsingBindlessTextures)
-	{
-		Canvas->CurX = 400;
-		Canvas->CurY = (CurY += 12);
-		Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of bindless Textures in use: %i"), GlobalTextureHandlesBufferSSBO.Size() + GlobalTextureHandlesBufferUBO.Size());
-	}
-
 	unguard;
 }
 

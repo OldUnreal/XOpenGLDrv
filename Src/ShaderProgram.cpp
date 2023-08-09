@@ -34,18 +34,8 @@ static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 	  Out << "#extension GL_OES_shader_io_blocks : require" END_LINE;
 	}
 
-	if (GL->UsingBindlessTextures) // defined for all variants of our bindlesstextures support
-	{
+	if (GL->UsingBindlessTextures)
 		Out << "#extension GL_ARB_bindless_texture : require" END_LINE;
-
-		if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_UBO) // defined if we're going to store handles in a UBO
-		{
-		}
-		else if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_SSBO) // defined if we're going to store handles in a (much larger) SSBO
-			Out << "#extension GL_ARB_shading_language_420pack : require" END_LINE;
-		else if (GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_INT) // defined if we're going to pass handles directly to the shader using uniform parameters or the drawcall's parameters in the parameter SSBO
-			Out << "#extension GL_ARB_gpu_shader_int64 : require" END_LINE;
-	}
 
 	if (GL->UsingShaderDrawParameters)
 	{
@@ -105,35 +95,12 @@ layout(std140) uniform GlobalCoords
 };
 )";
 
-	if (GL->UsingBindlessTextures && GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_UBO)
+	if (GL->UsingBindlessTextures)
 	{
 		Out << R"(
-layout(std140) uniform TextureHandles
+vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
 {
-  layout(bindless_sampler) sampler2D Textures[)" << GL->MaxBindlessTextures << R"(];
-};
-
-vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
-{
-  if (BindlessTexNum > 0u)
-    return texture(Textures[BindlessTexNum], TexCoords);
-  return texture(BoundSampler, TexCoords);
-}
-)";
-	}
-	else if (GL->UsingBindlessTextures && GL->BindlessHandleStorage == UXOpenGLRenderDevice::EBindlessHandleStorage::STORE_SSBO)
-	{
-		Out << R"(
-layout(std430, binding = 1) buffer TextureHandles
-{
-  uvec2 Textures[];
-};
-
-vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
-{
-  if (BindlessTexNum > 0u)
-    return texture(sampler2D(Textures[BindlessTexNum]), TexCoords);
-  return texture(BoundSampler, TexCoords);
+  return texture(sampler2D(BindlessTexHandle), TexCoords);
 }
 )";
 	}
@@ -141,7 +108,7 @@ vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
 	{
 		// texture bound to TMU. BindlessTexBum is meaningless here
 		Out << R"(
-vec4 GetTexel(uint BindlessTexNum, sampler2D BoundSampler, vec2 TexCoords)
+vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
 {
   return texture(BoundSampler, TexCoords);
 }
@@ -429,43 +396,6 @@ void UXOpenGLRenderDevice::InitShaders()
 		GlobalMatricesBuffer.RebindBufferBase(GlobalShaderBindingIndices::MatricesIndex);
 	}
 	
-	// Texture Handles. We don't want to re-create this one if we've already done it once!
-	if (UsingBindlessTextures && (BindlessHandleStorage == STORE_UBO || BindlessHandleStorage == STORE_SSBO))
-    {
-		if (BindlessHandleStorage == STORE_UBO)
-		{
-			if (!GlobalTextureHandlesBufferUBO.Buffer)
-			{
-				GlobalTextureHandlesBufferUBO.GenerateUBOBuffer(this, GlobalShaderBindingIndices::TextureHandlesIndex);
-				GlobalTextureHandlesBufferUBO.MapUBOBuffer(true, MaxBindlessTextures);
-				GlobalTextureHandlesBufferUBO.Advance(1); // we don't want to use index 0 because our shaders interpret that as a bound texture
-			}
-			else
-			{
-				GlobalTextureHandlesBufferUBO.RebindBufferBase(GlobalShaderBindingIndices::TextureHandlesIndex);
-			}
-		}
-		else
-		{
-			if (!GlobalTextureHandlesBufferSSBO.Buffer)
-			{
-				GlobalTextureHandlesBufferSSBO.GenerateSSBOBuffer(this, GlobalShaderBindingIndices::TextureHandlesIndex);
-				GlobalTextureHandlesBufferSSBO.MapSSBOBuffer(true, MaxBindlessTextures);
-				GlobalTextureHandlesBufferSSBO.Advance(1); // we don't want to use index 0 because our shaders interpret that as a bound texture
-			}
-			else
-			{
-				GlobalTextureHandlesBufferSSBO.RebindBufferBase(GlobalShaderBindingIndices::TextureHandlesIndex);
-			}
-		}
-		
-		if (!GlobalTextureHandlesBufferUBO.Buffer && !GlobalTextureHandlesBufferSSBO.Buffer)
-		{
-			GWarn->Logf(TEXT("Mapping of TextureHandlesBuffer failed! Disabling UsingBindlessTextures. Try reducing MaxBindlessTextures!"));
-			UsingBindlessTextures = false;
-		}
-	}
-
 	if (!StaticLightInfoBuffer.Buffer)
 	{
 		StaticLightInfoBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::StaticLightInfoIndex);
@@ -530,9 +460,6 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState()
 	BindUniform(ClipPlaneIndex, "ClipPlaneParams");
 	BindUniform(StaticLightInfoIndex, "StaticLightInfo");
 	BindUniform(CoordsIndex, "GlobalCoords");
-
-	if (RenDev->UsingBindlessTextures && RenDev->BindlessHandleStorage == STORE_UBO)
-		BindUniform(TextureHandlesIndex, "TextureHandles");
 }
 
 bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc, ShaderWriterFunc EmitHeaderFunc)

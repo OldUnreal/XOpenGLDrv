@@ -42,7 +42,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
     {"int", "DistanceFogMode", 0},
     {"uint", "Padding0", 0},
     {"uint", "Padding1", 0},
-    {"uvec4", "TexNum", 2},         // mirrored as a uvec4 in GLSL to ensure tight packing in std140
+    {"uvec4", "TexHandles", 4},
     { nullptr, nullptr, 0}
 };
 
@@ -69,15 +69,14 @@ void UXOpenGLRenderDevice::DrawComplexProgram::BuildVertexShader(GLuint ShaderTy
 layout(location = 0) in vec4 Coords; // == gl_Vertex
 layout(location = 1) in vec4 Normal; // == gl_Vertex
 
-flat out uint vTexNum;
-flat out uint vLightMapTexNum;
-flat out uint vFogMapTexNum;
-flat out uint vDetailTexNum;
-flat out uint vMacroTexNum;
-flat out uint vBumpMapTexNum;
-flat out uint vEnviroMapTexNum;
-flat out uint vHeightMapTexNum;
-flat out uint vHeightMapNum;
+flat out uvec2 vTexHandle;
+flat out uvec2 vLightMapTexHandle;
+flat out uvec2 vFogMapTexHandle;
+flat out uvec2 vDetailTexHandle;
+flat out uvec2 vMacroTexHandle;
+flat out uvec2 vBumpMapTexHandle;
+flat out uvec2 vEnviroMapTexHandle;
+flat out uvec2 vHeightMapTexHandle;
 flat out uint vDrawFlags;
 flat out uint vTextureFormat;
 flat out uint vPolyFlags;
@@ -138,13 +137,13 @@ void main(void)
   vPolyFlags = GetPolyFlags();
   vDrawFlags = GetDrawFlags();
   vTextureFormat = GetTextureFormat();
-  vTexNum = GetTexNum(0).x;
+  vTexHandle = GetTexHandles(0).xy;
   vGamma = GetZAxis().w;
-  vLightMapTexNum = GetTexNum(0).y;
-  vFogMapTexNum = GetTexNum(0).z;
-  vDetailTexNum = GetTexNum(0).w;
-  vMacroTexNum = GetTexNum(1).x;
-  vBumpMapTexNum = GetTexNum(1).y;  
+  vLightMapTexHandle = GetTexHandles(0).zw;
+  vFogMapTexHandle = GetTexHandles(1).xy;
+  vDetailTexHandle = GetTexHandles(1).zw;
+  vMacroTexHandle = GetTexHandles(2).xy;
+  vBumpMapTexHandle = GetTexHandles(2).zw;  
   vBaseDiffuse = GetDiffuseInfo().x;
   vBaseAlpha = GetDiffuseInfo().z;
   vBumpMapSpecular = GetBumpMapInfo().y;
@@ -157,8 +156,8 @@ void main(void)
   vDistanceFogInfo = GetDistanceFogInfo();
   vDistanceFogColor = GetDistanceFogColor();
   vDistanceFogMode = GetDistanceFogMode();
-  vEnviroMapTexNum = GetTexNum(1).z;
-  vHeightMapTexNum = GetTexNum(1).w;
+  vEnviroMapTexHandle = GetTexHandles(3).xy;
+  vHeightMapTexHandle = GetTexHandles(3).zw;
 )";
 #endif
 
@@ -333,14 +332,14 @@ in vec2 vFogMapCoords;
 in vec3 vTangentViewPos;
 in vec3 vTangentFragPos;
 
-flat in uint vTexNum;
-flat in uint vLightMapTexNum;
-flat in uint vFogMapTexNum;
-flat in uint vDetailTexNum;
-flat in uint vMacroTexNum;
-flat in uint vBumpMapTexNum;
-flat in uint vEnviroMapTexNum;
-flat in uint vHeightMapTexNum;
+flat in uvec2 vTexHandle;
+flat in uvec2 vLightMapTexHandle;
+flat in uvec2 vFogMapTexHandle;
+flat in uvec2 vDetailTexHandle;
+flat in uvec2 vMacroTexHandle;
+flat in uvec2 vBumpMapTexHandle;
+flat in uvec2 vEnviroMapTexHandle;
+flat in uvec2 vHeightMapTexHandle;
 flat in uint vDrawFlags;
 flat in uint vTextureFormat;
 flat in uint vPolyFlags;
@@ -417,13 +416,13 @@ vec3 hsv2rgb(vec3 c)
 
 #if ENGINE_VERSION==227
 	Out << R"(
-vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float parallaxHeight)
+vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float parallaxHeight)
 {
 )";
 	if (GL->ParallaxVersion == Parallax_Basic) // very basic implementation
 	{
 		Out << R"(
-  float height = GetTexel(TexNum, Texture7, ptexCoords).r;
+  float height = GetTexel(TexHandle, Texture7, ptexCoords).r;
   return ptexCoords - viewDir.xy * (height * 0.1);
 }
 )";
@@ -447,12 +446,12 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
   // get initial values
   vec2  currentTexCoords = ptexCoords;
   float currentDepthMapValue = 0.0;
-  currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r;
+  currentDepthMapValue = GetTexel(TexHandle, Texture7, currentTexCoords).r;
 
   while (currentLayerDepth < currentDepthMapValue)
   {
     currentTexCoords -= deltaTexCoords; // shift texture coordinates along direction of P
-    currentDepthMapValue = GetTexel(TexNum, Texture7, currentTexCoords).r; // get depthmap value at current texture coordinates
+    currentDepthMapValue = GetTexel(TexHandle, Texture7, currentTexCoords).r; // get depthmap value at current texture coordinates
     currentLayerDepth += layerDepth; // get depth of next layer
   }
 
@@ -460,7 +459,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
 
   // get depth after and before collision for linear interpolation
   float afterDepth = currentDepthMapValue - currentLayerDepth;
-  float beforeDepth = GetTexel(TexNum, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;
+  float beforeDepth = GetTexel(TexHandle, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;
 
   // interpolation of texture coordinates
   float weight = afterDepth / (afterDepth - beforeDepth);
@@ -481,14 +480,14 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
   float currentLayerHeight = 0.0; // depth of current layer
   vec2 dtex = vParallaxScale * viewDir.xy / viewDir.z / numLayers; // shift of texture coordinates for each iteration
   vec2 currentTexCoords = ptexCoords; // current texture coordinates
-  float heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r; // depth from heightmap
+  float heightFromTexture = GetTexel(TexHandle, Texture7, currentTexCoords).r; // depth from heightmap
 
   // while point is above surface
   while (heightFromTexture > currentLayerHeight)
   {
     currentLayerHeight += layerHeight; // go to the next layer
     currentTexCoords -= dtex; // shift texture coordinates along V
-    heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r; // new depth from heightmap
+    heightFromTexture = GetTexel(TexHandle, Texture7, currentTexCoords).r; // new depth from heightmap
   }
 
   ///////////////////////////////////////////////////////////
@@ -509,7 +508,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uint TexNum, out float paral
     deltaHeight /= 2.0;
  
     // new depth from heightmap
-    heightFromTexture = GetTexel(TexNum, Texture7, currentTexCoords).r;
+    heightFromTexture = GetTexel(TexHandle, Texture7, currentTexCoords).r;
 
     // shift along or agains vector V
     if (heightFromTexture > currentLayerHeight) // below the surface
@@ -567,7 +566,7 @@ if(dot(vec3(0, 0, 1), L) > 0)
   // current parameters
   float currentLayerHeight = initialHeight - layerHeight;
   vec2 currentTexCoords = initialTexCoord + texStep;
-  float heightFromTexture = GetTexel(vMacroTexNum, Texture7, currentTexCoords).r;
+  float heightFromTexture = GetTexel(vMacroTexHandle, Texture7, currentTexCoords).r;
 
   int stepIndex = 1;
 
@@ -586,7 +585,7 @@ if(dot(vec3(0, 0, 1), L) > 0)
     stepIndex += 1;
     currentLayerHeight -= layerHeight;
     currentTexCoords += texStep;
-    heightFromTexture = GetTexel(vMacroTexNum, Texture7, currentTexCoords).r;
+    heightFromTexture = GetTexel(vMacroTexHandle, Texture7, currentTexCoords).r;
   }
 
   // Shadowing factor should be 1 if there were no points under the surface
@@ -630,7 +629,7 @@ void main(void)
   if ((vDrawFlags & )" << DF_HeightMap << R"(u) == )" << DF_HeightMap << R"(u)
   {
     // get new texture coordinates from Parallax Mapping
-    texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexNum, parallaxHeight);
+    texCoords = ParallaxMapping(vTexCoords, TangentViewDir, vHeightMapTexHandle, parallaxHeight);
     //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
     //discard; // texCoords = vTexCoords;
   }
@@ -639,7 +638,7 @@ void main(void)
 	}
 
 	Out << R"(
-  vec4 Color = GetTexel(vTexNum, Texture0, texCoords.xy);
+  vec4 Color = GetTexel(vTexHandle, Texture0, texCoords.xy);
 
   if (vBaseDiffuse > 0.0)
     Color *= vBaseDiffuse; // Diffuse factor.
@@ -706,7 +705,7 @@ void main(void)
 		Out << R"(
   if ((vDrawFlags & )" << DF_LightMap << R"(u) == )" << DF_LightMap << R"(u)
   {
-    LightColor = GetTexel(vLightMapTexNum, Texture1, vLightMapCoords);
+    LightColor = GetTexel(vLightMapTexHandle, Texture1, vLightMapCoords);
     // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
     LightColor.rgb = LightColor.)" << LightColorOrder << R"( * ()" << (GL->OneXBlending ? 1.f : 2.f) << R"(* 255.0 / 127.0);
     LightColor.a = 1.0;
@@ -737,7 +736,7 @@ void main(void)
       bNear = clamp(0.65 - NearZ, 0.0, 1.0);
       if (bNear > 0.0)
       {
-        DetailTexColor = GetTexel(vDetailTexNum, Texture3, vDetailTexCoords * DetailScale);
+        DetailTexColor = GetTexel(vDetailTexHandle, Texture3, vDetailTexCoords * DetailScale);
         vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
         hsvDetailTex.b += (DetailTexColor.r - 0.1);
         hsvDetailTex = hsv2rgb(hsvDetailTex);
@@ -756,7 +755,7 @@ void main(void)
 		Out << R"(
   if ((vDrawFlags & )" << DF_MacroTexture << R"(u) == )" << DF_MacroTexture << R"(u)
   {    
-    vec4 MacrotexColor = GetTexel(vMacroTexNum, Texture4, vMacroTexCoords); 
+    vec4 MacrotexColor = GetTexel(vMacroTexHandle, Texture4, vMacroTexCoords); 
     if ((vPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
     {
       if (MacrotexColor.a < 0.5)
@@ -789,7 +788,7 @@ void main(void)
   if ((vDrawFlags & )" << DF_BumpMap << R"(u) == )" << DF_BumpMap << R"(u)
   {    
     //normal from normal map
-    vec3 TextureNormal = normalize(GetTexel(vBumpMapTexNum, Texture5, texCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
+    vec3 TextureNormal = normalize(GetTexel(vBumpMapTexHandle, Texture5, texCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
     vec3 BumpColor;
     vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 
@@ -844,7 +843,7 @@ void main(void)
 	Out << R"(
   vec4 FogColor = vec4(0.0);
   if ((vDrawFlags & )" << DF_FogMap << R"(u) == )" << DF_FogMap << R"(u)
-    FogColor = GetTexel(vFogMapTexNum, Texture2, vFogMapCoords) * 2.0;
+    FogColor = GetTexel(vFogMapTexHandle, Texture2, vFogMapCoords) * 2.0;
 
   // EnvironmentMap
 )";
@@ -853,7 +852,7 @@ void main(void)
 	Out << R"(
   if ((vDrawFlags & )" << DF_EnvironmentMap << R"(u) == )" << DF_EnvironmentMap << R"(u)
   {    
-    vec4 EnvironmentColor = GetTexel(vEnviroMapTexNum, Texture6, vEnvironmentTexCoords);
+    vec4 EnvironmentColor = GetTexel(vEnviroMapTexHandle, Texture6, vEnvironmentTexCoords);
     if ((vPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
     {
       if (EnvironmentColor.a < 0.5)
@@ -975,7 +974,7 @@ void main(void)
 	Out << R"(
 void main(void)
 {
-  vec4 Color = GetTexel(vTexNum, Texture0, vTexCoords);
+  vec4 Color = GetTexel(vTexHandle, Texture0, vTexCoords);
 
   if (vBaseDiffuse > 0.0)
     Color *= vBaseDiffuse; // Diffuse factor.
@@ -983,7 +982,7 @@ void main(void)
   if (vBaseAlpha > 0.0)
     Color.a *= vBaseAlpha; // Alpha.
 
-  //FragColor = GetTexel(vTexNum, Texture0, vTexCoords);
+  //FragColor = GetTexel(vTexHandle, Texture0, vTexCoords);
   FragColor = Color;
 }
 )";

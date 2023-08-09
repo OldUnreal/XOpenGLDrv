@@ -100,7 +100,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 		// Check if global GL state will change
         WillBlendStateChange(DrawCallParams.BlendPolyFlags, PolyFlags) || // orig polyflags here as intended!
 		// Check if bound sampler state will change
-        RenDev->WillTextureStateChange(0, Info, PolyFlags, DrawCallParams.TexNum) ||
+        RenDev->WillTextureStateChange(0, Info, PolyFlags) ||
         // Check if we have space to batch more data
         !CanBuffer
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -131,10 +131,10 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 	const auto& TexInfo = RenDev->TexInfo[0];
 	DrawCallParams.DrawColor	= DrawColor;
 	DrawCallParams.HitColor		= FPlaneToVec4(RenDev->HitColor);
-	DrawCallParams.TexNum		= TexInfo.TexNum;
 	DrawCallParams.PolyFlags	= NextPolyFlags;
 	DrawCallParams.HitTesting	= bHitTesting;
 	DrawCallParams.Gamma		= RenDev->GetViewportGamma(Frame->Viewport);
+	StoreTexHandle(0, DrawCallParams.TexHandles, TexInfo.BindlessTexHandle);
 	
 	if (RenDev->UsingShaderDrawParameters)
 		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));

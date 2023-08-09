@@ -19,14 +19,15 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 {
 	{"vec4", "DrawColor", 0},
 	{"vec4", "HitColor", 0},
-	{"uint", "TexNum", 0},
 	{"uint", "PolyFlags", 0},
 	{"uint", "BlendPolyFlags", 0},
 	{"uint", "HitTesting", 0},
 	{"uint", "DepthTested", 0},
 	{"uint", "Padding0", 0},
 	{"uint", "Padding1", 0},
+	{"uint", "Padding2", 0},
 	{"float", "Gamma", 0},
+	{"uvec4", "TexHandles", 0},
 	{ nullptr, nullptr, 0}
 };
 
@@ -40,7 +41,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::EmitHeader(GLuint ShaderType, UXOpen
 static void EmitInterfaceBlockData(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
 	Out << R"(
-  flat uint TexNum;
+  flat uvec2 TexHandle;
   flat uint PolyFlags;
   flat float Gamma;
   flat vec4 DrawColor;
@@ -103,7 +104,7 @@ void main(void)
 	}
 
 	Out << R"(
-  Out.TexNum = GetTexNum();
+  Out.TexHandle = GetTexHandles().xy;
   Out.PolyFlags = GetPolyFlags();
   Out.Gamma = GetGamma();
   Out.DrawColor = GetDrawColor();
@@ -169,7 +170,7 @@ void main()
 
   Out.PolyFlags = In[0].PolyFlags;
   Out.Gamma = In[0].Gamma;
-  Out.TexNum = In[0].TexNum;
+  Out.TexHandle = In[0].TexHandle;
   Out.DrawColor = In[0].DrawColor;
   Out.TexCoords = In[0].TexCoords;
 )";
@@ -273,7 +274,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::BuildFragmentShader(GLuint ShaderTyp
 void main(void)
 {	
   vec4 TotalColor;
-  vec4 Color = GetTexel(In.TexNum, Texture0, In.TexCoords.xy);
+  vec4 Color = GetTexel(In.TexHandle, Texture0, In.TexCoords.xy);
 
   // Handle PF_Masked.
   if ((In.PolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)

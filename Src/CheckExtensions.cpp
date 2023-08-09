@@ -53,7 +53,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
         {
             GWarn->Logf(TEXT("XOpenGL: GL_IMG_bindless_texture not found. UseBindlessTextures disabled"));
             UseBindlessTextures = false;
-            UseBindlessLightmaps = false;
         }
     }
 	//usually we would assume this extension to be supported in general, but it seems not every driver really does in ES mode. (RasPi, AMD Radeon R5 Graphics, ???)
@@ -78,10 +77,8 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
         else
         {
-            GWarn->Logf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. UsePersistentBuffers and UseBindlessTextures disabled."));
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_buffer_storage not found. UsePersistentBuffers disabled."));
             UsePersistentBuffers = false;
-            UseBindlessTextures = false;
-            UseBindlessLightmaps = false;
         }
     }
 
@@ -121,7 +118,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
         {
             GWarn->Logf(TEXT("XOpenGL: GL_ARB_bindless_texture not found. UseBindlessTextures disabled."));
             UseBindlessTextures = false;
-            UseBindlessLightmaps = false;
         }
     }
 
