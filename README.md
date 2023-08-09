@@ -225,21 +225,6 @@ other games:
   does not support bindless textures, XOpenGL will automatically disable this
   option while the game/editor is running.
 
-* UseBindlessLightmaps [Default: True, Type: Boolean, Supported Games: Unreal
-  227, Unreal Tournament 469]: This setting determines whether lightmaps should
-  be bound to texture units while rendering. Setting this option to false can
-  increase rendering performance on older GPUs that only support a limited
-  number of bindless textures. For any reasonably modern GPU, we recommend
-  keeping this option enabled. This setting has no effect if UseBindlessTextures
-  is set to false.
-
-* MaxBindlessTextures [Default: 0, Type: Integer, Supported Games: Unreal 227,
-  Unreal Tournament 469]: Sets the maximum number of bindless textures XOpenGL
-  is allowed to store in GPU memory at any given time. If set to 0, XOpenGL
-  automatically determines how many bindless textures it can store on the GPU
-  based on the GPU's capabilities (i.e., based on its support for SSBOs, int64
-  type support in GLSL, and the maximum uniform buffer size). 
-
 * UseShaderDrawParameters [Default: True, Type: Boolean, Supported Games: Unreal
   227, Unreal Tournament 469]: If set to true, XOpenGL will attempt to pass the
   parameters for every draw call in a shader storage buffer object (SSBO). This
