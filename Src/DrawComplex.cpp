@@ -93,8 +93,8 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		(Surface.FogMap && RenDev->WillTextureStateChange(2, *Surface.FogMap, NextPolyFlags)) ||
 		(Surface.DetailTexture && RenDev->DetailTextures && RenDev->WillTextureStateChange(3, *Surface.DetailTexture, NextPolyFlags)) ||
 		(Surface.MacroTexture && RenDev->MacroTextures && RenDev->WillTextureStateChange(4, *Surface.MacroTexture, NextPolyFlags)) ||
-		(Surface.BumpMap && RenDev->BumpMaps && RenDev->WillTextureStateChange(5, *Surface.BumpMap, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
+		(Surface.BumpMap && RenDev->BumpMaps && RenDev->WillTextureStateChange(5, *Surface.BumpMap, NextPolyFlags)) ||
 		(Surface.EnvironmentMap && RenDev->EnvironmentMaps && RenDev->WillTextureStateChange(6, *Surface.EnvironmentMap, NextPolyFlags)) ||
 		(Surface.HeightMap && RenDev->WillTextureStateChange(7, *Surface.HeightMap, NextPolyFlags)) ||
 #endif
