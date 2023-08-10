@@ -128,7 +128,7 @@ BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info,
 		return TRUE;
 
 	// Ditto. We're using the texture and its data is stale => stop batching
-	if (Result && IsResidentBindlessTexture && IsTextureDataStale && (Multi == -1 || TexInfo[Multi].BindlessTexHandle == Result->BindlessTexHandle))
+	if (Result && IsResidentBindlessTexture && IsTextureDataStale)
 		return TRUE;
 
 	// We have to upload and will have to bind to a TMU => stop batching

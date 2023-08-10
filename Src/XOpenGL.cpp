@@ -127,7 +127,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	// OpenGL 4
-	// new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
+	//new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
 	
@@ -472,8 +472,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
 
-	UsingPersistentBuffersTile = false;
-	UsingPersistentBuffersComplex = false;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
+	UsingPersistentBuffersTile = UsingPersistentBuffers;
+	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
 
 	// Init shaders

@@ -371,7 +371,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, TileParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWTILE_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(true, MAX_DRAWTILE_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{

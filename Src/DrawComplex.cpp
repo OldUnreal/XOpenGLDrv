@@ -91,8 +91,12 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		RenDev->WillTextureStateChange(0, *Surface.Texture, NextPolyFlags) ||
 		(Surface.LightMap && RenDev->WillTextureStateChange(1, *Surface.LightMap, NextPolyFlags)) ||
 		(Surface.FogMap && RenDev->WillTextureStateChange(2, *Surface.FogMap, NextPolyFlags)) ||
+		(Surface.DetailTexture && RenDev->DetailTextures && RenDev->WillTextureStateChange(3, *Surface.DetailTexture, NextPolyFlags)) ||
+		(Surface.MacroTexture && RenDev->MacroTextures && RenDev->WillTextureStateChange(4, *Surface.MacroTexture, NextPolyFlags)) ||
+		(Surface.BumpMap && RenDev->BumpMaps && RenDev->WillTextureStateChange(5, *Surface.BumpMap, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
 		(Surface.EnvironmentMap && RenDev->EnvironmentMaps && RenDev->WillTextureStateChange(6, *Surface.EnvironmentMap, NextPolyFlags)) ||
+		(Surface.HeightMap && RenDev->WillTextureStateChange(7, *Surface.HeightMap, NextPolyFlags)) ||
 #endif
 		// Check if we have room left in the multi-draw array
 		DrawBuffer.IsFull())
@@ -322,7 +326,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, ComplexParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(true, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{

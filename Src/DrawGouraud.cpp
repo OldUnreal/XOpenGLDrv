@@ -532,7 +532,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, GouraudParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(false, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(true, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{

@@ -82,22 +82,22 @@
 #define MAX_FRAME_RECURSION 4
 
 // maximum number of surfaces in one drawcomplex multi-draw
-#define MAX_DRAWCOMPLEX_BATCH 1024
+#define MAX_DRAWCOMPLEX_BATCH 4 * 256
 // maximum number of polys in one drawgouraud multi-draw
-#define MAX_DRAWGOURAUD_BATCH 16384
+#define MAX_DRAWGOURAUD_BATCH 64 * 256
 // maximum number of tiles in one drawtile multi-draw
-#define MAX_DRAWTILE_BATCH 16384
+#define MAX_DRAWTILE_BATCH 64 * 256
 // maximum number of lines/triangles in one drawsimple multi-draw
-#define MAX_DRAWSIMPLE_BATCH 16384
+#define MAX_DRAWSIMPLE_BATCH 64 * 256
 
 // stijn: this absolutely needs to be dynamic or stream draw on macOS
 #define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
 
-#define DRAWSIMPLE_SIZE 16 * 1024
-#define DRAWTILE_SIZE 16 * 1024
-#define DRAWCOMPLEX_SIZE 8 * 32 * MAX_DRAWCOMPLEX_BATCH
+#define DRAWSIMPLE_SIZE 64 * 256
+#define DRAWTILE_SIZE 64 * 256
+#define DRAWCOMPLEX_SIZE 256 * MAX_DRAWCOMPLEX_BATCH
 #define DRAWGOURAUDPOLY_SIZE 256 * 1024
-#define NUMBUFFERS 6
+#define NUMBUFFERS 3
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 # define MAX_LIGHTS 256
@@ -807,7 +807,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Returns true if Index points to a new sub-buffer after this call
 		bool Rotate(bool Wait)
 		{
-			Index		= (Index + 1) % SubBufferCount;
+			Index = (Index + 1) % SubBufferCount;
 			IndexOffset = 0;
 			BeginOffset = Index * SubBufferSize;
 			if (Wait)
@@ -815,6 +815,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (SubBufferCount > 1)
 			{
+				if (bBound && BufferType != GL_ARRAY_BUFFER)
+				{
+					Unbind();
+					Bind();
+				}
+
 				bInputLayoutCreated = false;
 				return true;
 			}
@@ -850,6 +856,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateSSBOBuffer(UXOpenGLRenderDevice* RenDev, const GLuint BindingIndex)
 		{
 			BindingPoint = &RenDev->SSBOPoint;
+			this->BindingIndex = BindingIndex;
 			glGenBuffers(1, &BufferObjectName);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName);
 			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName);
@@ -860,6 +867,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateUBOBuffer(UXOpenGLRenderDevice* RenDev, const GLuint BindingIndex)
 		{
 			BindingPoint = &RenDev->UBOPoint;
+			this->BindingIndex = BindingIndex;
 			glGenBuffers(1, &BufferObjectName);
 			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName);
 			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName);
@@ -892,12 +900,20 @@ class UXOpenGLRenderDevice : public URenderDevice
 				(*BindingPoint)->Unbind();
 
 			if (BufferType == GL_ARRAY_BUFFER)
+			{
 				glBindVertexArray(VaoObjectName);
-			glBindBuffer(BufferType, BufferObjectName);
+				glBindBuffer(BufferType, BufferObjectName);
+			}
+			else
+			{
+				if (bPersistentBuffer)
+					glBindBufferRange(BufferType, BindingIndex, BufferObjectName, Index * SubBufferSize * sizeof(T), SubBufferSize * sizeof(T));
+				else
+					glBindBuffer(BufferType, BufferObjectName);
+			}
 			bBound = true;
 
 			*BindingPoint = this;
-
 		}
 
 		void Unbind()
@@ -915,16 +931,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			return bBound;
 		}
+
 		bool IsInputLayoutCreated() const
 		{
 			return bInputLayoutCreated;
 		}
+
 		void SetInputLayoutCreated()
 		{
 			bInputLayoutCreated = true;
 		}
 
-		//
 		void RebindBufferBase(const GLuint BindingIndex)
 		{
 			Bind();
@@ -943,7 +960,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void BufferData(bool Invalidate, bool Reinitialize, GLenum ExpectedUsage)
 		{
 			if (bPersistentBuffer)
+			{
+				glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 				return;
+			}
 
 			if (Invalidate)
 				glInvalidateBufferData(BufferObjectName);
@@ -1040,7 +1060,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	private:
 		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
 		{
-			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT;
 
 			SubBufferSize = BufferSize;
 			BufferType = Target;	
@@ -1049,13 +1069,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 			bPersistentBuffer = Persistent;
 			if (Persistent)
 			{
-				SubBufferCount = 1; // TODO: Put multi-buffering back in
+				SubBufferCount = NUMBUFFERS;
 				Sync = new GLsync [SubBufferCount];
 				memset(Sync, 0, sizeof(GLsync) * SubBufferCount);
 
 				glBindBuffer(Target, BufferObjectName);
 				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), 0, PersistentBufferFlags);
-				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize, PersistentBufferFlags));
+				if (BufferType != GL_ARRAY_BUFFER)
+					glBindBufferRange(Target, BindingIndex, BufferObjectName, 0, SubBufferSize * sizeof(T));
+				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
 				glBindBuffer(Target, 0);
 			}
 			else
@@ -1089,6 +1111,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		bool   bInputLayoutCreated{};   // 
 		GLenum BufferType{};            // GL target
 		BoundBuffer** BindingPoint{};   // The binding point that needs to be unbound before we can bind this buffer
+		GLuint BindingIndex{};
 	};
 
 	//
