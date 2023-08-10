@@ -95,8 +95,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::DrawTile(FSceneNode* Frame, FTexture
 		!DrawBuffer.IsFull();
 
 	// Check if the draw call parameters will change
-	if ((!RenDev->UsingShaderDrawParameters &&
-		(DrawCallParams.DrawColor != DrawColor || DrawCallParams.PolyFlags != NextPolyFlags || DrawCallParams.HitTesting != bHitTesting)) ||
+	if ((DrawCallParams.DrawColor != DrawColor || DrawCallParams.PolyFlags != NextPolyFlags || DrawCallParams.HitTesting != bHitTesting) ||
 		// Check if global GL state will change
         WillBlendStateChange(DrawCallParams.BlendPolyFlags, PolyFlags) || // orig polyflags here as intended!
 		// Check if bound sampler state will change
@@ -371,12 +370,12 @@ void UXOpenGLRenderDevice::DrawTileProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, TileParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(true, MAX_DRAWTILE_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, MAX_DRAWTILE_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
 		ParametersBuffer.GenerateUBOBuffer(RenDev, TileParametersIndex);
-		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
 	}
 }

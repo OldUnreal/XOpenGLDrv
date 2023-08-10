@@ -140,8 +140,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 	DrawFlags NoNearZFlag = NoNearZ ? DF_NoNearZ : DF_None;
 
 	// Check if the uniforms will change
-	if (!RenDev->UsingShaderDrawParameters ||
-		// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
+	if (// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
 		((DrawCallParams.PolyFlags^PolyFlags) & PF_ForceViewZone) ||
 		// Check if the blending mode will change
 		RenDev->WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
@@ -532,12 +531,12 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, GouraudParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(true, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, MAX_DRAWGOURAUD_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
 		ParametersBuffer.GenerateUBOBuffer(RenDev, GouraudParametersIndex);
-		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
 	}
 }

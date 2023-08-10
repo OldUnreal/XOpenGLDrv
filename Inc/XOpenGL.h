@@ -551,6 +551,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	UsingPersistentBuffersGouraud;
 	bool	UsingPersistentBuffersComplex;
 	bool	UsingPersistentBuffersTile;
+	bool	UsingPersistentBuffersDrawcallParams;
 	bool	UsingShaderDrawParameters;
 	bool    UsingGeometryShaders;
 	static INT LogLevel; // Verbosity level of the GL debug logging
@@ -961,7 +962,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			if (bPersistentBuffer)
 			{
-				glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+				//glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 				return;
 			}
 
@@ -1060,14 +1061,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 	private:
 		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
 		{
-			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT;
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 
 			SubBufferSize = BufferSize;
 			BufferType = Target;	
 				
 			// Allocate and pin buffers
 			bPersistentBuffer = Persistent;
-			if (Persistent)
+			if (bPersistentBuffer)
 			{
 				SubBufferCount = NUMBUFFERS;
 				Sync = new GLsync [SubBufferCount];

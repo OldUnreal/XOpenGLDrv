@@ -83,8 +83,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
 
 	// Check if the uniforms will change
-	if (!RenDev->UsingShaderDrawParameters || 
-		DrawCallParams.HitTesting != RenDev->HitTesting() ||
+	if (DrawCallParams.HitTesting != RenDev->HitTesting() ||
 		// Check if the blending mode will change
 		WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
 		// Check if the surface textures will change
@@ -326,12 +325,12 @@ void UXOpenGLRenderDevice::DrawComplexProgram::MapBuffers()
 	if (RenDev->UsingShaderDrawParameters)
 	{
 		ParametersBuffer.GenerateSSBOBuffer(RenDev, ComplexParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(true, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
 	}
 	else
 	{
 		ParametersBuffer.GenerateUBOBuffer(RenDev, ComplexParametersIndex);
-		ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
+		ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 		ParametersBuffer.Advance(1);
 	}
 }

@@ -188,7 +188,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
-	UseShaderDrawParameters = 1;
+	UseShaderDrawParameters = 0; // setting this to true slightly improves performance on nvidia cards
 #else
 	UseBindlessTextures = 0;
 	UseShaderDrawParameters = 0;
@@ -475,6 +475,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UsingPersistentBuffersTile = UsingPersistentBuffers;
 	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
+	UsingPersistentBuffersDrawcallParams = false; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
 
 	// Init shaders
 	InitShaders();

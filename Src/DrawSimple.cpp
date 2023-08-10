@@ -334,7 +334,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::MapBuffers()
 	}
 
 	ParametersBuffer.GenerateUBOBuffer(RenDev, SimpleParametersIndex);
-	ParametersBuffer.MapUBOBuffer(false, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
+	ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
 	ParametersBuffer.Advance(1);
 }
 
