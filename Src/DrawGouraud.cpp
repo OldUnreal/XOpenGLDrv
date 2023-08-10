@@ -192,6 +192,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::PrepareDrawCall(FSceneNode* Frame
 	RenDev->SetTexture(0, Info, DrawCallParams.PolyFlags, 0, DF_DiffuseTexture);
 	DrawCallParams.DiffuseInfo = glm::vec4(RenDev->TexInfo[0].UMult, RenDev->TexInfo[0].VMult, Info.Texture ? Info.Texture->Diffuse : 1.f, TextureAlpha);
 	DrawCallParams.DrawFlags = DF_DiffuseTexture | NoNearZFlag;
+	StoreTexHandle(0, DrawCallParams.TexHandles, RenDev->TexInfo[0].BindlessTexHandle);
 
 	DrawCallParams.DetailMacroInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	if (Info.Texture && Info.Texture->DetailTexture && RenDev->DetailTextures)
