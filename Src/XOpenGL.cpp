@@ -515,8 +515,7 @@ void UXOpenGLRenderDevice::PostEditChange()
 
 	// stijn: We shouldn't re-check extensions here unless we recreate the entire renderer!!
 	//CheckExtensions();
-	ResetShaders();
-	InitShaders();
+	RecompileShaders();
 
 	Flush(UsePrecache);
 	unguard;

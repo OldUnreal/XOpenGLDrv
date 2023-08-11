@@ -821,6 +821,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 				{
 					Unbind();
 					Bind();
+					glBindBufferBase(BufferType, BindingIndex, BufferObjectName[Index]);
 				}
 
 				bInputLayoutCreated = false;
@@ -911,10 +912,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 				if (bPersistentBuffer)
 					glBindBufferRange(BufferType, BindingIndex, BufferObjectName[0], Index * SubBufferSize * sizeof(T), SubBufferSize * sizeof(T));
 				else
-				{
 					glBindBuffer(BufferType, BufferObjectName[Index]);
-					glBindBufferBase(BufferType, BindingIndex, BufferObjectName[Index]);
-				}
 			}
 			bBound = true;
 
@@ -1221,6 +1219,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	ShaderProgram* Shaders[Max_Prog]{};
 	void ResetShaders();
+	void RecompileShaders();
 	void InitShaders();
 	INT PrevProgram;
 	INT ActiveProgram;

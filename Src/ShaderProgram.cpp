@@ -340,10 +340,8 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 			debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
 			delete[] compiler_log;
 		}
-		else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
+		else debugf(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
 	}
-	CHECK_GL_ERROR();
-
 	return Result;
 	unguard;
 }
@@ -372,7 +370,7 @@ bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram()
 		debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderName, appFromAnsi(linker_log));
 		delete[] linker_log;
 	}
-	else debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderName);
+	else debugf(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderName);
 
 	CHECK_GL_ERROR();
 	return Result;
@@ -382,6 +380,8 @@ bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram()
 void UXOpenGLRenderDevice::InitShaders()
 {
 	guard(UXOpenGLRenderDevice::InitShaders);
+
+	CHECK_GL_ERROR();
 
 	Shaders[No_Prog]      = new NoProgram(TEXT("No"), this);
 	Shaders[Simple_Prog]  = new DrawSimpleProgram(TEXT("DrawSimple"), this);
@@ -395,7 +395,6 @@ void UXOpenGLRenderDevice::InitShaders()
 		GlobalMatricesBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::MatricesIndex);
 		GlobalMatricesBuffer.MapUBOBuffer(false, 1);
 		GlobalMatricesBuffer.Advance(1);
-		CHECK_GL_ERROR();
 	}
 	else
 	{
@@ -451,6 +450,13 @@ void UXOpenGLRenderDevice::ResetShaders()
 {
 	guard(UXOpenGLRenderDevice::ResetShaders);
 
+	if (UBOPoint)
+		UBOPoint->Unbind();
+	if (SSBOPoint)
+		SSBOPoint->Unbind();
+	if (ArrayPoint)
+		ArrayPoint->Unbind();
+
 	UBOPoint = SSBOPoint = ArrayPoint = nullptr;
 	
 	for (const auto Shader: Shaders)
@@ -458,6 +464,18 @@ void UXOpenGLRenderDevice::ResetShaders()
 	memset(Shaders, 0, sizeof(ShaderProgram*) * ARRAY_COUNT(Shaders));
 		
 	unguard;
+}
+
+void UXOpenGLRenderDevice::RecompileShaders()
+{
+	for (const auto Shader : Shaders)
+	{
+		Shader->DeleteShader();
+		Shader->BuildShaderProgram();
+		Shader->ActivateShader();
+		Shader->BindShaderState();
+		Shader->DeactivateShader();
+	}
 }
 
 void UXOpenGLRenderDevice::ShaderProgram::BindShaderState()
@@ -485,7 +503,6 @@ bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderWriterFunc Ve
 	if (GeoShaderFunc)
 		glAttachShader(ShaderProgramObject, GeoShaderObject);
 	glAttachShader(ShaderProgramObject, FragmentShaderObject);
-	CHECK_GL_ERROR();
 
 	if (!LinkShaderProgram())
 		return false;
@@ -510,8 +527,6 @@ void UXOpenGLRenderDevice::ShaderProgram::DeleteShader()
 	glDeleteProgram(ShaderProgramObject);
 
 	ShaderProgramObject = VertexShaderObject = GeoShaderObject = FragmentShaderObject = 0;
-
-	CHECK_GL_ERROR();
 }
 
 UXOpenGLRenderDevice::ShaderProgram::~ShaderProgram()
