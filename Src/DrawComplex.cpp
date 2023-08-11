@@ -83,7 +83,8 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
 
 	// Check if the uniforms will change
-	if (DrawCallParams.HitTesting != RenDev->HitTesting() ||
+	if (!RenDev->UsingShaderDrawParameters ||
+		DrawCallParams.HitTesting != RenDev->HitTesting() ||
 		// Check if the blending mode will change
 		WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
 		// Check if the surface textures will change
