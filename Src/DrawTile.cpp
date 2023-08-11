@@ -250,6 +250,9 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
 			glDrawArrays(GL_TRIANGLES, DrawBuffer.CommandBuffer(i).FirstVertex, DrawBuffer.CommandBuffer(i).Count);
 
+		if (RenDev->UsingShaderDrawParameters)
+			ParametersBuffer.Rotate(false);
+
 		VertBufferES.Lock();
 		VertBufferES.Rotate(Wait);
 	}
@@ -258,24 +261,21 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
 		{
 			glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
-				DrawBuffer.CommandBuffer(i).FirstVertex,
+				DrawBuffer.CommandBuffer(i).FirstVertex + VertBufferCore.BeginOffsetBytes() / sizeof(BufferedVertCore),
 				DrawBuffer.CommandBuffer(i).Count,
 				DrawBuffer.CommandBuffer(i).InstanceCount,
-				DrawBuffer.CommandBuffer(i).BaseInstance
+				DrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
 			);
-		}		
+		}
+
+		if (RenDev->UsingShaderDrawParameters)
+			ParametersBuffer.Rotate(false);
 
 		VertBufferCore.Lock();
 		VertBufferCore.Rotate(Wait);
 	}
 
 	DrawBuffer.Reset();
-
-	if (RenDev->UsingShaderDrawParameters)
-	{
-		ParametersBuffer.Lock();
-		ParametersBuffer.Rotate(Wait);
-	}
 }
 
 void UXOpenGLRenderDevice::DrawTileProgram::CreateInputLayout()
@@ -283,19 +283,17 @@ void UXOpenGLRenderDevice::DrawTileProgram::CreateInputLayout()
 	if (VertBufferES.IsBound())
 	{
 		using Vert = BufferedVertES;
-		const auto BeginOffset = VertBufferES.BeginOffsetBytes();
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset));
-		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, UV)));
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, UV)));
 		VertBufferES.SetInputLayoutCreated();
 	}
 	else
 	{
 		using Vert = BufferedVertCore;
-		const auto BeginOffset = VertBufferCore.BeginOffsetBytes();
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)BeginOffset);
-		glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, TexCoords0)));
-		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, TexCoords1)));
-		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, TexCoords2)));
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
+		glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, TexCoords0)));
+		glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, TexCoords1)));
+		glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, TexCoords2)));
 		VertBufferCore.SetInputLayoutCreated();
 	}
 }
@@ -344,7 +342,6 @@ void UXOpenGLRenderDevice::DrawTileProgram::ActivateShader()
 	}
 
 	ParametersBuffer.Bind();
-	ParametersBuffer.Wait();
 	DrawCallParams.BlendPolyFlags = 0;// RenDev->CurrentPolyFlags | RenDev->CurrentAdditionalPolyFlags;
 	DrawCallParams.PolyFlags = 0;
 }

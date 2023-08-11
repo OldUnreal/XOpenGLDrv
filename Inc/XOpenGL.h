@@ -97,8 +97,7 @@
 #define DRAWTILE_SIZE 64 * 256
 #define DRAWCOMPLEX_SIZE 256 * MAX_DRAWCOMPLEX_BATCH
 #define DRAWGOURAUDPOLY_SIZE 256 * 1024
-#define NUMPERSISTENTBUFFERS 3
-#define NUMNONPERSISTENTBUFFERS 1
+#define NUMBUFFERS 16
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 # define MAX_LIGHTS 256
@@ -552,6 +551,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	UsingPersistentBuffersGouraud;
 	bool	UsingPersistentBuffersComplex;
 	bool	UsingPersistentBuffersTile;
+	bool	UsingPersistentBuffersSimple;
 	bool	UsingPersistentBuffersDrawcallParams;
 	bool	UsingShaderDrawParameters;
 	bool    UsingGeometryShaders;
@@ -811,22 +811,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			Index = (Index + 1) % SubBufferCount;
 			IndexOffset = 0;
-			BeginOffset = bPersistentBuffer ? Index * SubBufferSize : 0;
+			BeginOffset = Index * SubBufferSize;
 			if (Wait)
 				this->Wait();
 
 			if (SubBufferCount > 1)
-			{
-				if (bBound)
-				{
-					Unbind();
-					Bind();
-					glBindBufferBase(BufferType, BindingIndex, BufferObjectName[Index]);
-				}
-
-				bInputLayoutCreated = false;
 				return true;
-			}
 			return false;
 		}
 
@@ -851,7 +841,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateVertexBuffer(UXOpenGLRenderDevice* RenDev)
 		{
 			BindingPoint = &RenDev->ArrayPoint;
-			glGenBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
+			glGenBuffers(1, &BufferObjectName);
 			glGenVertexArrays(1, &VaoObjectName);
 		}
 
@@ -860,9 +850,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			BindingPoint = &RenDev->SSBOPoint;
 			this->BindingIndex = BindingIndex;
-			glGenBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName[0]);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName[0]);
+			glGenBuffers(1, &BufferObjectName);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 		}
 
@@ -871,9 +861,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			BindingPoint = &RenDev->UBOPoint;
 			this->BindingIndex = BindingIndex;
-			glGenBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
-			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName[0]);
-			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName[0]);
+			glGenBuffers(1, &BufferObjectName);
+			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName);
+			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName);
 			glBindBuffer(GL_UNIFORM_BUFFER, 0);
 		}
 
@@ -903,19 +893,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 				(*BindingPoint)->Unbind();
 
 			if (BufferType == GL_ARRAY_BUFFER)
-			{
 				glBindVertexArray(VaoObjectName);
-				glBindBuffer(BufferType, BufferObjectName[Index]);
-			}
-			else
-			{
-				if (bPersistentBuffer)
-					glBindBufferRange(BufferType, BindingIndex, BufferObjectName[0], Index * SubBufferSize * sizeof(T), SubBufferSize * sizeof(T));
-				else
-					glBindBuffer(BufferType, BufferObjectName[Index]);
-			}
-			bBound = true;
+			glBindBuffer(BufferType, BufferObjectName);
 
+			bBound = true;
 			*BindingPoint = this;
 		}
 
@@ -948,7 +929,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void RebindBufferBase(const GLuint BindingIndex)
 		{
 			Bind();
-			glBindBufferBase(BufferType, BindingIndex, BufferObjectName[Index]);
+			glBindBufferBase(BufferType, BindingIndex, BufferObjectName);
 			Unbind();
 		}
 
@@ -963,12 +944,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void BufferData(bool Invalidate, bool Reinitialize, GLenum ExpectedUsage)
 		{
 			if (bPersistentBuffer)
+			{
+				//glMemoryBarrier(GL_ALL_BARRIER_BITS);
 				return;
+			}
 
 			if (Invalidate)
-				glInvalidateBufferData(BufferObjectName[Index]);
-
-			//glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+				glInvalidateBufferData(BufferObjectName);
 
 			if (Reinitialize
 #if defined(__LINUX_ARM__) || MACOSX
@@ -979,8 +961,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			else
 				glBufferSubData(BufferType, 0, SizeBytes(), Buffer);
 			CHECK_GL_ERROR();
-
-			//glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 		}
 
 		// Unmaps and deallocates the buffer
@@ -989,18 +969,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (bPersistentBuffer)
 			{
 				GLint IsMapped;
-				glGetNamedBufferParameteriv(BufferObjectName[0], GL_BUFFER_MAPPED, &IsMapped);
+				glGetNamedBufferParameteriv(BufferObjectName, GL_BUFFER_MAPPED, &IsMapped);
 				if (IsMapped == GL_TRUE)
-					glUnmapNamedBuffer(BufferObjectName[0]);
-				if (BufferObjectName[0])
-					glDeleteBuffers(NUMPERSISTENTBUFFERS, BufferObjectName);
+					glUnmapNamedBuffer(BufferObjectName);
 			}
 			else
 			{
 				delete[] Buffer;
-				if (BufferObjectName[0])
-					glDeleteBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
 			}
+			if (BufferObjectName)
+				glDeleteBuffers(1, &BufferObjectName);
 			Buffer = nullptr;
 
 			if (VaoObjectName)
@@ -1011,7 +989,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			bBound = bInputLayoutCreated = false;
 			BindingPoint = nullptr;
 			IndexOffset = Index = BeginOffset = 0;
-			BufferObjectName[0] = VaoObjectName = 0;
+			BufferObjectName = VaoObjectName = 0;
 		}
 
 		// Inserts a fence that makes the GPU signal the active sub-buffer when
@@ -1075,28 +1053,21 @@ class UXOpenGLRenderDevice : public URenderDevice
 			bPersistentBuffer = Persistent;
 			if (bPersistentBuffer)
 			{
-				SubBufferCount = NUMPERSISTENTBUFFERS;
+				SubBufferCount = NUMBUFFERS;
 				Sync = new GLsync [SubBufferCount];
 				memset(Sync, 0, sizeof(GLsync) * SubBufferCount);
 
-				glBindBuffer(Target, BufferObjectName[0]);
+				glBindBuffer(Target, BufferObjectName);
 				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), 0, PersistentBufferFlags);
-				if (BufferType != GL_ARRAY_BUFFER)
-					glBindBufferRange(Target, BindingIndex, BufferObjectName[0], 0, SubBufferSize * sizeof(T));
-				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName[0], 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
+				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
 				glBindBuffer(Target, 0);
 			}
 			else
 			{
-				SubBufferCount = NUMNONPERSISTENTBUFFERS;
 				Buffer = new T[BufferSize];
-
-				for (INT i = 0; i < NUMNONPERSISTENTBUFFERS; ++i)
-				{
-					glBindBuffer(Target, BufferObjectName[i]);
-					glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
-					glBindBuffer(Target, 0);
-				}
+				glBindBuffer(Target, BufferObjectName);
+				glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
+				glBindBuffer(Target, 0);
 			}
 		}
 
@@ -1106,7 +1077,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BeginOffset{};			// Global index of the first buffer element of the sub-buffer we're currently writing to (relative to the start of the _entire_ buffer)
 		GLuint IndexOffset{};			// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
 
-		GLuint BufferObjectName[NUMNONPERSISTENTBUFFERS]{};		// OpenGL name of the buffer object
+		GLuint BufferObjectName{};		// OpenGL name of the buffer object
 		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
 
 		//

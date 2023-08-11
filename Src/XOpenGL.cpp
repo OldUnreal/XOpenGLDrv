@@ -127,7 +127,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	// OpenGL 4
-	//new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
 	
@@ -475,7 +475,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UsingPersistentBuffersTile = UsingPersistentBuffers;
 	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
-	UsingPersistentBuffersDrawcallParams = false; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
+	UsingPersistentBuffersDrawcallParams = UsingPersistentBuffers; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
+	UsingPersistentBuffersSimple = UsingPersistentBuffers;
 
 	// Init shaders
 	InitShaders();
@@ -1038,17 +1039,11 @@ void UXOpenGLRenderDevice::SetPermanentState()
 {
 	// Set permanent state.
 	glEnable(GL_DEPTH_TEST);
-	CHECK_GL_ERROR();
 	glDepthMask(GL_TRUE);
-	CHECK_GL_ERROR();
 	glPolygonOffset(-1.0f, -1.0f);
-	CHECK_GL_ERROR();
 	glBlendFunc(GL_ONE, GL_ZERO);
-	CHECK_GL_ERROR();
 	glEnable(GL_BLEND);
-	CHECK_GL_ERROR();
 	glDisable(GL_CLIP_DISTANCE0);
-    CHECK_GL_ERROR();
 
 	/*
 	GLES 3 supports sRGB functionality, but it does not expose the GL_FRAMEBUFFER_SRGB enable/disable bit.
@@ -1057,19 +1052,14 @@ void UXOpenGLRenderDevice::SetPermanentState()
 #ifndef __EMSCRIPTEN__
 	if (UseSRGBTextures && OpenGLVersion == GL_Core)
 		glEnable(GL_FRAMEBUFFER_SRGB);
-    CHECK_GL_ERROR();
 #endif
 
     if (UseAA && UseAASmoothing)
     {
         glEnable( GL_LINE_SMOOTH );
-        CHECK_GL_ERROR();
         glEnable( GL_POLYGON_SMOOTH );
-        CHECK_GL_ERROR();
         glHint( GL_LINE_SMOOTH_HINT, GL_NICEST );
-        CHECK_GL_ERROR();
         glHint( GL_POLYGON_SMOOTH_HINT, GL_NICEST );
-        CHECK_GL_ERROR();
         /*
         On some implementations, when you call glEnable(GL_POINT_SMOOTH) or glEnable(GL_LINE_SMOOTH) and you use shaders at the same time, your rendering speed goes down to 0.1 FPS.
         This is because the driver does software rendering. This would happen on AMD/ATI GPUs/drivers.
@@ -1566,11 +1556,6 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 {
     guard(UXOpenGLRenderDevice::UpdateCoords);
-
-    FVector _ClientCameraLocation = Frame->Viewport->Actor->Location;
-
-    //debugf(TEXT("_ClientCameraLocation %f %f %f"),_ClientCameraLocation.X,_ClientCameraLocation.Y,_ClientCameraLocation.Z);
-    //debugf(TEXT("Frame->Coords.Origin %f %f %f"), Frame->Coords.Origin.X,Frame->Coords.Origin.Y,Frame->Coords.Origin.Z);
 
 	auto Coords = GlobalCoordsBuffer.GetElementPtr(0); 
 

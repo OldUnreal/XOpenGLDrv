@@ -457,10 +457,10 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
 		{
 			glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
-				DrawBuffer.CommandBuffer(i).FirstVertex,
+				DrawBuffer.CommandBuffer(i).FirstVertex + VertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
 				DrawBuffer.CommandBuffer(i).Count,
 				DrawBuffer.CommandBuffer(i).InstanceCount,
-				DrawBuffer.CommandBuffer(i).BaseInstance
+				DrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
 			);
 		}
 
@@ -474,25 +474,22 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 			glDrawArrays(GL_TRIANGLES, DrawBuffer.CommandBuffer(i).FirstVertex, DrawBuffer.CommandBuffer(i).Count);
 
 	DrawBuffer.Reset();
-	VertBuffer.Lock();
-	VertBuffer.Rotate(Wait);
 
 	if (RenDev->UsingShaderDrawParameters)
-	{
-		ParametersBuffer.Lock();
-		ParametersBuffer.Rotate(Wait);
-	}
+		ParametersBuffer.Rotate(false);
+
+	VertBuffer.Lock();
+	VertBuffer.Rotate(Wait);
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 {
 	using Vert = BufferedVert;
-	auto BeginOffset = VertBuffer.BeginOffsetBytes() / sizeof(FLOAT);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)     BeginOffset);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Normal)));
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, UV)));
-	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Light)));
-	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(	BeginOffset	+ offsetof(Vert, Fog)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, Normal)));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, UV)));
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, Light)));
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, Fog)));
 	VertBuffer.SetInputLayoutCreated();
 }
 
@@ -507,7 +504,6 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::DeactivateShader()
 void UXOpenGLRenderDevice::DrawGouraudProgram::ActivateShader()
 {
 	VertBuffer.Wait();
-	ParametersBuffer.Wait();
 	
 	glUseProgram(ShaderProgramObject);
 

@@ -257,10 +257,10 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 	    for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
 		{
 			glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 
-				DrawBuffer.CommandBuffer(i).FirstVertex, 
+				DrawBuffer.CommandBuffer(i).FirstVertex + VertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
 				DrawBuffer.CommandBuffer(i).Count, 
 				DrawBuffer.CommandBuffer(i).InstanceCount,
-				DrawBuffer.CommandBuffer(i).BaseInstance
+				DrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
 			);
 		}
 
@@ -275,28 +275,23 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 	
 	DrawBuffer.Reset();
 
+	if (RenDev->UsingShaderDrawParameters)
+		ParametersBuffer.Rotate(false);
+
 	VertBuffer.Lock();
 	VertBuffer.Rotate(Wait);
-
-	if (RenDev->UsingShaderDrawParameters)
-	{
-		ParametersBuffer.Lock();
-		ParametersBuffer.Rotate(Wait);
-	}
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 {
-	const auto BeginOffset = VertBuffer.BeginOffsetBytes() / sizeof(FLOAT);
-	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(BeginOffset));
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(BeginOffset + offsetof(BufferedVert, Normal)));
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(0));
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(offsetof(BufferedVert, Normal)));
 	VertBuffer.SetInputLayoutCreated();
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::ActivateShader()
 {
 	VertBuffer.Wait();
-	ParametersBuffer.Wait();
 
 	glUseProgram(ShaderProgramObject);
 	VertBuffer.Bind();

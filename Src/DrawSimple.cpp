@@ -269,10 +269,10 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 			for (INT i = 0; i < LineDrawBuffer.TotalCommands; ++i)
 			{
 				glDrawArraysInstancedBaseInstance(GL_LINES,
-					LineDrawBuffer.CommandBuffer(i).FirstVertex,
+					LineDrawBuffer.CommandBuffer(i).FirstVertex + LineVertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
 					LineDrawBuffer.CommandBuffer(i).Count,
 					LineDrawBuffer.CommandBuffer(i).InstanceCount,
-					LineDrawBuffer.CommandBuffer(i).BaseInstance
+					LineDrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
 				);
 			}
 		}
@@ -280,6 +280,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 			for (INT i = 0; i < LineDrawBuffer.TotalCommands; ++i)
 				glDrawArrays(GL_LINES, LineDrawBuffer.CommandBuffer(i).FirstVertex, LineDrawBuffer.CommandBuffer(i).Count);
 
+		LineVertBuffer.Lock();
 		LineVertBuffer.Rotate(Wait);
 		LineDrawBuffer.Reset();
 	}
@@ -301,16 +302,18 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 			for (INT i = 0; i < TriangleDrawBuffer.TotalCommands; ++i)
 			{
 				glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
-					TriangleDrawBuffer.CommandBuffer(i).FirstVertex,
+					TriangleDrawBuffer.CommandBuffer(i).FirstVertex + TriangleVertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
 					TriangleDrawBuffer.CommandBuffer(i).Count,
 					TriangleDrawBuffer.CommandBuffer(i).InstanceCount,
-					TriangleDrawBuffer.CommandBuffer(i).BaseInstance
+					TriangleDrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
 				);
 			}
 		}
 		else
 			for (INT i = 0; i < TriangleDrawBuffer.TotalCommands; ++i)
 				glDrawArrays(GL_TRIANGLES, TriangleDrawBuffer.CommandBuffer(i).FirstVertex, TriangleDrawBuffer.CommandBuffer(i).Count);
+
+		TriangleVertBuffer.Lock();
 		TriangleVertBuffer.Rotate(Wait);
 		TriangleDrawBuffer.Reset();
 	}
@@ -320,8 +323,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::CreateInputLayout()
 {
-	const auto BeginOffsetBytes = LineVertBuffer.IsBound() ? LineVertBuffer.BeginOffsetBytes() : TriangleVertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(BeginOffsetBytes / sizeof(FLOAT)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(0));
 }
 
 void UXOpenGLRenderDevice::DrawSimpleProgram::DeactivateShader()
@@ -352,7 +354,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::MapBuffers()
 	for (const auto Buffer : { &LineVertBuffer, &TriangleVertBuffer })
 	{
 		Buffer->GenerateVertexBuffer(RenDev);
-		Buffer->MapVertexBuffer(RenDev->UsingPersistentBuffers, DRAWSIMPLE_SIZE);
+		Buffer->MapVertexBuffer(RenDev->UsingPersistentBuffersSimple, DRAWSIMPLE_SIZE);
 	}
 
 	ParametersBuffer.GenerateUBOBuffer(RenDev, SimpleParametersIndex);
