@@ -946,6 +946,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (bPersistentBuffer)
 			{
 				//glMemoryBarrier(GL_ALL_BARRIER_BITS);
+				glFlushMappedNamedBufferRange(BufferObjectName, BeginOffsetBytes(), SizeBytes());
 				return;
 			}
 
@@ -1044,7 +1045,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	private:
 		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
 		{
-			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT;
 
 			SubBufferSize = BufferSize;
 			BufferType = Target;	
@@ -1064,6 +1065,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			}
 			else
 			{
+				SubBufferCount = 1;
 				Buffer = new T[BufferSize];
 				glBindBuffer(Target, BufferObjectName);
 				glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
