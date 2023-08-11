@@ -945,7 +945,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			if (bPersistentBuffer)
 			{
-				//glMemoryBarrier(GL_ALL_BARRIER_BITS);
 				glFlushMappedNamedBufferRange(BufferObjectName, BeginOffsetBytes(), SizeBytes());
 				return;
 			}
@@ -978,12 +977,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				delete[] Buffer;
 			}
-			if (BufferObjectName)
-				glDeleteBuffers(1, &BufferObjectName);
+			
 			Buffer = nullptr;
 
 			if (VaoObjectName)
 				glDeleteBuffers(1, &VaoObjectName);
+			if (BufferObjectName)
+				glDeleteBuffers(1, &BufferObjectName);
 
 			delete[] Sync;
 			Sync = nullptr;
@@ -1000,11 +1000,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!bPersistentBuffer)
 				return;
 
-			checkSlow(Sync);
-
-			if (Sync[Index])
-				glDeleteSync(Sync[Index]);
-
 			Sync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 		}
 
@@ -1014,32 +1009,19 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!bPersistentBuffer)
 				return;
 
-			checkSlow(Sync);
-
-			GLuint64 WaitDuration = 0;
-			GLenum WaitReturn;
-			if (Sync[Index])
+			while (1)
 			{
-				while (1)
+				GLenum WaitReturn = glClientWaitSync(Sync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, 1);
+				if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
 				{
-					WaitReturn = glClientWaitSync(Sync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, WaitDuration);
-					CHECK_GL_ERROR();
-
-					if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
-					{
-						return;
-					}
-					if (WaitReturn == GL_WAIT_FAILED)
-					{
-						GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"), Index);
-						return;
-					}
-					//GWarn->Logf(TEXT("Wait! Count %i, %f %x"), Count, appSeconds().GetFloat(),WaitReturn);
-					//Stats.StallCount++;
-					WaitDuration = 500000;
+					return;
+				}
+				if (WaitReturn == GL_WAIT_FAILED)
+				{
+					GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"), Index);
+					return;
 				}
 			}
-			CHECK_GL_ERROR();
 		}
 
 	private:
