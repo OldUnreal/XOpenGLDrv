@@ -1312,47 +1312,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	}
 
 	//
-	// Helper class for glMultiDrawArray batching
-	//
-	class MultiDrawBuffer
-	{
-	public:
-		MultiDrawBuffer(INT MaxMultiDraw)
-		{
-			IndexArray.AddZeroed(MaxMultiDraw);
-			CountArray.AddZeroed(MaxMultiDraw);
-			TotalVertices = 0;
-			TotalDrawCalls = 0;
-		}
-
-		void StartDrawCall()
-		{
-			IndexArray(TotalDrawCalls) = TotalVertices;
-		}
-
-		void EndDrawCall(INT Vertices)
-		{
-			TotalVertices += Vertices;
-			CountArray(TotalDrawCalls++) = Vertices;
-		}
-
-		bool IsFull() const
-		{
-			return TotalDrawCalls + 1 >= IndexArray.Num();
-		}
-
-		void Reset()
-		{
-			TotalVertices = TotalDrawCalls = 0;
-		}
-
-		TArray<GLint>	IndexArray;		// Index of the first vertex for each sub-drawcall
-		TArray<GLsizei> CountArray;		// Number of vertices for each sub-drawcall
-		INT				TotalVertices;
-		INT				TotalDrawCalls;
-	};
-
-	//
 	// Helper class for glMultiDrawArraysIndirect batching
 	//
 	class MultiDrawIndirectBuffer
@@ -1546,8 +1505,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<BufferedVert> TriangleVertBuffer;
 		BufferObject<DrawCallParameters> ParametersBuffer;
 
-		MultiDrawBuffer LineDrawBuffer;
-		MultiDrawBuffer TriangleDrawBuffer;
+		MultiDrawIndirectBuffer LineDrawBuffer;
+		MultiDrawIndirectBuffer TriangleDrawBuffer;
 
 		// Helpers
 		void PrepareDrawCall(glm::uint LineFlags, const glm::vec4& DrawColor, glm::uint BlendMode, BufferObject<BufferedVert>& OutBuffer, INT VertexCount);

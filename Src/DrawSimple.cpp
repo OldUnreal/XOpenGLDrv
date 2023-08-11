@@ -263,11 +263,23 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 		}
 
 		LineVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
+
 		if (RenDev->OpenGLVersion == GL_Core)
-			glMultiDrawArrays(GL_LINES, &LineDrawBuffer.IndexArray(0), &LineDrawBuffer.CountArray(0), LineDrawBuffer.TotalDrawCalls);
+		{
+			for (INT i = 0; i < LineDrawBuffer.TotalCommands; ++i)
+			{
+				glDrawArraysInstancedBaseInstance(GL_LINES,
+					LineDrawBuffer.CommandBuffer(i).FirstVertex,
+					LineDrawBuffer.CommandBuffer(i).Count,
+					LineDrawBuffer.CommandBuffer(i).InstanceCount,
+					LineDrawBuffer.CommandBuffer(i).BaseInstance
+				);
+			}
+		}
 		else
-			for (INT i = 0; i < LineDrawBuffer.TotalDrawCalls; ++i)
-				glDrawArrays(GL_LINES, LineDrawBuffer.IndexArray(i), LineDrawBuffer.CountArray(i));
+			for (INT i = 0; i < LineDrawBuffer.TotalCommands; ++i)
+				glDrawArrays(GL_LINES, LineDrawBuffer.CommandBuffer(i).FirstVertex, LineDrawBuffer.CommandBuffer(i).Count);
+
 		LineVertBuffer.Rotate(Wait);
 		LineDrawBuffer.Reset();
 	}
@@ -285,10 +297,20 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 
 		TriangleVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
 		if (RenDev->OpenGLVersion == GL_Core)
-			glMultiDrawArrays(GL_TRIANGLES, &TriangleDrawBuffer.IndexArray(0), &TriangleDrawBuffer.CountArray(0), TriangleDrawBuffer.TotalDrawCalls);
+		{
+			for (INT i = 0; i < TriangleDrawBuffer.TotalCommands; ++i)
+			{
+				glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
+					TriangleDrawBuffer.CommandBuffer(i).FirstVertex,
+					TriangleDrawBuffer.CommandBuffer(i).Count,
+					TriangleDrawBuffer.CommandBuffer(i).InstanceCount,
+					TriangleDrawBuffer.CommandBuffer(i).BaseInstance
+				);
+			}
+		}
 		else
-			for (INT i = 0; i < TriangleDrawBuffer.TotalDrawCalls; ++i)
-				glDrawArrays(GL_TRIANGLES, TriangleDrawBuffer.IndexArray(i), TriangleDrawBuffer.CountArray(i));
+			for (INT i = 0; i < TriangleDrawBuffer.TotalCommands; ++i)
+				glDrawArrays(GL_TRIANGLES, TriangleDrawBuffer.CommandBuffer(i).FirstVertex, TriangleDrawBuffer.CommandBuffer(i).Count);
 		TriangleVertBuffer.Rotate(Wait);
 		TriangleDrawBuffer.Reset();
 	}
