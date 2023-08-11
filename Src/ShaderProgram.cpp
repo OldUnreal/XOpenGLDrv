@@ -168,7 +168,7 @@ vec4 GammaCorrect(float Gamma, vec4 Color)
 
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex)
+void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseInstanceID)
 {
 	// gl_DrawID is only accessible in vertex shaders
 	if (GL->UsingShaderDrawParameters && ShaderType != GL_VERTEX_SHADER)
@@ -226,7 +226,13 @@ layout(std430, binding = )" << BufferBindingIndex << R"() buffer All)" << appToA
 
 		Out << "  return ";
 		if (GL->UsingShaderDrawParameters)
-			Out << "Draw" << appToAnsi(Program->ShaderName) << "Params[gl_DrawID].";
+		{
+			Out << "Draw" << appToAnsi(Program->ShaderName);
+			if (UseInstanceID)
+				Out << "Params[gl_BaseInstance + gl_InstanceID].";
+			else
+				Out	<< "Params[gl_DrawID].";
+		}
 		Out << Info->Name;
 		if (Info->ArrayCount > 0)
 			Out << "[Index]";

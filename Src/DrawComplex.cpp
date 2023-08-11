@@ -253,10 +253,25 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 
 	// Issue draw calls
 	if (RenDev->OpenGLVersion == GL_Core)
-		glMultiDrawArrays(GL_TRIANGLES, &DrawBuffer.IndexArray(0), &DrawBuffer.CountArray(0), DrawBuffer.TotalDrawCalls);
+	{
+	    for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
+		{
+			glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 
+				DrawBuffer.CommandBuffer(i).FirstVertex, 
+				DrawBuffer.CommandBuffer(i).Count, 
+				DrawBuffer.CommandBuffer(i).InstanceCount,
+				DrawBuffer.CommandBuffer(i).BaseInstance
+			);
+		}
+
+		// stijn: This does not work yet and I don't know why. Do we need to store the command buffer
+		// in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
+		// glMultiDrawArraysIndirect(GL_TRIANGLES, &DrawBuffer.CommandBuffer(0), DrawBuffer.TotalCommands, 0);
+		CHECK_GL_ERROR();
+	}
 	else
-		for (INT i = 0; i < DrawBuffer.TotalDrawCalls; ++i)
-			 glDrawArrays(GL_TRIANGLES, DrawBuffer.IndexArray(i), DrawBuffer.CountArray(i));
+		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
+			 glDrawArrays(GL_TRIANGLES, DrawBuffer.CommandBuffer(i).FirstVertex, DrawBuffer.CommandBuffer(i).Count);
 	
 	DrawBuffer.Reset();
 

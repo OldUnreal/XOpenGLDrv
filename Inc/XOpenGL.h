@@ -97,7 +97,8 @@
 #define DRAWTILE_SIZE 64 * 256
 #define DRAWCOMPLEX_SIZE 256 * MAX_DRAWCOMPLEX_BATCH
 #define DRAWGOURAUDPOLY_SIZE 256 * 1024
-#define NUMBUFFERS 3
+#define NUMPERSISTENTBUFFERS 3
+#define NUMNONPERSISTENTBUFFERS 1
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 # define MAX_LIGHTS 256
@@ -810,13 +811,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			Index = (Index + 1) % SubBufferCount;
 			IndexOffset = 0;
-			BeginOffset = Index * SubBufferSize;
+			BeginOffset = bPersistentBuffer ? Index * SubBufferSize : 0;
 			if (Wait)
 				this->Wait();
 
 			if (SubBufferCount > 1)
 			{
-				if (bBound && BufferType != GL_ARRAY_BUFFER)
+				if (bBound)
 				{
 					Unbind();
 					Bind();
@@ -849,7 +850,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateVertexBuffer(UXOpenGLRenderDevice* RenDev)
 		{
 			BindingPoint = &RenDev->ArrayPoint;
-			glGenBuffers(1, &BufferObjectName);
+			glGenBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
 			glGenVertexArrays(1, &VaoObjectName);
 		}
 
@@ -858,9 +859,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			BindingPoint = &RenDev->SSBOPoint;
 			this->BindingIndex = BindingIndex;
-			glGenBuffers(1, &BufferObjectName);
-			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName);
-			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName);
+			glGenBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
+			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName[0]);
+			glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BindingIndex, BufferObjectName[0]);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 		}
 
@@ -869,9 +870,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			BindingPoint = &RenDev->UBOPoint;
 			this->BindingIndex = BindingIndex;
-			glGenBuffers(1, &BufferObjectName);
-			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName);
-			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName);
+			glGenBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
+			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName[0]);
+			glBindBufferBase(GL_UNIFORM_BUFFER, BindingIndex, BufferObjectName[0]);
 			glBindBuffer(GL_UNIFORM_BUFFER, 0);
 		}
 
@@ -903,14 +904,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (BufferType == GL_ARRAY_BUFFER)
 			{
 				glBindVertexArray(VaoObjectName);
-				glBindBuffer(BufferType, BufferObjectName);
+				glBindBuffer(BufferType, BufferObjectName[Index]);
 			}
 			else
 			{
 				if (bPersistentBuffer)
-					glBindBufferRange(BufferType, BindingIndex, BufferObjectName, Index * SubBufferSize * sizeof(T), SubBufferSize * sizeof(T));
+					glBindBufferRange(BufferType, BindingIndex, BufferObjectName[0], Index * SubBufferSize * sizeof(T), SubBufferSize * sizeof(T));
 				else
-					glBindBuffer(BufferType, BufferObjectName);
+				{
+					glBindBuffer(BufferType, BufferObjectName[Index]);
+					glBindBufferBase(BufferType, BindingIndex, BufferObjectName[Index]);
+				}
 			}
 			bBound = true;
 
@@ -946,7 +950,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void RebindBufferBase(const GLuint BindingIndex)
 		{
 			Bind();
-			glBindBufferBase(BufferType, BindingIndex, BufferObjectName);
+			glBindBufferBase(BufferType, BindingIndex, BufferObjectName[Index]);
 			Unbind();
 		}
 
@@ -961,13 +965,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void BufferData(bool Invalidate, bool Reinitialize, GLenum ExpectedUsage)
 		{
 			if (bPersistentBuffer)
-			{
-				//glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 				return;
-			}
 
 			if (Invalidate)
-				glInvalidateBufferData(BufferObjectName);
+				glInvalidateBufferData(BufferObjectName[Index]);
+
+			//glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 
 			if (Reinitialize
 #if defined(__LINUX_ARM__) || MACOSX
@@ -978,6 +981,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			else
 				glBufferSubData(BufferType, 0, SizeBytes(), Buffer);
 			CHECK_GL_ERROR();
+
+			//glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 		}
 
 		// Unmaps and deallocates the buffer
@@ -986,27 +991,29 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (bPersistentBuffer)
 			{
 				GLint IsMapped;
-				glGetNamedBufferParameteriv(BufferObjectName, GL_BUFFER_MAPPED, &IsMapped);
+				glGetNamedBufferParameteriv(BufferObjectName[0], GL_BUFFER_MAPPED, &IsMapped);
 				if (IsMapped == GL_TRUE)
-					glUnmapNamedBuffer(BufferObjectName);
+					glUnmapNamedBuffer(BufferObjectName[0]);
+				if (BufferObjectName[0])
+					glDeleteBuffers(NUMPERSISTENTBUFFERS, BufferObjectName);
 			}
 			else
 			{
 				delete[] Buffer;
+				if (BufferObjectName[0])
+					glDeleteBuffers(NUMNONPERSISTENTBUFFERS, BufferObjectName);
 			}
 			Buffer = nullptr;
 
-			if (BufferObjectName)
-				glDeleteBuffers(1, &BufferObjectName);
 			if (VaoObjectName)
-				glDeleteBuffers(1, &BufferObjectName);
+				glDeleteBuffers(1, &VaoObjectName);
 
 			delete[] Sync;
 			Sync = nullptr;
 			bBound = bInputLayoutCreated = false;
 			BindingPoint = nullptr;
 			IndexOffset = Index = BeginOffset = 0;
-			BufferObjectName = VaoObjectName = 0;
+			BufferObjectName[0] = VaoObjectName = 0;
 		}
 
 		// Inserts a fence that makes the GPU signal the active sub-buffer when
@@ -1070,25 +1077,28 @@ class UXOpenGLRenderDevice : public URenderDevice
 			bPersistentBuffer = Persistent;
 			if (bPersistentBuffer)
 			{
-				SubBufferCount = NUMBUFFERS;
+				SubBufferCount = NUMPERSISTENTBUFFERS;
 				Sync = new GLsync [SubBufferCount];
 				memset(Sync, 0, sizeof(GLsync) * SubBufferCount);
 
-				glBindBuffer(Target, BufferObjectName);
+				glBindBuffer(Target, BufferObjectName[0]);
 				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), 0, PersistentBufferFlags);
 				if (BufferType != GL_ARRAY_BUFFER)
-					glBindBufferRange(Target, BindingIndex, BufferObjectName, 0, SubBufferSize * sizeof(T));
-				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
+					glBindBufferRange(Target, BindingIndex, BufferObjectName[0], 0, SubBufferSize * sizeof(T));
+				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName[0], 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
 				glBindBuffer(Target, 0);
 			}
 			else
 			{
-				SubBufferCount = 1;
-
-				glBindBuffer(Target, BufferObjectName);
+				SubBufferCount = NUMNONPERSISTENTBUFFERS;
 				Buffer = new T[BufferSize];
-				glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
-				glBindBuffer(Target, 0);
+
+				for (INT i = 0; i < NUMNONPERSISTENTBUFFERS; ++i)
+				{
+					glBindBuffer(Target, BufferObjectName[i]);
+					glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
+					glBindBuffer(Target, 0);
+				}
 			}
 		}
 
@@ -1098,7 +1108,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BeginOffset{};			// Global index of the first buffer element of the sub-buffer we're currently writing to (relative to the start of the _entire_ buffer)
 		GLuint IndexOffset{};			// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
 
-		GLuint BufferObjectName{};		// OpenGL name of the buffer object
+		GLuint BufferObjectName[NUMNONPERSISTENTBUFFERS]{};		// OpenGL name of the buffer object
 		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
 
 		//
@@ -1178,7 +1188,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			const char* Name;
 			const int ArrayCount;
 		};
-		static void  EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex);
+		static void  EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseInstanceID=false);
 
 		//
 		// Program-specific functions
@@ -1343,6 +1353,56 @@ class UXOpenGLRenderDevice : public URenderDevice
 	};
 
 	//
+	// Helper class for glMultiDrawArraysIndirect batching
+	//
+	class MultiDrawIndirectBuffer
+	{
+	public:
+		MultiDrawIndirectBuffer(INT MaxMultiDraw)
+		{
+			CommandBuffer.AddZeroed(MaxMultiDraw);
+			TotalCommands = 0;
+			TotalVertices = 0;
+		}
+
+		void StartDrawCall()
+		{
+			CommandBuffer(TotalCommands).FirstVertex = TotalVertices;
+			CommandBuffer(TotalCommands).BaseInstance = TotalCommands;
+			CommandBuffer(TotalCommands).InstanceCount = 1;
+		}
+
+		void EndDrawCall(INT Vertices)
+		{
+			TotalVertices += Vertices;
+			CommandBuffer(TotalCommands++).Count = Vertices;
+		}
+
+		bool IsFull() const
+		{
+			return TotalCommands + 1 >= CommandBuffer.Num();
+		}
+
+		void Reset()
+		{
+			TotalCommands = TotalVertices = 0;
+		}
+
+		struct MultiDrawIndirectCommand
+		{
+			glm::uint Count;
+			glm::uint InstanceCount;
+			glm::uint FirstVertex;
+			glm::uint BaseInstance;
+		};
+		static_assert(sizeof(MultiDrawIndirectCommand) == 16, "Invalid indirect command size");
+
+		TArray<MultiDrawIndirectCommand> CommandBuffer;
+		INT TotalVertices;
+		INT TotalCommands;
+	};
+
+	//
 	// DrawTile Shader
 	//
 	class DrawTileProgram : public ShaderProgram
@@ -1416,7 +1476,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters>	ParametersBuffer;
 		BufferObject<BufferedVertES>		VertBufferES;
 		BufferObject<BufferedVertCore>		VertBufferCore;
-		MultiDrawBuffer DrawBuffer;
+		MultiDrawIndirectBuffer DrawBuffer;
 	};
 
 	//
@@ -1576,7 +1636,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters> ParametersBuffer;
 		BufferObject<BufferedVert> VertBuffer;
 
-		MultiDrawBuffer DrawBuffer;
+		MultiDrawIndirectBuffer DrawBuffer;
 
 		// Cached Texture Infos
 		FTEXTURE_PTR DetailTextureInfo{};
@@ -1665,7 +1725,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		BufferObject<DrawCallParameters> ParametersBuffer;
 		BufferObject<BufferedVert> VertBuffer;
 
-		MultiDrawBuffer DrawBuffer;
+		MultiDrawIndirectBuffer DrawBuffer;
 
 		// Cached texture Info
 		FTEXTURE_PTR BumpMapInfo{};

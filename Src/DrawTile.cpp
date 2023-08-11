@@ -247,15 +247,23 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		
 	if (VertBufferES.IsBound())
 	{
-		for (INT i = 0; i < DrawBuffer.TotalDrawCalls; ++i)
-			glDrawArrays(GL_TRIANGLES, DrawBuffer.IndexArray(i), DrawBuffer.CountArray(i));
+		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
+			glDrawArrays(GL_TRIANGLES, DrawBuffer.CommandBuffer(i).FirstVertex, DrawBuffer.CommandBuffer(i).Count);
 
 		VertBufferES.Lock();
 		VertBufferES.Rotate(Wait);
 	}
 	else
 	{
-		glMultiDrawArrays(GL_TRIANGLES, &DrawBuffer.IndexArray(0), &DrawBuffer.CountArray(0), DrawBuffer.TotalDrawCalls);
+		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
+		{
+			glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
+				DrawBuffer.CommandBuffer(i).FirstVertex,
+				DrawBuffer.CommandBuffer(i).Count,
+				DrawBuffer.CommandBuffer(i).InstanceCount,
+				DrawBuffer.CommandBuffer(i).BaseInstance
+			);
+		}		
 
 		VertBufferCore.Lock();
 		VertBufferCore.Rotate(Wait);

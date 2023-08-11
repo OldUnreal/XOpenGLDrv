@@ -33,7 +33,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 
 void UXOpenGLRenderDevice::DrawTileProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
-	EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::TileParametersIndex);
+	EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::TileParametersIndex, true);
 
 	Out << "uniform sampler2D Texture0;" END_LINE;
 }

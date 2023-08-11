@@ -48,7 +48,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 
 void UXOpenGLRenderDevice::DrawComplexProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
-    EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::ComplexParametersIndex);
+    EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::ComplexParametersIndex, true);
 
 	Out << R"(
 uniform sampler2D Texture0; //Base Texture

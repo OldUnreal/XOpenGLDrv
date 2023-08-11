@@ -38,7 +38,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
 {
-    EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::GouraudParametersIndex);
+    EmitDrawCallParametersHeader(ShaderType, GL, Info, Out, Program, GlobalShaderBindingIndices::GouraudParametersIndex, true);
 
     Out << R"(
 uniform sampler2D Texture0; // Base Texture
