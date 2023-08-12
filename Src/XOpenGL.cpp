@@ -188,7 +188,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
-	UseShaderDrawParameters = 0; // setting this to true slightly improves performance on nvidia cards
+	UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards
 #else
 	UseBindlessTextures = 0;
 	UseShaderDrawParameters = 0;

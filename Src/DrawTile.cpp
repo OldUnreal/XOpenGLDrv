@@ -247,8 +247,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		
 	if (VertBufferES.IsBound())
 	{
-		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
-			glDrawArrays(GL_TRIANGLES, DrawBuffer.CommandBuffer(i).FirstVertex, DrawBuffer.CommandBuffer(i).Count);
+		DrawBuffer.Draw(GL_TRIANGLES, RenDev);
 
 		if (RenDev->UsingShaderDrawParameters)
 			ParametersBuffer.Rotate(false);
@@ -258,15 +257,7 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 	}
 	else
 	{
-		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
-		{
-			glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
-				DrawBuffer.CommandBuffer(i).FirstVertex + VertBufferCore.BeginOffsetBytes() / sizeof(BufferedVertCore),
-				DrawBuffer.CommandBuffer(i).Count,
-				DrawBuffer.CommandBuffer(i).InstanceCount,
-				DrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
-			);
-		}
+		DrawBuffer.Draw(GL_TRIANGLES, RenDev);
 
 		if (RenDev->UsingShaderDrawParameters)
 			ParametersBuffer.Rotate(false);
@@ -275,7 +266,9 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 		VertBufferCore.Rotate(Wait);
 	}
 
-	DrawBuffer.Reset();
+	DrawBuffer.Reset(
+		VertBufferCore.BeginOffsetBytes() / sizeof(BufferedVertCore) + VertBufferES.BeginOffsetBytes() / sizeof(BufferedVertES),
+		ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters));
 }
 
 void UXOpenGLRenderDevice::DrawTileProgram::CreateInputLayout()

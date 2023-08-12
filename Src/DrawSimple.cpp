@@ -264,25 +264,12 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 
 		LineVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
 
-		if (RenDev->OpenGLVersion == GL_Core)
-		{
-			for (INT i = 0; i < LineDrawBuffer.TotalCommands; ++i)
-			{
-				glDrawArraysInstancedBaseInstance(GL_LINES,
-					LineDrawBuffer.CommandBuffer(i).FirstVertex + LineVertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
-					LineDrawBuffer.CommandBuffer(i).Count,
-					LineDrawBuffer.CommandBuffer(i).InstanceCount,
-					LineDrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
-				);
-			}
-		}
-		else
-			for (INT i = 0; i < LineDrawBuffer.TotalCommands; ++i)
-				glDrawArrays(GL_LINES, LineDrawBuffer.CommandBuffer(i).FirstVertex, LineDrawBuffer.CommandBuffer(i).Count);
+		LineDrawBuffer.Draw(GL_LINES, RenDev);
 
 		LineVertBuffer.Lock();
 		LineVertBuffer.Rotate(Wait);
-		LineDrawBuffer.Reset();
+
+		LineDrawBuffer.Reset(LineVertBuffer.BeginOffsetBytes() / sizeof(BufferedVert));
 	}
 
 	if (TriangleVertBuffer.Size() > 0)
@@ -297,25 +284,13 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 		}
 
 		TriangleVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
-		if (RenDev->OpenGLVersion == GL_Core)
-		{
-			for (INT i = 0; i < TriangleDrawBuffer.TotalCommands; ++i)
-			{
-				glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
-					TriangleDrawBuffer.CommandBuffer(i).FirstVertex + TriangleVertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
-					TriangleDrawBuffer.CommandBuffer(i).Count,
-					TriangleDrawBuffer.CommandBuffer(i).InstanceCount,
-					TriangleDrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
-				);
-			}
-		}
-		else
-			for (INT i = 0; i < TriangleDrawBuffer.TotalCommands; ++i)
-				glDrawArrays(GL_TRIANGLES, TriangleDrawBuffer.CommandBuffer(i).FirstVertex, TriangleDrawBuffer.CommandBuffer(i).Count);
+
+		TriangleDrawBuffer.Draw(GL_TRIANGLES, RenDev);
 
 		TriangleVertBuffer.Lock();
 		TriangleVertBuffer.Rotate(Wait);
-		TriangleDrawBuffer.Reset();
+
+		TriangleDrawBuffer.Reset(TriangleVertBuffer.BeginOffsetBytes() / sizeof(BufferedVert));
 	}
 
 	unguard;

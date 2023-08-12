@@ -345,6 +345,18 @@ void UXOpenGLRenderDevice::CheckExtensions()
     glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &MaxUniformBlockSize); //Check me!!! For whatever reason this appears to return on (some?) AMD drivers a value of 572657868
     debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxUniformBlockSize: %i"), MaxUniformBlockSize);
 
+    INT MaxOutputComponents = 0;
+    glGetIntegerv(GL_MAX_VERTEX_OUTPUT_COMPONENTS, &MaxOutputComponents);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxVertexOutputComponents: %i"), MaxOutputComponents);
+
+    INT MaxVaryingComponents = 0;
+    glGetIntegerv(GL_MAX_VARYING_COMPONENTS, &MaxVaryingComponents);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxVaryingComponents: %i"), MaxVaryingComponents);
+
+    INT MaxVaryingVectors = 0;
+    glGetIntegerv(GL_MAX_VARYING_VECTORS, &MaxVaryingVectors);
+    debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxVaryingVectors: %i"), MaxVaryingVectors);
+
 	CHECK_GL_ERROR();
 
 	unguard;

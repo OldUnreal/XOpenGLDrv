@@ -61,7 +61,7 @@ precision lowp int;
 	}
 
 	Out << R"(
-layout(std140) uniform GlobalMatrices
+layout(std140, binding=)" << UXOpenGLRenderDevice::MatricesIndex << R"() uniform GlobalMatrices
 {
   mat4 projMat;
   mat4 viewMat;
@@ -71,14 +71,14 @@ layout(std140) uniform GlobalMatrices
   mat4 lightSpaceMat;
 };
 
-layout(std140) uniform ClipPlaneParams
+layout(std140, binding=)" << UXOpenGLRenderDevice::ClipPlaneIndex << R"() uniform ClipPlaneParams
 {
   vec4  ClipParams; // Clipping params, ClipIndex,0,0,0
   vec4  ClipPlane;  // Clipping planes. Plane.X, Plane.Y, Plane.Z, Plane.W
 };
 
 // Light information.
-layout(std140) uniform StaticLightInfo
+layout(std140, binding=)" << UXOpenGLRenderDevice::StaticLightInfoIndex << R"() uniform StaticLightInfo
 {
   vec4 LightPos[)" << MAX_LIGHTS << R"(];
   vec4 LightData1[)" << MAX_LIGHTS << R"(]; // LightBrightness, LightHue, LightSaturation, LightCone
@@ -88,7 +88,7 @@ layout(std140) uniform StaticLightInfo
   vec4 LightData5[)" << MAX_LIGHTS << R"(]; // NormalLightRadius, bZoneNormalLight, unused, unused
 };
 
-layout(std140) uniform GlobalCoords
+layout(std140, binding=)" << UXOpenGLRenderDevice::CoordsIndex << R"() uniform GlobalCoords
 {
   mat4 FrameCoords;
   mat4 FrameUncoords;
@@ -178,7 +178,7 @@ void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint Sh
 	if (GL->UsingShaderDrawParameters)
 		Out << "struct ";
 	else
-		Out << "layout(std140) uniform ";
+		Out << "layout(std140, binding = " << BufferBindingIndex << ") uniform ";
 
 	Out << R"(DrawCallParameters
 {
@@ -278,6 +278,32 @@ static const TCHAR* ShaderTypeString(GLuint ShaderType)
 	}
 }
 
+void UXOpenGLRenderDevice::ShaderProgram::DumpShader(const char* Source, bool AddLineNumbers)
+{
+	FString ShaderSource(Source);
+	TArray<FString> Lines;
+	INT LineNum = 0;
+	while (true)
+	{
+		const INT NewLine = ShaderSource.InStr(TEXT("\n"));
+		FString Line = NewLine >= 0 ? ShaderSource.Left(NewLine) : ShaderSource;
+		if (Line.Right(1) == TEXT("\r"))
+			Line = Line.Left(Line.Len() - 1);
+		if (Line.InStr(TEXT("#line 1")) == 0)
+			LineNum = 0;
+		if (AddLineNumbers)
+			Lines.AddItem(FString::Printf(TEXT("%d:\t%ls"), LineNum++, *Line));
+		else
+			Lines.AddItem(*Line);
+		if (NewLine == -1)
+			break;
+		ShaderSource = ShaderSource.Mid(NewLine + 1);
+	}
+	debugf(TEXT("XOpenGL: Shader Source:"));
+	for (INT i = 0; i < Lines.Num(); ++i)
+		debugf(TEXT("%ls"), *Lines(i));
+}
+
 bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuint& ShaderObject, ShaderWriterFunc Func, ShaderWriterFunc EmitHeaderFunc)
 {
 	guard(CompileShader);
@@ -309,25 +335,7 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 			delete[] compiler_log;
 		}
 
-		FString ShaderSource(*ShOut);
-		TArray<FString> Lines;
-		INT LineNum = 0;
-		while (true)
-		{
-			const INT NewLine = ShaderSource.InStr(TEXT("\n"));
-			FString Line = NewLine >= 0 ? ShaderSource.Left(NewLine) : ShaderSource;
-			if (Line.Right(1) == TEXT("\r"))
-				Line = Line.Left(Line.Len() - 1);
-			if (Line.InStr(TEXT("#line 1")) == 0)
-				LineNum = 0;
-			Lines.AddItem(FString::Printf(TEXT("%d:\t%ls"), LineNum++, *Line));
-			if (NewLine == -1)
-				break;
-			ShaderSource = ShaderSource.Mid(NewLine + 1);
-		}
-		debugf(TEXT("XOpenGL: Shader Source:"));
-		for (INT i = 0; i < Lines.Num(); ++i)
-			debugf(TEXT("XOpenGL: %ls"), *Lines(i));
+		DumpShader(*ShOut, true);
 		Result = false;
 	}
 	else 
@@ -342,6 +350,10 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 		}
 		else debugf(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
 	}
+
+	//debugf(TEXT("XOpenGL: %ls %ls Shader Source"), ShaderName, ShaderTypeString(ShaderType));
+	//DumpShader(*ShOut, false);
+
 	return Result;
 	unguard;
 }

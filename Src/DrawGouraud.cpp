@@ -452,34 +452,17 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 	if (!VertBuffer.IsInputLayoutCreated())
 		CreateInputLayout();
 
-	if (RenDev->OpenGLVersion == GL_Core)
-	{
-		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
-		{
-			glDrawArraysInstancedBaseInstance(GL_TRIANGLES,
-				DrawBuffer.CommandBuffer(i).FirstVertex + VertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
-				DrawBuffer.CommandBuffer(i).Count,
-				DrawBuffer.CommandBuffer(i).InstanceCount,
-				DrawBuffer.CommandBuffer(i).BaseInstance + ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters)
-			);
-		}
-
-		// stijn: This does not work yet and I don't know why. Do we need to store the command buffer
-		// in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
-		// glMultiDrawArraysIndirect(GL_TRIANGLES, &DrawBuffer.CommandBuffer(0), DrawBuffer.TotalCommands, 0);
-		CHECK_GL_ERROR();
-	}
-	else
-		for (INT i = 0; i < DrawBuffer.TotalCommands; ++i)
-			glDrawArrays(GL_TRIANGLES, DrawBuffer.CommandBuffer(i).FirstVertex, DrawBuffer.CommandBuffer(i).Count);
-
-	DrawBuffer.Reset();
+	DrawBuffer.Draw(GL_TRIANGLES, RenDev);
 
 	if (RenDev->UsingShaderDrawParameters)
 		ParametersBuffer.Rotate(false);
 
 	VertBuffer.Lock();
 	VertBuffer.Rotate(Wait);
+
+	DrawBuffer.Reset(
+		VertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
+		ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters));
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()

@@ -18,32 +18,32 @@
 const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo Info[]
 =
 {
-    {"vec4", "DiffuseUV", 0},
-    {"vec4", "LightMapUV", 0},
-    {"vec4", "FogMapUV", 0},
-    {"vec4", "DetailUV", 0},
-    {"vec4", "MacroUV", 0},
-    {"vec4", "EnviroMapUV", 0},
-    {"vec4", "DiffuseInfo", 0},
-    {"vec4", "MacroInfo", 0},
-    {"vec4", "BumpMapInfo", 0},
-    {"vec4", "HeightMapInfo", 0},
-    {"vec4", "XAxis", 0},
-    {"vec4", "YAxis", 0},
-    {"vec4", "ZAxis", 0},
-    {"vec4", "DrawColor", 0},
-    {"vec4", "DistanceFogColor", 0},
-    {"vec4", "DistanceFogInfo", 0},
+	{"vec4", "DiffuseUV", 0},
+	{"vec4", "LightMapUV", 0},
+	{"vec4", "FogMapUV", 0},
+	{"vec4", "DetailUV", 0},
+	{"vec4", "MacroUV", 0},
+	{"vec4", "EnviroMapUV", 0},
+	{"vec4", "DiffuseInfo", 0},
+	{"vec4", "MacroInfo", 0},
+	{"vec4", "BumpMapInfo", 0},
+	{"vec4", "HeightMapInfo", 0},
+	{"vec4", "XAxis", 0},
+	{"vec4", "YAxis", 0},
+	{"vec4", "ZAxis", 0},
+	{"vec4", "DrawColor", 0},
+	{"vec4", "DistanceFogColor", 0},
+	{"vec4", "DistanceFogInfo", 0},
 	{"uint", "DrawFlags", 0},
-    {"uint", "HitTesting", 0},
-    {"uint", "TextureFormat", 0},
-    {"uint", "PolyFlags", 0},
-    {"uint", "RendMap", 0},
-    {"int", "DistanceFogMode", 0},
-    {"uint", "Padding0", 0},
-    {"uint", "Padding1", 0},
-    {"uvec4", "TexHandles", 4},
-    { nullptr, nullptr, 0}
+	{"uint", "HitTesting", 0},
+	{"uint", "TextureFormat", 0},
+	{"uint", "PolyFlags", 0},
+	{"uint", "RendMap", 0},
+	{"int", "DistanceFogMode", 0},
+	{"uint", "Padding0", 0},
+	{"uint", "Padding1", 0},
+	{"uvec4", "TexHandles", 4},
+	{ nullptr, nullptr, 0}
 };
 
 void UXOpenGLRenderDevice::DrawComplexProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
@@ -65,10 +65,12 @@ uniform sampler2D Texture7; //HeightMap
 // Vertexshader for DrawComplexSurface, single pass.
 void UXOpenGLRenderDevice::DrawComplexProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice * GL, FShaderWriterX & Out, ShaderProgram* Program)
 {
-	Out << R"(
+    Out << R"(
 layout(location = 0) in vec4 Coords; // == gl_Vertex
 layout(location = 1) in vec4 Normal; // == gl_Vertex
 
+flat out vec4 vDistanceFogColor;
+flat out vec4 vDistanceFogInfo;
 flat out uvec2 vTexHandle;
 flat out uvec2 vLightMapTexHandle;
 flat out uvec2 vFogMapTexHandle;
@@ -80,23 +82,44 @@ flat out uvec2 vHeightMapTexHandle;
 flat out uint vDrawFlags;
 flat out uint vTextureFormat;
 flat out uint vPolyFlags;
+flat out int vDistanceFogMode;
 flat out float vBaseDiffuse;
 flat out float vBaseAlpha;
 flat out float vParallaxScale;
 flat out float vGamma;
 flat out float vBumpMapSpecular;
 flat out float vTimeSeconds;
-flat out vec4 vDistanceFogColor;
-flat out vec4 vDistanceFogInfo;
-flat out int vDistanceFogMode;
+)";
 
-out vec3 vCoords;
+    if (GIsEditor)
+        Out << "flat out vec3 vSurfaceNormal;" END_LINE; // f.e. Render normal view.
+#if ENGINE_VERSION!=227
+    if (GL->BumpMaps)
+#endif
+    {
+        Out << "flat out mat3 vTBNMat;" END_LINE;
+    }
+
+    if (GL->SupportsClipDistance)
+        Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
+
+    if (GIsEditor)
+    {
+        Out << R"(
+flat out uint vHitTesting;
+flat out uint vRendMap; 
+flat out vec4 vDrawColor;
+)";
+    }
+
+    Out << R"(
 out vec4 vEyeSpacePos;
+out vec3 vCoords;
+out vec3 vTangentViewPos;
+out vec3 vTangentFragPos;
 out vec2 vTexCoords;
 out vec2 vLightMapCoords;
 out vec2 vFogMapCoords;
-out vec3 vTangentViewPos;
-out vec3 vTangentFragPos;
 )";
 
 	if (GL->DetailTextures)
@@ -108,26 +131,6 @@ out vec3 vTangentFragPos;
 #if ENGINE_VERSION==227
 	Out << "out vec2 vEnvironmentTexCoords;" END_LINE;
 #endif
-	if (GIsEditor)
-		Out << "flat out vec3 vSurfaceNormal;" END_LINE; // f.e. Render normal view.
-#if ENGINE_VERSION!=227
-	if (GL->BumpMaps)
-#endif
-	{
-		Out << "flat out mat3 vTBNMat;" END_LINE;
-	}
-
-	if (GL->SupportsClipDistance)
-		Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
-
-    if (GIsEditor)
-    {
-        Out << R"(
-flat out uint vHitTesting;
-flat out uint vRendMap;
-flat out vec4 vDrawColor;
-)";
-    }
 
 #if 1
 	Out << R"(

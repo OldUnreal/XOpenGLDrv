@@ -1134,6 +1134,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		void DeleteShader();
 
+		void DumpShader(const char* Source, bool AddLineNumbers);
+
 		// Used to describe the layout of the drawcall parameters
 		struct DrawCallParameterInfo
 		{
@@ -1274,14 +1276,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 		MultiDrawIndirectBuffer(INT MaxMultiDraw)
 		{
 			CommandBuffer.AddZeroed(MaxMultiDraw);
-			TotalCommands = 0;
-			TotalVertices = 0;
 		}
 
 		void StartDrawCall()
 		{
-			CommandBuffer(TotalCommands).FirstVertex = TotalVertices;
-			CommandBuffer(TotalCommands).BaseInstance = TotalCommands;
+			CommandBuffer(TotalCommands).FirstVertex = TotalVertices + FirstVertexOffset;
+			CommandBuffer(TotalCommands).BaseInstance = TotalCommands + BaseInstanceOffset;
 			CommandBuffer(TotalCommands).InstanceCount = 1;
 		}
 
@@ -1296,9 +1296,38 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return TotalCommands + 1 >= CommandBuffer.Num();
 		}
 
-		void Reset()
+		void Reset(INT NewFirstVertexOffset=0, INT NewBaseInstanceOffset=0)
 		{
 			TotalCommands = TotalVertices = 0;
+			FirstVertexOffset = NewFirstVertexOffset;
+			BaseInstanceOffset = NewBaseInstanceOffset;
+		}
+
+		void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
+		{
+			// Issue draw calls
+			if (RenDev->OpenGLVersion == GL_Core && glDrawArraysInstancedBaseInstance)
+			{
+				for (INT i = 0; i < TotalCommands; ++i)
+				{
+					glDrawArraysInstancedBaseInstance(Mode,
+						CommandBuffer(i).FirstVertex,
+						CommandBuffer(i).Count,
+						CommandBuffer(i).InstanceCount,
+						CommandBuffer(i).BaseInstance
+					);
+				}
+
+				// stijn: This does not work yet and I don't know why. Do we need to store the command buffer
+				// in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
+				// glMultiDrawArraysIndirect(Mode, &DrawBuffer.CommandBuffer(0), DrawBuffer.TotalCommands, 0);
+				CHECK_GL_ERROR();
+			}
+			else
+			{
+				for (INT i = 0; i < TotalCommands; ++i)
+					glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
+			}
 		}
 
 		struct MultiDrawIndirectCommand
@@ -1311,8 +1340,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 		static_assert(sizeof(MultiDrawIndirectCommand) == 16, "Invalid indirect command size");
 
 		TArray<MultiDrawIndirectCommand> CommandBuffer;
-		INT TotalVertices;
-		INT TotalCommands;
+		INT TotalVertices{};
+		INT TotalCommands{};
+
+	private:
+		INT BaseInstanceOffset{};
+		INT FirstVertexOffset{};
 	};
 
 	//
