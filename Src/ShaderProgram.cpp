@@ -61,7 +61,7 @@ precision lowp int;
 	}
 
 	Out << R"(
-layout(std140, binding=)" << UXOpenGLRenderDevice::MatricesIndex << R"() uniform GlobalMatrices
+layout(std140) uniform GlobalMatrices
 {
   mat4 projMat;
   mat4 viewMat;
@@ -71,14 +71,14 @@ layout(std140, binding=)" << UXOpenGLRenderDevice::MatricesIndex << R"() uniform
   mat4 lightSpaceMat;
 };
 
-layout(std140, binding=)" << UXOpenGLRenderDevice::ClipPlaneIndex << R"() uniform ClipPlaneParams
+layout(std140) uniform ClipPlaneParams
 {
   vec4  ClipParams; // Clipping params, ClipIndex,0,0,0
   vec4  ClipPlane;  // Clipping planes. Plane.X, Plane.Y, Plane.Z, Plane.W
 };
 
 // Light information.
-layout(std140, binding=)" << UXOpenGLRenderDevice::StaticLightInfoIndex << R"() uniform StaticLightInfo
+layout(std140) uniform StaticLightInfo
 {
   vec4 LightPos[)" << MAX_LIGHTS << R"(];
   vec4 LightData1[)" << MAX_LIGHTS << R"(]; // LightBrightness, LightHue, LightSaturation, LightCone
@@ -88,7 +88,7 @@ layout(std140, binding=)" << UXOpenGLRenderDevice::StaticLightInfoIndex << R"() 
   vec4 LightData5[)" << MAX_LIGHTS << R"(]; // NormalLightRadius, bZoneNormalLight, unused, unused
 };
 
-layout(std140, binding=)" << UXOpenGLRenderDevice::CoordsIndex << R"() uniform GlobalCoords
+layout(std140) uniform GlobalCoords
 {
   mat4 FrameCoords;
   mat4 FrameUncoords;
@@ -178,7 +178,7 @@ void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint Sh
 	if (GL->UsingShaderDrawParameters)
 		Out << "struct ";
 	else
-		Out << "layout(std140, binding = " << BufferBindingIndex << ") uniform ";
+		Out << "layout(std140) uniform ";
 
 	Out << R"(DrawCallParameters
 {
