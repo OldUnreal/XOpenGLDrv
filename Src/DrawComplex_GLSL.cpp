@@ -417,7 +417,6 @@ vec3 hsv2rgb(vec3 c)
 }
 )";
 
-#if ENGINE_VERSION==227
 	Out << R"(
 vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float parallaxHeight)
 {
@@ -542,7 +541,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
 	}
 
 	// unused. Maybe later.
-# if 0
+#if 0
 	Out << R"(
 float parallaxSoftShadowMultiplier(in vec3 L, in vec2 initialTexCoord, in float initialHeight)
 {
@@ -601,8 +600,7 @@ if(dot(vec3(0, 0, 1), L) > 0)
 }
 )";
 
-# endif // 0
-#endif // ENGINE_VERSION==227
+#endif // 0
 
 #if 1
 	Out << R"(
