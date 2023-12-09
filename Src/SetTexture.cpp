@@ -376,9 +376,9 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			MinComposeSize = Info.Mips[Bind->BaseMip]->USize * Info.Mips[Bind->BaseMip]->VSize * 4;
 			InternalFormat = GL_RGBA8;
 			if (OpenGLVersion == GL_Core)
-				SourceFormat = GL_BGRA; // Was GL_RGBA;
+			  SourceFormat = GL_BGRA; // Was GL_RGBA;
 			else
-				SourceFormat = GL_RGBA; // ES prefers RGBA...
+			  SourceFormat = GL_RGBA; // ES prefers RGBA...
 			break;
 #if ENGINE_VERSION==227
 			// RGB10A2_LM. Used for HDLightmaps.
@@ -569,7 +569,22 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 					// TEXF_BGRA8_LM used by light and fogmaps.
 				case TEXF_BGRA8_LM:
 					guard(ConvertBGRA7777_RGBA8888);
-					ImgSrc = Mip->DataPtr;
+					if (OpenGLVersion == GL_Core)
+					  {
+					    ImgSrc = Mip->DataPtr;
+					  }
+					else // GL ES can't do BGRA so we need to swap the colors here
+					  {
+					    ImgSrc = Compose;
+					    DWORD* Ptr = (DWORD*)Compose;
+					    INT Count = USize * VSize;
+					    for (INT i = 0; i < Count; i++)
+					      {
+						FColor Color = ((FColor*)Mip->DataPtr)[i];
+						Exchange(Color.R, Color.B);
+						*Ptr++ = *(DWORD*)&Color;
+					      }
+					  }
 					unguard;
 					break;
 
