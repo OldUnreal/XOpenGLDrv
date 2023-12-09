@@ -61,6 +61,8 @@
 // cause of the crash.
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
 #define XOPENGL_MODIFIED_LOCK 1
+
+#define FGetHSV FPlane::GetHSV
 #elif UNREAL_TOURNAMENT_OLDUNREAL
 // stijn: Just do what other devices do!
 #define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
