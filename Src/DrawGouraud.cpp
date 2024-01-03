@@ -51,7 +51,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	clockFast(Stats.GouraudPolyCycles);
 	SetProgram(Gouraud_Prog);
-	dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog])->DrawGouraudPolyList(Frame, Info, Pts, NumPts, PolyFlags, Span);
+	dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog])->DrawGouraudPolyList(Frame, Info, Pts, NumPts, (PolyFlags & ~PF_Selected), Span);
 	unclockFast(Stats.GouraudPolyCycles);
 }
 #endif
