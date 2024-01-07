@@ -211,7 +211,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DPoint(const FSceneNode* Fram
 	else if (Z < 0.f)
 		Z = -Z;
 
-	if (TriangleDrawBuffer.IsFull())
+	if (TriangleDrawBuffer.IsFull() || !TriangleVertBuffer.CanBuffer(6))
 		Flush(true);
 
 	PrepareDrawCall( LineFlags, DrawColor, BlendMode, TriangleVertBuffer, 4);
@@ -219,12 +219,12 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Draw2DPoint(const FSceneNode* Fram
 
 	TriangleDrawBuffer.StartDrawCall();
 	auto Out = TriangleVertBuffer.GetCurrentElementPtr();
-	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
-	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
-	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
-	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
-	(Out++)->Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
-	(Out  )->Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
+	Out[0].Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
+	Out[1].Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
+	Out[2].Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
+	Out[3].Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
+	Out[4].Point = glm::vec3(RenDev->RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
+	Out[5].Point = glm::vec3(RenDev->RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RenDev->RFY2 * Z * (Y2 - Frame->FY2 + 0.5f), Z);
 	TriangleVertBuffer.Advance(6);
 	TriangleDrawBuffer.EndDrawCall(6);
 
