@@ -90,7 +90,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		// Check if the surface textures will change
 		RenDev->WillTextureStateChange(0, *Surface.Texture, NextPolyFlags) ||
 		(Surface.LightMap && RenDev->WillTextureStateChange(1, *Surface.LightMap, NextPolyFlags)) ||
-		(Surface.FogMap && RenDev->WillTextureStateChange(2, *Surface.FogMap, NextPolyFlags)) ||
+		((Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr) && RenDev->WillTextureStateChange(2, *Surface.FogMap, NextPolyFlags)) ||
 		(Surface.DetailTexture && RenDev->DetailTextures && RenDev->WillTextureStateChange(3, *Surface.DetailTexture, NextPolyFlags)) ||
 		(Surface.MacroTexture && RenDev->MacroTextures && RenDev->WillTextureStateChange(4, *Surface.MacroTexture, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
@@ -132,7 +132,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 	if (Surface.LightMap)
 		SetTexture(1, *Surface.LightMap, DrawCallParams.PolyFlags, -0.5, DF_LightMap, &DrawCallParams.LightMapUV);
 
-	if (Surface.FogMap)
+	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
 		SetTexture(2, *Surface.FogMap, PF_AlphaBlend, -0.5, DF_FogMap, &DrawCallParams.FogMapUV);
 	
 	if (Surface.DetailTexture && RenDev->DetailTextures)
