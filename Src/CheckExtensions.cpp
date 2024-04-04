@@ -124,20 +124,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
     if (GLExtensionSupported(TEXT("GL_ARB_shader_storage_buffer_object")))
     {
         SupportsSSBO = true;
-    }
-
-    if (UseShaderDrawParameters)
-    {
-        if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")) && SupportsSSBO)
-        {
-            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters and GL_ARB_shader_storage_buffer_object found. UseShaderDrawParameters enabled."));
-        }
-        else
-        {
-            GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters or GL_ARB_shader_storage_buffer_object not found. UseShaderDrawParameters disabled."));
-            UseShaderDrawParameters = false;
-        }
-    }
+    }    
 
 	if (GLExtensionSupported(TEXT("GL_ARB_gpu_shader_int64")))
 	{
@@ -168,6 +155,24 @@ void UXOpenGLRenderDevice::CheckExtensions()
         SupportsAMDMemoryInfo = true;
     }
     else SupportsAMDMemoryInfo = false;
+
+    if (UseShaderDrawParameters)
+    {
+        if (SupportsAMDMemoryInfo)
+        {
+            GWarn->Logf(TEXT("XOpenGL: UseShaderDrawParameters doesn't work well on AMD GPUs => option disabled."));
+            UseShaderDrawParameters = false;
+        }
+        if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")) && SupportsSSBO)
+        {
+            debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters and GL_ARB_shader_storage_buffer_object found. UseShaderDrawParameters enabled."));
+        }
+        else
+        {
+            GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters or GL_ARB_shader_storage_buffer_object not found. UseShaderDrawParameters disabled."));
+            UseShaderDrawParameters = false;
+        }
+    }
 
 # ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
     if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))

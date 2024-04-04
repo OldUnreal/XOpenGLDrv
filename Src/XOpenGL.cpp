@@ -472,11 +472,13 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
 
+#if 0
 	UsingPersistentBuffersTile = UsingPersistentBuffers;
 	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
 	UsingPersistentBuffersDrawcallParams = UsingPersistentBuffers; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
 	UsingPersistentBuffersSimple = UsingPersistentBuffers;
+#endif
 
 	// Init shaders
 	InitShaders();
