@@ -137,6 +137,8 @@ void main(void)
 
     if (!GL->UsingGeometryShaders)
     {
+		// stijn: BumpMap support code
+#if ENGINE_VERSION==227
         Out << R"(
   vec3 T = vec3(1.0, 1.0, 1.0); // Arbitrary.
   vec3 B = vec3(1.0, 1.0, 1.0); // Replace with actual values extracted from mesh generation some day.
@@ -149,9 +151,10 @@ void main(void)
   Out.TBNMat = transpose(mat3(T, B, N));
   Out.TangentViewPos = Out.TBNMat * normalize(FrameCoords[0].xyz);
   Out.TangentFragPos = Out.TBNMat * Coords.xyz;
-
-  gl_Position = modelviewprojMat * vec4(Coords, 1.0);
 )";
+#endif
+
+		Out << "  gl_Position = modelviewprojMat * vec4(Coords, 1.0);" END_LINE;
 
         if (GL->SupportsClipDistance)
         {
@@ -212,12 +215,24 @@ void main(void)
   mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
   mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
+)";
+	
+#if ENGINE_VERSION==227
+	Out << R"(
   vec3 Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
   vec3 Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
+)";
+#endif
+	
+	Out << R"(
   uint ClipIndex = uint(ClipParams.x);
 
   for (int i = 0; i < 3; ++i)
   {
+)";
+
+#if ENGINE_VERSION==227
+	Out << R"(
     vec3 T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));
     vec3 B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));
     vec3 N = normalize(vec3(modelMat * In[i].Normals));
@@ -226,7 +241,12 @@ void main(void)
     // if (dot(cross(N, T), B) < 0.0)
     // T = T * -1.0;
     Out.TBNMat = mat3(T, B, N);
-
+    Out.TangentViewPos = Out.TBNMat * normalize(FrameCoords[0].xyz);
+    Out.TangentFragPos = Out.TBNMat * In[i].Coords.xyz;
+)";
+#endif
+	
+	Out << R"(
     Out.EyeSpacePos = In[i].EyeSpacePos;
     Out.LightColor = In[i].LightColor;
     Out.FogColor = In[i].FogColor;
@@ -247,9 +267,6 @@ void main(void)
     Out.DistanceFogColor = In[i].DistanceFogColor;
     Out.DistanceFogInfo = In[i].DistanceFogInfo;
     Out.DistanceFogMode = In[i].DistanceFogMode;
-
-    Out.TangentViewPos = Out.TBNMat * normalize(FrameCoords[0].xyz);
-    Out.TangentFragPos = Out.TBNMat * In[i].Coords.xyz;
 )";
 
     if (GIsEditor)
@@ -292,22 +309,6 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::BuildFragmentShader(GLuint Shader
     Out << R"(
 } In;
 
-vec3 rgb2hsv(vec3 c)
-{
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0); // some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
-  vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);
-  vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-vec3 hsv2rgb(vec3 c)
-{
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
 )";
 
     Out << R"(
@@ -336,6 +337,7 @@ void main(void)
   vec4 LightColor;
 )";
 
+#if ENGINE_VERSION==227
     if (GL->UseHWLighting)
     {
         constexpr FLOAT MinLight = 0.025f;
@@ -365,7 +367,9 @@ void main(void)
   LightColor = TotalAdd;
 )";
     }
-    else Out << "  LightColor = In.LightColor;" END_LINE;
+    else
+#endif
+		Out << "  LightColor = In.LightColor;" END_LINE;
 
     Out << R"(
   // Handle PF_RenderFog.
@@ -612,37 +616,4 @@ void main(void)
     }
 
     Out << "}" END_LINE;
-
-    // Blending translation table
-    /*
-    //PF_Modulated
-    //glBlendFunc( GL_DST_COLOR, GL_SRC_COLOR );
-    //pixel_color * gl_FragColor
-
-    GL_ONE 						vec4(1.0)
-    GL_ZERO 					vec4(0.0)
-    GL_SRC_COLOR 				gl_FragColor
-    GL_SRC_ALPHA 				vec4(gl_FragColor.a)
-    GL_DST_COLOR 				pixel_color
-    GL_DST_ALPHA 				vec4(pixel_color.a)
-    GL_ONE_MINUS_SRC_COLOR		vec4(1.0) - gl_FragColor
-    GL_ONE_MINUS_SRC_ALPHA 		vec4(1.0  - gl_FragColor.a)
-    GL_ONE_MINUS_DST_COLOR 		vec4(1.0) - pixel_color
-    GL_ONE_MINUS_DST_ALPHA 		vec4(1.0  - pixel_color.a)
-
-    if (gPolyFlags & PF_Invisible)
-        glBlendFunc(GL_ZERO, GL_ONE);
-
-    if (gPolyFlags & PF_Translucent)
-        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_COLOR);
-
-    if (gPolyFlags & PF_Modulated)
-        glBlendFunc(GL_DST_COLOR, GL_SRC_COLOR);
-
-    if (gPolyFlags & PF_AlphaBlend)
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    if (gPolyFlags & PF_Highlighted)
-        glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    */
 }

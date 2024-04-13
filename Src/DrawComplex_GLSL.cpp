@@ -93,12 +93,10 @@ flat out float vTimeSeconds;
 
     if (GIsEditor)
         Out << "flat out vec3 vSurfaceNormal;" END_LINE; // f.e. Render normal view.
-#if ENGINE_VERSION!=227
+#if ENGINE_VERSION==227
     if (GL->BumpMaps)
-#endif
-    {
         Out << "flat out mat3 vTBNMat;" END_LINE;
-    }
+#endif
 
     if (GL->SupportsClipDistance)
         Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
@@ -182,12 +180,10 @@ void main(void)
   vec3 MapCoordsYAxis = GetYAxis().xyz;
 )";
 
-# if ENGINE_VERSION!=227
+# if ENGINE_VERSION==227
 	if (GIsEditor || GL->BumpMaps)
-# endif
-	{
 		Out << "  vec3 MapCoordsZAxis = GetZAxis().xyz;" END_LINE;
-	}
+# endif
 
 	Out << R"(
   float UDot = GetXAxis().w;
@@ -257,9 +253,8 @@ void main(void)
 )";
 # endif
 
-# if ENGINE_VERSION!=227
+# if ENGINE_VERSION==227
 	if (GL->BumpMaps)
-# endif
 	{
 		Out << R"(
   vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);
@@ -279,8 +274,9 @@ void main(void)
     vTangentFragPos = vTBNMat * Coords.xyz;
   }
 )";
-
 	}
+# endif
+
 	if (GIsEditor)
 		Out << "  vSurfaceNormal = MapCoordsZAxis;" END_LINE;
 
@@ -368,13 +364,13 @@ flat in vec4 vDrawColor;
 
 	if (GIsEditor)
 		Out << "flat in vec3 vSurfaceNormal;" END_LINE;
-#if ENGINE_VERSION!=227
+#if ENGINE_VERSION==227
 	if (GL->BumpMaps)
-#endif
 	{
 		Out << "in vec4 vEyeSpacePos;" END_LINE;
 		Out << "flat in mat3 vTBNMat;" END_LINE;
 	}
+#endif
 
 	if (GL->DetailTextures)
 		Out << "in vec2 vDetailTexCoords;" END_LINE;
@@ -398,25 +394,7 @@ flat in vec4 vDrawColor;
 		Out << "layout(location = 0, index = 0) out vec4 FragColor;" END_LINE;
 	}
 
-	Out << R"(
-vec3 rgb2hsv(vec3 c)
-{
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0); // some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
-  vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);
-  vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-vec3 hsv2rgb(vec3 c)
-{
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-)";
-
+#if ENGINE_VERSION==227
 	Out << R"(
 vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float parallaxHeight)
 {
@@ -539,7 +517,8 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
 }
 )";
 	}
-
+#endif // ENGINE_VERSION==227
+	
 	// unused. Maybe later.
 #if 0
 	Out << R"(
@@ -613,13 +592,14 @@ void main(void)
   vec2 texCoords = vTexCoords;
 )";
 
+#if ENGINE_VERSION==227
 	if (GL->UseHWLighting || GL->BumpMaps)
 	{
 		Out << R"(
   vec3 TangentViewDir = normalize(vTangentViewPos - vTangentFragPos);
   int NumLights = int(LightData4[0].y);
 )";
-
+		
 		if (GL->ParallaxVersion == Parallax_Basic ||
 			GL->ParallaxVersion == Parallax_Occlusion ||
 			GL->ParallaxVersion == Parallax_Relief)
@@ -637,6 +617,7 @@ void main(void)
 )";
 		}
 	}
+#endif
 
 	Out << R"(
   vec4 Color = GetTexel(vTexHandle, Texture0, texCoords.xy);
@@ -660,6 +641,7 @@ void main(void)
   vec4 LightColor = vec4(1.0);
 )";
 
+#if ENGINE_VERSION==227
 	if (GL->UseHWLighting)
 	{
 		constexpr FLOAT MinLight = 0.05f;
@@ -691,6 +673,7 @@ void main(void)
 )";
 	}
 	else // Software Lighting
+#endif
 	{
 		const char* LightColorOrder = GL->OpenGLVersion == GL_ES ? "bgr" : "rgb";
 
@@ -768,14 +751,11 @@ void main(void)
 	}
 
 	// BumpMap (Normal Map)
+#if ENGINE_VERSION==227
 	if (GL->BumpMaps)
 	{
 		constexpr float MinLight = 0.05f;
-#if ENGINE_VERSION == 227
 		FString Sunlight = FString::Printf(TEXT("bool bSunlight = bool(uint(LightData2[i].x == %du));"), LE_Sunlight);
-#else
-		FString Sunlight = TEXT("bool bSunlight = false;");
-#endif
 
 		Out << R"(
   if ((vDrawFlags & )" << DF_BumpMap << R"(u) == )" << DF_BumpMap << R"(u)
@@ -831,6 +811,7 @@ void main(void)
   }
 )";
 	}
+#endif
 
 	// FogMap
 	Out << R"(
@@ -866,13 +847,11 @@ void main(void)
     TotalColor = TotalColor * LightColor;
 
   TotalColor += FogColor;
-
-  // Add DistanceFog, needs to be added after Light has been applied.
 )";
 
 #if ENGINE_VERSION==227
-	// stijn: Very slow! Went from 135 to 155FPS on CTF-BT-CallousV3 by just disabling this branch even tho 469 doesn't do distance fog
 	Out << R"(    
+  // Add DistanceFog, needs to be added after Light has been applied.
   if (vDistanceFogMode >= 0)
   {    
     FogParameters DistanceFogParams;
@@ -892,6 +871,7 @@ void main(void)
   }
 )";
 #endif
+	
 	if (GIsEditor)
 	{
 		// Editor support.
@@ -968,13 +948,8 @@ void main(void)
 void main(void)
 {
   vec4 Color = GetTexel(vTexHandle, Texture0, vTexCoords);
-
-  if (vBaseDiffuse > 0.0)
-    Color *= vBaseDiffuse; // Diffuse factor.
-
-  if (vBaseAlpha > 0.0)
-    Color.a *= vBaseAlpha; // Alpha.
-
+  Color *= vBaseDiffuse; // Diffuse factor.
+  Color.a *= vBaseAlpha; // Alpha.
   //FragColor = GetTexel(vTexHandle, Texture0, vTexCoords);
   FragColor = Color;
 }
