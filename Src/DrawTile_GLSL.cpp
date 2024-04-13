@@ -276,17 +276,7 @@ void main(void)
   vec4 TotalColor;
   vec4 Color = GetTexel(In.TexHandle, Texture0, In.TexCoords.xy);
 
-  // Handle PF_Masked.
-  if ((In.PolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
-  {
-    if (Color.a < 0.5)
-      discard;
-    else Color.rgb /= Color.a;
-  }
-  else if (((In.PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u) && Color.a < 0.01)
-    discard;
-
-  TotalColor = Color * In.DrawColor;
+  TotalColor = ApplyPolyFlags(Color, In.PolyFlags) * In.DrawColor;
 
   if ((In.PolyFlags & )" << PF_Modulated << R"(u) != )" << PF_Modulated << R"(u)
     TotalColor = GammaCorrect(In.Gamma, TotalColor);

@@ -1,4 +1,4 @@
-﻿/*=============================================================================
+/*=============================================================================
 	XOpenGL.cpp: Unreal XOpenGL implementation for OpenGL 3.3+ and GL ES 3.0+
 
 	Copyright 2014-2021 Oldunreal
@@ -239,7 +239,12 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	UseLightmapAtlas = 1;
-	SupportsUpdateTextureRect = 1;
+	
+	// stijn: Partial updates of the lightmap atlas absolutely kill performance
+	// on mac We went from 16fps to 90fps on our fps1 benchmark map when we
+	// disabled this feature
+	
+    // SupportsUpdateTextureRect = 1;
 #endif
 
 	unguard;
@@ -1574,7 +1579,7 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 	Coords->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
 	GlobalCoordsBuffer.Bind();
-	GlobalCoordsBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+	GlobalCoordsBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 	unguard;
 }
@@ -1633,7 +1638,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		}
 		
 		StaticLightInfoBuffer.Bind();
-		StaticLightInfoBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+		StaticLightInfoBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 		CHECK_GL_ERROR();
 	}
 	else if (UseHWLighting && Level)
@@ -1675,7 +1680,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		}
 
 		StaticLightInfoBuffer.Bind();
-		StaticLightInfoBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+		StaticLightInfoBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 		CHECK_GL_ERROR();
 	}
 	CHECK_GL_ERROR();
@@ -1737,7 +1742,7 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	GlobalMatrices->modelviewMat = GlobalMatrices->viewMat * GlobalMatrices->modelMat;
 
 	GlobalMatricesBuffer.Bind();
-	GlobalMatricesBuffer.BufferData(false, false, GL_STATIC_DRAW);
+	GlobalMatricesBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
@@ -1788,7 +1793,7 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	GlobalMatrices->modelviewMat = GlobalMatrices->viewMat * GlobalMatrices->modelMat;
 
 	GlobalMatricesBuffer.Bind();
-	GlobalMatricesBuffer.BufferData(false, false, GL_STATIC_DRAW);
+	GlobalMatricesBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	UpdateCoords(Frame);
@@ -1808,7 +1813,7 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	ClipPlaneInfo->ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	++NumClipPlanes;
@@ -1830,7 +1835,7 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	ClipPlaneInfo->ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	return 1;

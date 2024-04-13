@@ -223,14 +223,14 @@ void UXOpenGLRenderDevice::DrawTileProgram::Flush(bool Wait)
 
     if (VertBufferES.IsBound())
 	{
-		VertBufferES.BufferData(RenDev->UseBufferInvalidation, false, GL_STREAM_DRAW);
+		VertBufferES.BufferData(RenDev->UseBufferInvalidation, false, VERTEX_BUFFER_USAGE_PATTERN);
 
 		if (!VertBufferES.IsInputLayoutCreated())
 			CreateInputLayout();
 	}
 	else
 	{
-		VertBufferCore.BufferData(RenDev->UseBufferInvalidation, false, GL_STREAM_DRAW);
+		VertBufferCore.BufferData(RenDev->UseBufferInvalidation, false, VERTEX_BUFFER_USAGE_PATTERN);
 
 		if (!VertBufferCore.IsInputLayoutCreated())
 			CreateInputLayout();

@@ -319,28 +319,20 @@ void main(void)
 
   int NumLights = int(LightData4[0].y);
   vec4 Color = GetTexel(In.TexHandle, Texture0, In.TexCoords);
+  Color *= In.TextureInfo.x; // Diffuse factor.
+  Color.a *= In.TextureInfo.y; // Alpha.
+)";
 
-  if (In.TextureInfo.x > 0.0)
-    Color *= In.TextureInfo.x; // Diffuse factor.
-  if (In.TextureInfo.y > 0.0)
-    Color.a *= In.TextureInfo.y; // Alpha.
+	// stijn: see comment in DrawComplex_GLSL.cpp
+#if ENGINE_VERSION==227
+	Out << R"(
   if (In.TextureFormat == )" << TEXF_BC5 << R"(u) // BC5 (GL_COMPRESSED_RG_RGTC2) compression
     Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);
+)";
+#endif
 
-  if ((In.PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u)
-  {
-    Color.a *= In.LightColor.a; // Alpha.
-    if (Color.a < 0.01)
-      discard;
-  }
-  // Handle PF_Masked.
-  else if ((In.PolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
-  {
-    if (Color.a < 0.5)
-      discard;
-    else Color.rgb /= Color.a;
-  }
-
+	Out << R"(
+  Color = ApplyPolyFlags(Color, In.PolyFlags);
   vec4 LightColor;
 )";
 

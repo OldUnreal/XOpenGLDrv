@@ -436,7 +436,7 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::Flush(bool Wait)
 	if (VertBuffer.Size() == 0)
 		return;
 
-	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
+	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, VERTEX_BUFFER_USAGE_PATTERN);
 
 	if (!RenDev->UsingShaderDrawParameters)
 	{

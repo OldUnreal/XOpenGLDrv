@@ -262,7 +262,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 			LineVertBuffer.SetInputLayoutCreated();
 		}
 
-		LineVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
+		LineVertBuffer.BufferData(false, true, VERTEX_BUFFER_USAGE_PATTERN);
 
 		LineDrawBuffer.Draw(GL_LINES, RenDev);
 
@@ -283,7 +283,7 @@ void UXOpenGLRenderDevice::DrawSimpleProgram::Flush(bool Wait)
 			TriangleVertBuffer.SetInputLayoutCreated();
 		}
 
-		TriangleVertBuffer.BufferData(false, true, GL_STREAM_DRAW);
+		TriangleVertBuffer.BufferData(false, true, VERTEX_BUFFER_USAGE_PATTERN);
 
 		TriangleDrawBuffer.Draw(GL_TRIANGLES, RenDev);
 

@@ -92,8 +92,11 @@
 // maximum number of lines/triangles in one drawsimple multi-draw
 #define MAX_DRAWSIMPLE_BATCH 64 * 256
 
-// stijn: this absolutely needs to be dynamic or stream draw on macOS
-#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
+// stijn: per-drawcall data absolutely needs to use GL_STREAM_DRAW or GL_DYNAMIC_DRAW on mac
+#define DRAWCALL_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
+#define VERTEX_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
+// stijn: this still works reasonably well with GL_STATIC_DRAW, but GL_DYNAMIC_DRAW still gives us a minor performance boost
+#define UNIFORM_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
 
 #define DRAWSIMPLE_SIZE 64 * 256
 #define DRAWTILE_SIZE 64 * 256
@@ -872,15 +875,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Creates a CPU-accessible mapping for this buffer
 		void MapVertexBuffer(bool Persistent, GLuint BufferSize)
 		{
-			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, GL_STREAM_DRAW);
+			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, VERTEX_BUFFER_USAGE_PATTERN);
 		}
 
-		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=GL_DYNAMIC_DRAW)
+		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN)
 		{
 			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, ExpectedUsage);
 		}
 
-		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=GL_DYNAMIC_DRAW)
+		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN)
 		{
 			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage);
 		}
@@ -956,7 +959,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (Reinitialize
 #if defined(__LINUX_ARM__) || MACOSX
-				|| 1 // These platforms seem to prefer forced reinitialization...
+                               || 1 // These platforms seem to prefer forced reinitialization...
 #endif
 				)
 				glBufferData(BufferType, SizeBytes(), Buffer, ExpectedUsage);

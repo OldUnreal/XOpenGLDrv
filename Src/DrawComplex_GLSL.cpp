@@ -152,7 +152,7 @@ void main(void)
   vBumpMapSpecular = GetBumpMapInfo().y;
 )";
 
-#if ENGINE_VERSION==227
+# if ENGINE_VERSION==227
     Out << R"(
   vParallaxScale = GetHeightMapInfo().z * 0.025; // arbitrary to get DrawScale into (for this purpose) sane regions.
   vTimeSeconds = GetHeightMapInfo().w; // Surface.Level->TimeSeconds
@@ -162,7 +162,7 @@ void main(void)
   vEnviroMapTexHandle = GetTexHandles(3).xy;
   vHeightMapTexHandle = GetTexHandles(3).zw;
 )";
-#endif
+# endif
 
     if (GIsEditor)
     {
@@ -182,9 +182,9 @@ void main(void)
   vec3 MapCoordsYAxis = GetYAxis().xyz;
 )";
 
-#if ENGINE_VERSION!=227
+# if ENGINE_VERSION!=227
 	if (GIsEditor || GL->BumpMaps)
-#endif
+# endif
 	{
 		Out << "  vec3 MapCoordsZAxis = GetZAxis().xyz;" END_LINE;
 	}
@@ -246,7 +246,7 @@ void main(void)
 	}
 
 	// Texture UV EnvironmentMap
-#if ENGINE_VERSION==227
+# if ENGINE_VERSION==227
 	Out << R"(
   if ((vDrawFlags & )" << DF_EnvironmentMap << R"(u) == )" << DF_EnvironmentMap << R"(u)
   {
@@ -255,11 +255,11 @@ void main(void)
     vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;
   }
 )";
-#endif
+# endif
 
-#if ENGINE_VERSION!=227
+# if ENGINE_VERSION!=227
 	if (GL->BumpMaps)
-#endif
+# endif
 	{
 		Out << R"(
   vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);
@@ -640,31 +640,23 @@ void main(void)
 
 	Out << R"(
   vec4 Color = GetTexel(vTexHandle, Texture0, texCoords.xy);
+  Color *= vBaseDiffuse; // Diffuse factor.
+  Color.a *= vBaseAlpha; // Alpha.
+)";
 
-  if (vBaseDiffuse > 0.0)
-    Color *= vBaseDiffuse; // Diffuse factor.
-
-  if (vBaseAlpha > 0.0)
-    Color.a *= vBaseAlpha; // Alpha.
-
+	// stijn: This is a rarely used code path, but it still adds a branch to our
+	// shader code. Many GPUs dislike branches so this is just a silly way to
+	// reduce performance. If you absolutely need this color correction, then
+	// I would recommend doing it in the texture upload code instead!	
+#if ENGINE_VERSION==227
+	Out << R"(
   if (vTextureFormat == )" << TEXF_BC5 << R"(u) //BC5 (GL_COMPRESSED_RG_RGTC2) compression
     Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);
-
-  // Handle PF_Masked.
-  if ((vPolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
-  {
-    if (Color.a < 0.5)
-      discard;
-    else Color.rgb /= Color.a;
-  }
-  else if ((vPolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && Color.a < 0.01)
-    discard;
-  // if ((vPolyFlags&PF_Mirrored) == PF_Mirrored)
-  // {
-  //   add mirror code here.
-  // }
-
-  TotalColor = Color;
+)";
+#endif
+	
+	Out << R"(
+  TotalColor = ApplyPolyFlags(Color, vPolyFlags);
   vec4 LightColor = vec4(1.0);
 )";
 

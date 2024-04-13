@@ -16,7 +16,7 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
+static void Emit_Globals(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
 	// VERSION
 	if (GL->OpenGLVersion == GL_Core)
@@ -29,7 +29,7 @@ static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 			Out << "#version 330 core" END_LINE;
 	}
 	else
-        {	  
+	{	  
 	  Out << "#version 310 es" END_LINE;
 	  Out << "#extension GL_OES_shader_io_blocks : require" END_LINE;
 	}
@@ -159,13 +159,31 @@ vec4 GammaCorrect(float Gamma, vec4 Color)
     Color.b = pow(Color.b, InvGamma);
     return Color;
 }
+)";
 
-// The following directive resets the line number to 1 
-// to have the correct output logging for a possible 
-// error within the shader files.
-#line 1
-)";	
+	if (ShaderType == GL_FRAGMENT_SHADER)
+	{
+		Out << R"(
+vec4 ApplyPolyFlags(vec4 Color, uint PolyFlags)
+{
+  // Handle PF_Masked.
+  if ((PolyFlags & )" << PF_Masked << R"(u) == )" << PF_Masked << R"(u)
+  {
+    if (Color.a < 0.5)
+      discard;
+    else Color.rgb /= Color.a;
+  }
+  else if ((PolyFlags & )" << PF_AlphaBlend << R"(u) == )" << PF_AlphaBlend << R"(u && Color.a < 0.01)
+    discard;
+  return Color;
+}
+)";
+	}
 
+    // The following directive resets the line number to 1 
+    // to have the correct output logging for a possible 
+    // error within the shader files.
+	Out << "#line 1" END_LINE;
 }
 
 void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseInstanceID)
@@ -308,7 +326,7 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 {
 	guard(CompileShader);
 	FShaderWriterX ShOut;
-	Emit_Globals(RenDev, ShOut);
+	Emit_Globals(ShaderType, RenDev, ShOut);
 	if (EmitHeaderFunc)
 		(*EmitHeaderFunc)(ShaderType, RenDev, ShOut, this);
 	(*Func)(ShaderType, RenDev, ShOut, this);

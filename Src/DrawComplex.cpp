@@ -239,7 +239,7 @@ void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
 	if (VertBuffer.IsEmpty())
 		return;
 
-	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
+	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, VERTEX_BUFFER_USAGE_PATTERN);
 	if (!RenDev->UsingShaderDrawParameters)
 	{
 		auto Out = ParametersBuffer.GetElementPtr(0);
