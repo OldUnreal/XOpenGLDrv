@@ -172,6 +172,8 @@ void UXOpenGLRenderDevice::CheckExtensions()
             GWarn->Logf(TEXT("XOpenGL: GL_ARB_shader_draw_parameters or GL_ARB_shader_storage_buffer_object not found. UseShaderDrawParameters disabled."));
             UseShaderDrawParameters = false;
         }
+
+        glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &MaxSSBOBlockSize);
     }
 
 # ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
@@ -208,13 +210,11 @@ void UXOpenGLRenderDevice::CheckExtensions()
     SDL_GL_GetAttribute(SDL_GL_DEPTH_SIZE, &db);
     debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_DEPTH_SIZE DesiredDepthBits: %i, provided: %i"),DesiredDepthBits, db);
 
-
     if (UseSRGBTextures)
     {
         SDL_GL_GetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, &srgb);
         debugf(NAME_DevGraphics, TEXT("XOpenGL: SDL_GL_FRAMEBUFFER_SRGB_CAPABLE: %i"),srgb);
     }
-    CHECK_GL_ERROR();
 # endif
 
     INT MaxTextureImageUnits = 0;
