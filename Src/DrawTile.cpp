@@ -179,7 +179,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		if (Info.Modifier)
 		{
 			for (INT i = 0; i < 6; ++i)
-				Info.Modifier->TransformPoint(Out[i].UV.x, Out[i].UV.y);
+				Info.Modifier->TransformPoint(Out[i].TexCoords.x, Out[i].TexCoords.y);
 		}
 #endif
 

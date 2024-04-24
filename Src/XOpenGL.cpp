@@ -1625,7 +1625,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		LightData->LightData4[i] = glm::vec4(Actor->WorldLightRadius(), NumLights, (GLfloat)Actor->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
 		LightData->LightData5[i] = glm::vec4(Actor->LightRadius * 10, 1.0, 0.0, 0.0);
 #else
-		LightData->LightData4[i] = glm::vec4(Actor->WorldLightRadius(), _NumLights, (GLfloat)Actor->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
+		LightData->LightData4[i] = glm::vec4(Actor->WorldLightRadius(), NumLights, (GLfloat)Actor->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
 		LightData->LightData5[i] = glm::vec4(Actor->NormalLightRadius, (GLfloat)Actor->bZoneNormalLight, Actor->LightBrightness, 0.0);
 #endif
 		if (i == MAX_LIGHTS - 1)
@@ -2253,7 +2253,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 	);
 
 #if ENGINE_VERSION==227
-    StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumStaticLights);
+    StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumLights);
 #endif
 
 #ifndef __LINUX_ARM__
@@ -2335,7 +2335,7 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	#if ENGINE_VERSION==227
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
-	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of static Lights: %i"), NumStaticLights);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of static Lights: %i"), NumLights);
     #endif
     Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
