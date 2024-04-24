@@ -75,6 +75,10 @@ out VertexData
     Out << R"(
 } Out;
 
+#if OPT_SupportsClipDistance && !OPT_GeometryShaders
+out float gl_ClipDistance[OPT_MaxClippingPlanes];
+#endif
+
 void main(void)
 {
   Out.TexCoords = TexCoords * GetDiffuseInfo(DrawID).xy;
@@ -117,7 +121,7 @@ void main(void)
 
   vDrawID = DrawID;
 
-#if OPT_SupportsClipDistance
+#if OPT_SupportsClipDistance && !OPT_GeometryShaders
   uint ClipIndex = uint(ClipParams.x);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Out.EyeSpacePos.xyz);
 #endif
@@ -422,24 +426,24 @@ void main(void)
 #endif
 
 #if OPT_DistanceFog
-  int vDistanceFogMode = GetDistanceFogMode(DrawID);
-  if (vDistanceFogMode >= 0)
+  int DistanceFogMode = GetDistanceFogMode(DrawID);
+  if (DistanceFogMode >= 0)
   {
-    vec4 vDistanceFogInfo = GetDistanceFogInfo(DrawID);
-    vec4 vDistanceFogColor = GetDistanceFogColor(DrawID);
+    vec4 DistanceFogInfo = GetDistanceFogInfo(DrawID);
+    vec4 DistanceFogColor = GetDistanceFogColor(DrawID);
 
     FogParameters DistanceFogParams;
-    DistanceFogParams.FogStart = In.DistanceFogInfo.x;
-    DistanceFogParams.FogEnd = In.DistanceFogInfo.y;
-    DistanceFogParams.FogDensity = In.DistanceFogInfo.z;
-    DistanceFogParams.FogMode = In.DistanceFogMode;
+    DistanceFogParams.FogStart = DistanceFogInfo.x;
+    DistanceFogParams.FogEnd = DistanceFogInfo.y;
+    DistanceFogParams.FogDensity = DistanceFogInfo.z;
+    DistanceFogParams.FogMode = DistanceFogMode;
 
 # if OPT_Modulated
     DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);
 # elif OPT_Translucent && !OPT_Environment
     DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);
 # else
-    DistanceFogParams.FogColor = In.DistanceFogColor;
+    DistanceFogParams.FogColor = DistanceFogColor;
 # endif
 
     DistanceFogParams.FogCoord = abs(In.EyeSpacePos.z / In.EyeSpacePos.w);
