@@ -98,8 +98,8 @@
 #define MAX_DRAWSIMPLE_BATCH 64 * 256
 
 // stijn: per-drawcall data absolutely needs to use GL_STREAM_DRAW or GL_DYNAMIC_DRAW on mac
-#define DRAWCALL_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
-#define VERTEX_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
+#define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
+#define VERTEX_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
 // stijn: this still works reasonably well with GL_STATIC_DRAW, but GL_DYNAMIC_DRAW still gives us a minor performance boost
 #define UNIFORM_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
 
@@ -1102,31 +1102,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
         void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
         {
-            // Issue draw calls
-            if (RenDev->OpenGLVersion == GL_Core && glDrawArraysInstancedBaseInstance)
-            {
-#if !MACOSX
-                for (INT i = 0; i < TotalCommands; ++i)
-                {
-					glDrawArraysInstanced(Mode,
-						CommandBuffer(i).FirstVertex,
-						CommandBuffer(i).Count,
-						CommandBuffer(i).InstanceCount
-					);
-                }
-#else
-
-                // stijn: This does not work yet and I don't know why. Do we need to store the command buffer
-                // in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
-                glMultiDrawArraysIndirect(Mode, &CommandBuffer(0), TotalCommands, 0);
-#endif
-                CHECK_GL_ERROR();
-            }
-            else
-            {
-                for (INT i = 0; i < TotalCommands; ++i)
-                    glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
-            }
+			// stijn: This does not work yet and I don't know why. Do we need to store the command buffer
+			// in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
+			// glMultiDrawArraysIndirect(Mode, &CommandBuffer(0), TotalCommands, 0);
+			for (INT i = 0; i < TotalCommands; ++i)
+				glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
         }
 
         struct MultiDrawIndirectCommand
