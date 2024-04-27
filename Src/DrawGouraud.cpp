@@ -427,7 +427,7 @@ UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, 
 	VertexBufferSize				= DRAWGOURAUDPOLY_SIZE;
 	ParametersBufferSize			= DRAWGOURAUDPOLY_SIZE;
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::GouraudParametersIndex;
-	NumTextureSamplers				= 4;
+	NumTextureSamplers				= 6;
 	DrawMode						= GL_TRIANGLES;
 	NumVertexAttributes				= 6;
 	UseSSBOParametersBuffer			= RenDev->UsingShaderDrawParameters;
