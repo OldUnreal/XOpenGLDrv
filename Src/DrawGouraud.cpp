@@ -124,7 +124,7 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 #if ENGINE_VERSION==227
 		1.f;
 #else
-		Info.Texture ? Info.Texture->Alpha : 1.f;
+		(Info.Texture && Info.Texture->Alpha) > 0.f ? Info.Texture->Alpha : 1.f;
 #endif
 	
 	DrawCallParams->DrawColor = HitTesting() ? FPlaneToVec4(HitColor) : glm::vec4(0.f, 0.f, 0.f, TextureAlpha);
