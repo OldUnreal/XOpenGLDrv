@@ -308,7 +308,7 @@ void UXOpenGLRenderDevice::DrawSimpleLineProgram::DeactivateShader()
 
 void UXOpenGLRenderDevice::DrawSimpleLineProgram::BuildCommonSpecializations()
 {
-	// TODO
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
 }
 
 /*-----------------------------------------------------------------------------
@@ -356,7 +356,7 @@ void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::DeactivateShader()
 
 void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::BuildCommonSpecializations()
 {
-	// TODO
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
 }
 
 /*-----------------------------------------------------------------------------
