@@ -198,7 +198,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #ifdef __EMSCRIPTEN__
 	OpenGLVersion = GL_ES;
     UseEnhancedLightmaps = 0; // CHECK ME! GL_ES and UseEnhancedLightmaps don't like each other very much (yet?).
-#elif __LINUX_ARM__
+#elif __LINUX_ARM__ || __LINUX_ARM64__
 	OpenGLVersion = GL_ES;
     UseEnhancedLightmaps = 0;
 #else
@@ -2086,12 +2086,8 @@ void UXOpenGLRenderDevice::Exit()
 
 #ifdef SDL2BUILD
 	ResetShaders();
-	if (SharedBindMap)
-	{
-		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
-		delete SharedBindMap;
-		SharedBindMap = NULL;
-	}
+	delete SharedBindMap;
+	SharedBindMap = NULL;
 	CurrentGLContext = NULL;
 
 # if !UNREAL_TOURNAMENT_OLDUNREAL
@@ -2118,9 +2114,8 @@ void UXOpenGLRenderDevice::Exit()
 	ResetShaders();
 	if (AllContexts.Num() == 0 && SharedBindMap)
 	{
-		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
-		delete SharedBindMap;
-		SharedBindMap = NULL;
+	  delete SharedBindMap;
+	  SharedBindMap = NULL;
 	}
 
 	// Shut down global GL.
