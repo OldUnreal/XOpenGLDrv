@@ -184,7 +184,7 @@ static void EmitParallaxFunction(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float parallaxHeight)
 {
     float vParallaxScale = GetHeightMapInfo(vDrawID).z * 0.025;
-    float vTimeSeconds = GetHeightMapInfo(DrawID).w; // Surface.Level->TimeSeconds
+    float vTimeSeconds = GetHeightMapInfo(vDrawID).w; // Surface.Level->TimeSeconds
         )";
         if (GL->ParallaxVersion == Parallax_Basic) // very basic implementation
         {
@@ -535,7 +535,7 @@ void main(void)
       // specular
       vec3 halfwayDir = normalize(TangentlightDir + TangentViewDir);
       float spec = pow(max(dot(TextureNormal, halfwayDir), 0.0), 8.0);
-      vec3 specular = vec3(max(GetBumpMapInfo(DrawID).y, 0.1)) * spec * CurrentLightColor * LightBrightness;
+      vec3 specular = vec3(max(GetBumpMapInfo(vDrawID).y, 0.1)) * spec * CurrentLightColor * LightBrightness;
 
       TotalBumpColor += (ambient + diffuse + specular) * attenuation;
     }
