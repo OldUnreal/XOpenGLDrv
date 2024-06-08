@@ -286,7 +286,7 @@ void UXOpenGLRenderDevice::DrawTileESProgram::BuildCommonSpecializations()
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_Masked));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_AlphaBlended));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_AlphaBlended));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_AlphaBlended));
 }
 
@@ -358,10 +358,11 @@ void UXOpenGLRenderDevice::DrawTileCoreProgram::ActivateShader()
 
 void UXOpenGLRenderDevice::DrawTileCoreProgram::BuildCommonSpecializations()
 {
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_Masked));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_AlphaBlended));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_AlphaBlended));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_AlphaBlended));
 }
 

@@ -267,14 +267,14 @@ void UXOpenGLRenderDevice::DrawComplexProgram::BuildCommonSpecializations()
 {
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_DetailTexture));
-   SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap));
-   SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Masked));
-   SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Translucent));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_FogMap));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_Translucent));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_FogMap));
-SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_MacroTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_FogMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_FogMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_MacroTexture));
 }
 
 /*-----------------------------------------------------------------------------
