@@ -12,130 +12,102 @@
 #include "XOpenGL.h"
 
 /*-----------------------------------------------------------------------------
-	GLSL Code
-------------------------------------------------------------------------------*/
+	Globals
+-----------------------------------------------------------------------------*/
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::EmitHeader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
+const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderDevice::DrawSimpleParametersInfo[]
+=
 {
-	// DrawSimple isn't performance-critical so we don't use multi-drawing with SSBOs here
-	Out << R"(
-layout(std140) uniform DrawCallParameters
-{
-	vec4 DrawColor;
-	float Gamma;
-	uint HitTesting;
-	uint LineFlags;
-	uint DrawMode;
-	uint BlendMode;
-	uint Padding0;
-	uint Padding1;
-	uint Padding2;	
+	{"vec4", "DrawColor", 0},
+	{ nullptr, nullptr, 0}
 };
-)";
-}
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
-{
-	Out << "layout(location = 0) in vec3 Coords; // == gl_Vertex" END_LINE;
+/*-----------------------------------------------------------------------------
+	Shaders
+-----------------------------------------------------------------------------*/
 
-	if (GL->OpenGLVersion != GL_ES)
-		Out << "out float gl_ClipDistance[" << GL->MaxClippingPlanes << "];" END_LINE;
+static const char* SimpleVertexShader = R"(
+layout(location = 0) in vec3 Coords; // == gl_Vertex
+layout(location = 1) in uint DrawID; // emulated gl_DrawID
+#if OPT_SupportsClipDistance
+out float gl_ClipDistance[OPT_MaxClippingPlanes];
+#endif
 
-	Out << R"(
 void main(void)
 {
-  vec4 vEyeSpacePos = modelviewMat * vec4(Coords, 1.0);
   gl_Position = modelviewprojMat * vec4(Coords, 1.0);
-)";
 
-	if (GL->OpenGLVersion != GL_ES)
-	{
-		Out << R"(
+#if OPT_SupportsClipDistance
   uint ClipIndex = uint(ClipParams.x);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords);
-)";
-	}
+#endif
 
-	Out << "}" END_LINE;
-}
-
-// stijn: I don't think we need this anymore + it breaks DrawSimple on macOS because
-// the geoshader expects lines as input, but EndFlash and 2DPoint draw triangles
-
-void UXOpenGLRenderDevice::DrawSimpleProgram::BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
-{
-	Out << R"(
-layout(lines) in;
-layout(line_strip, max_vertices = 2) out;
-noperspective out float texCoord;
-
-void main()
-{
-  mat4 modelviewMat = modelMat * viewMat;
-  vec2 winPos1 = vec2(512, 384) * gl_in[0].gl_Position.xy / gl_in[0].gl_Position.w;
-  vec2 winPos2 = vec2(512, 384) * gl_in[1].gl_Position.xy / gl_in[1].gl_Position.w;
-
-  // Line Start
-  gl_Position = modelviewprojMat * (gl_in[0].gl_Position);
-  texCoord = 0.0;
-  EmitVertex();
-
-  // Line End
-  gl_Position = modelviewprojMat * (gl_in[1].gl_Position);
-  texCoord = length(winPos2 - winPos1);
-  EmitVertex();
-  EndPrimitive();
+  vDrawID = DrawID;
 }
 )";
-}
 
-void UXOpenGLRenderDevice::DrawSimpleProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, ShaderProgram* Program)
-{
-	if (GL->OpenGLVersion == GL_ES)
-	{
-		Out << "layout(location = 0) out vec4 FragColor;" END_LINE;
-		if (GL->SimulateMultiPass)
-			Out << "layout ( location = 1 ) out vec4 FragColor1;" END_LINE;
-	}
-	else
-	{
-		if (GL->SimulateMultiPass)
-			Out << "layout(location = 0, index = 1) out vec4 FragColor1;" END_LINE;
-		Out << "layout(location = 0, index = 0) out vec4 FragColor;" END_LINE;
-	}
+static const char* SimpleFragmentShader = R"(
+#if OPT_GLES
+layout(location = 0) out vec4 FragColor;
+# if OPT_SimulateMultiPass
+layout ( location = 1 ) out vec4 FragColor1;
+# endif
+#else
+# if OPT_SimulateMultiPass
+layout(location = 0, index = 1) out vec4 FragColor1;
+# endif
+layout(location = 0, index = 0) out vec4 FragColor;
+#endif
 
-	Out << R"(
 void main(void)
 {
-  vec4 TotalColor = DrawColor;
-)";
+  vec4 TotalColor = GetDrawColor(vDrawID);
 
-	// stijn: this is an attempt at stippled line drawing in GL4
-#if 0
-	Out << R"(
-  if ((LineFlags & )" << LINE_Transparent << R"(u) == )" << LINE_Transparent << R"(u)
-  {
-    if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)
-      discard;
-  }
-)";
+  // stijn: this is an attempt at stippled line drawing in GL4
+#if 0 && OPT_Transparent
+  if (((uint(floor(gl_FragCoord.x)) & 1u) ^ (uint(floor(gl_FragCoord.y)) & 1u)) == 0u)
+    discard;
 #endif
-	
-	if (GL->SimulateMultiPass)
-		Out << "  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;" END_LINE;
-	Out << "  FragColor = TotalColor;" END_LINE;
 
-	if (GIsEditor)
-	{
-		Out << "  if (!bool(HitTesting)) {" END_LINE;
-	}
+#if OPT_SimulateMultiPass
+  FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;
+#endif
+FragColor = TotalColor;
 
-	Out << R"(
-  FragColor = GammaCorrect(Gamma, FragColor);
+#if OPT_Editor
+  if (!bool(HitTesting)) {
+#endif
+    FragColor = GammaCorrect(Gamma, FragColor);
+#if OPT_Editor
+  }
+#endif
+}
 )";
 
-	if (GIsEditor)
-		Out << "  }" END_LINE;
+/*-----------------------------------------------------------------------------
+	Simple Line Shader
+-----------------------------------------------------------------------------*/
 
-	Out << "}" END_LINE;
+void UXOpenGLRenderDevice::DrawSimpleLineProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
+{
+	Out << SimpleVertexShader;
+}
+
+void UXOpenGLRenderDevice::DrawSimpleLineProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
+{
+	Out << SimpleFragmentShader;
+}
+
+/*-----------------------------------------------------------------------------
+	Simple Triangle Shader
+-----------------------------------------------------------------------------*/
+
+void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
+{
+	Out << SimpleVertexShader;
+}
+
+void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
+{
+	Out << SimpleFragmentShader;
 }

@@ -1,4 +1,4 @@
-﻿/*=============================================================================
+/*=============================================================================
 	XOpenGL.cpp: Unreal XOpenGL implementation for OpenGL 3.3+ and GL ES 3.0+
 
 	Copyright 2014-2021 Oldunreal
@@ -45,9 +45,9 @@
 
 IMPLEMENT_CLASS(UXOpenGLRenderDevice);
 
-#if ENGINE_VERSION!=227
-#ifdef _WIN32
-#pragma comment(lib,"Winmm")
+#if ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
+# ifdef _WIN32
+#  pragma comment(lib,"Winmm")
 void TimerBegin()
 {
 	// This will increase the precision of the kernel interrupt
@@ -61,7 +61,7 @@ void TimerEnd()
 	// Restore the kernel timer config
 	timeEndPeriod(1);
 }
-#endif
+# endif
 #endif
 
 void UXOpenGLRenderDevice::StaticConstructor()
@@ -119,13 +119,14 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
 
 #if ENGINE_VERSION==227
-	// new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseEnhancedLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseEnhancedLightmaps), TEXT("Options"), CPF_Config);
 	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
 #endif
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
@@ -133,8 +134,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	
 	// Debug Options
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
-	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("DebugOptions"), CPF_Config);
-	new(GetClass(), TEXT("NoBuffering"), RF_Public)UBoolProperty(CPP_PROPERTY(NoBuffering), TEXT("DebugOptions"), CPF_Config);
+	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("DebugOptions"), CPF_Config);	
 	new(GetClass(), TEXT("NoDrawComplexSurface"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawComplexSurface), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawGouraud"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawGouraud), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawGouraudList"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawGouraudList), TEXT("DebugOptions"), CPF_Config);
@@ -143,7 +143,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #else
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("Options"), CPF_Config);
-	new(GetClass(), TEXT("NoBuffering"), RF_Public)UBoolProperty(CPP_PROPERTY(NoBuffering), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawComplexSurface"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawComplexSurface), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawGouraud"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawGouraud), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NoDrawTile"), RF_Public)UBoolProperty(CPP_PROPERTY(NoDrawTile), TEXT("Options"), CPF_Config);
@@ -176,22 +175,13 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	BumpMaps = 1;
 	GammaMultiplier = 1.75f;
 	GammaMultiplierUED  = 1.75f;
-#ifdef __EMSCRIPTEN__
 	ParallaxVersion = Parallax_Disabled;
-#elif __LINUX_ARM__
-	ParallaxVersion = Parallax_Disabled;
-#else
-	ParallaxVersion = Parallax_Disabled;
-#endif
 	UseTrilinear = 1;
 	NoAATiles = 1;
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	UseBindlessTextures = 1;
-	UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards
-#else
-	UseBindlessTextures = 0;
-	UseShaderDrawParameters = 0;
+#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+	//UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards // stijn: disabled by default because many AMD drivers choke on it
 #endif
 	UseHWLighting = 0;
 	AlwaysMipmap = 0;
@@ -208,7 +198,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #ifdef __EMSCRIPTEN__
 	OpenGLVersion = GL_ES;
     UseEnhancedLightmaps = 0; // CHECK ME! GL_ES and UseEnhancedLightmaps don't like each other very much (yet?).
-#elif __LINUX_ARM__
+#elif __LINUX_ARM__ || __LINUX_ARM64__
 	OpenGLVersion = GL_ES;
     UseEnhancedLightmaps = 0;
 #else
@@ -223,7 +213,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 	UseOpenGLDebug = 0;
 	DebugLevel = 2;
-	NoBuffering = 0;
 	NoDrawComplexSurface = 0;
 	NoDrawGouraud = 0;
 	NoDrawGouraudList = 0;
@@ -239,7 +228,12 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 #if UNREAL_TOURNAMENT_OLDUNREAL && !defined(__LINUX_ARM__)
 	UseLightmapAtlas = 1;
-	SupportsUpdateTextureRect = 1;
+	
+	// stijn: Partial updates of the lightmap atlas absolutely kill performance
+	// on mac We went from 16fps to 90fps on our fps1 benchmark map when we
+	// disabled this feature
+	
+    // SupportsUpdateTextureRect = 1;
 #endif
 
 	unguard;
@@ -252,7 +246,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	Viewport = InViewport;
 	bContextInitialized = false;
-	bGlobalBuffersMapped = false;
 	iPixelFormat = 0;
 
 	DetailMax = Clamp(DetailMax,0,3);
@@ -262,7 +255,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 #if _WIN32
     hRC = NULL;
-    #if ENGINE_VERSION!=227
+    #if ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerBegin();
 	#endif // ENGINE_VERSION
 #endif
@@ -358,7 +351,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Debug settings:"));
 	debugf(NAME_DevLoad, TEXT("UseOpenGLDebug %i"), UseOpenGLDebug);
 	debugf(NAME_DevLoad, TEXT("DebugLevel %i"), DebugLevel);
-	debugf(NAME_DevLoad, TEXT("NoBuffering %i"), NoBuffering);
 	debugf(NAME_DevLoad, TEXT("NoDrawComplexSurface %i"), NoDrawComplexSurface);
 	debugf(NAME_DevLoad, TEXT("NoDrawGouraud %i"), NoDrawGouraud);
 	debugf(NAME_DevLoad, TEXT("NoDrawGouraudList %i"), NoDrawGouraudList);
@@ -376,9 +368,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UseHWClipping = 0;
 #endif
 	UseMeshBuffering = 0;
-
-	if (NoBuffering)
-		UsePersistentBuffers = false;
 
 	EnvironmentMaps = 0; //not yet implemented.
 
@@ -431,11 +420,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 		if (OpenGLVersion == GL_ES)
         {
-            if (UseShaderDrawParameters)
-                GWarn->Logf(TEXT("OpenGL ES does not support gl_DrawID at this time, disabling UseShaderDrawParameters"));
-            UsingShaderDrawParameters = false;
-
-            if (SimulateMultiPass)
+			if (SimulateMultiPass)
                 GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
             SimulateMultiPass = false;
 
@@ -472,33 +457,36 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
 
+#if 0
 	UsingPersistentBuffersTile = UsingPersistentBuffers;
 	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
 	UsingPersistentBuffersDrawcallParams = UsingPersistentBuffers; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
 	UsingPersistentBuffersSimple = UsingPersistentBuffers;
+#endif
 
 	// Init shaders
 	InitShaders();
 
-	const auto GlobalMatrices = GlobalMatricesBuffer.GetElementPtr(0);
-	check(GlobalMatrices);
+	const auto FrameState = FrameStateBuffer.GetElementPtr(0);
+	check(FrameState);
 
 	// Set view matrix.
-	GlobalMatrices->viewMat = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
+	FrameState->viewMat = glm::scale(glm::mat4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
 
 	// Initial proj matrix (updated to actual values in SetSceneNode).
-	GlobalMatrices->projMat = glm::mat4(1.0f);
+	FrameState->projMat = glm::mat4(1.0f);
 
 	// Identity
-	GlobalMatrices->modelMat = glm::mat4(1.0f);
+	FrameState->modelMat = glm::mat4(1.0f);
 
 	if (UseHWLighting)
 		InViewport->GetOuterUClient()->NoLighting = 1; // Disable (Engine) lighting.
 
 	// stijn: This ResetFog call was missing and caused the black screen bug in UT469
-	if (bGlobalBuffersMapped)
-		ResetFog();
+	ResetFog();
+
+	SetFrameStateUniforms();
 
 	if (UseAA)
 		glEnable(GL_MULTISAMPLE);
@@ -525,23 +513,19 @@ void UXOpenGLRenderDevice::PostEditChange()
 #ifdef WINBUILD
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uiMsg, WPARAM wParam, LPARAM lParam)
 {
-	switch (uiMsg)
+	if (uiMsg == WM_CLOSE)
 	{
-	case WM_CLOSE:
 		PostQuitMessage(0);
-		break;
-
-	default:
-		return DefWindowProc(hWnd, uiMsg, wParam, lParam);
+		return 0;
 	}
-
-	return 0;
+	return DefWindowProc(hWnd, uiMsg, wParam, lParam);
 }
 #endif
+
 UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 {
 	guard(UXOpenGLRenderDevice::SetWindowPixelFormat);
-	#ifdef _WIN32
+#ifdef _WIN32
 	if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
 	{
 		GWarn->Logf(TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
@@ -551,7 +535,7 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 		return 0;
 	}
 	else debugf(NAME_DevGraphics, TEXT("XOpenGL: Setting PixelFormat: %i"), iPixelFormat);
-	#endif
+#endif
 	return 1;
 	unguard;
 }
@@ -560,33 +544,27 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
-    INT SDLError = 0;
-
-	SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    INT SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
-
-    if (UseAA)
+    
+	if (UseAA)
     {
         SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
         SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
     }
+	
 	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
-
     SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
-
+	
 	if (UseOpenGLDebug)
 		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
-
-	if (OpenGLVersion == GL_ES)
-		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-	else
-		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE); // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
-
-    if (SDLError != 0)
+	
+	SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, (OpenGLVersion == GL_ES) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
+    
+	if (SDLError != 0)
         debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in SetSDLAttributes (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
-
-    return !SDLError;
-
+    
+	return !SDLError;
     unguard;
 }
 #endif
@@ -738,11 +716,6 @@ InitContext:
 		glDebugMessageCallback(UXOpenGLRenderDevice::DebugCallback, NULL);
 		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
 		GWarn->Logf(TEXT("XOpenGL: OpenGL debugging enabled, this can cause severe performance drain!"));
-	}
-
-	if (NoBuffering)
-	{
-		GWarn->Logf(TEXT("XOpenGL: NoBuffering enabled, this WILL cause severe performance drain! This debugging option is useful to find performance critical situations, but should not be used in general."));
 	}
 
 	AllContexts.AddItem(glContext);
@@ -1092,7 +1065,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	guard(UXOpenGLRenderDevice::SetRes);
 
 	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
-#if __APPLE__
+#if MACOSX && 0
 	DesiredStencilBits = 0;
 	DesiredDepthBits = 32;
 #else
@@ -1241,7 +1214,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	CHECK_GL_ERROR();
 
 	// Verify hardware defaults.
-	CurrentPolyFlags = static_cast<DWORD>(PF_Occlude);
+	CurrentBlendPolyFlags = static_cast<DWORD>(PF_Occlude);
 
 	// Remember fullscreenness.
 	WasFullscreen = Fullscreen;
@@ -1255,13 +1228,7 @@ void UXOpenGLRenderDevice::UnsetRes()
 
 #ifdef WINBUILD
 	if (WasFullscreen)
-	{
 		ChangeDisplaySettingsW(NULL, 0);
-	}
-#elif SDL2BUILD
-
-#else
-
 #endif
 	unguard;
 }
@@ -1321,70 +1288,70 @@ void UXOpenGLRenderDevice::SwapControl()
 		{
 			switch (UseVSync)
 			{
-			case VS_On:
-				wglSwapIntervalEXT(1);
-				break;
-			case VS_Off:
-				wglSwapIntervalEXT(0);
-				break;
-
-			case VS_Adaptive:
-				if (!SupportsSwapControlTear)
+				case VS_On:
+					wglSwapIntervalEXT(1);
+					break;
+				case VS_Off:
 					wglSwapIntervalEXT(0);
-				else
-					wglSwapIntervalEXT(-1);
-				break;
-			default:
-				wglSwapIntervalEXT(0);
+					break;
+
+				case VS_Adaptive:
+					if (!SupportsSwapControlTear)
+						wglSwapIntervalEXT(0);
+					else
+						wglSwapIntervalEXT(-1);
+					break;
+				default:
+					wglSwapIntervalEXT(0);
 			}
 		}
 		else
 		{
 			switch (UseVSync)
 			{
-			case VS_On:
-				if (wglSwapIntervalEXT(1) != 1)
-					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
-				else
-                {
-                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
-                }
-				break;
-			case VS_Off:
-				if (wglSwapIntervalEXT(0) != 1)
-					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-				else
-                {
-                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
-                }
-				break;
-
-			case VS_Adaptive:
-				if (!SupportsSwapControlTear)
-				{
-					debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
+				case VS_On:
+					if (wglSwapIntervalEXT(1) != 1)
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
+					else
+					{
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: On"));
+					}
+					break;
+				case VS_Off:
 					if (wglSwapIntervalEXT(0) != 1)
 						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
 					else
-                    {
-                        debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
-                    }
+					{
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+					}
 					break;
-				}
-				if (wglSwapIntervalEXT(-1) != 1)
-					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed."));
-				else
-				{
-                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
-				}
-				break;
-			default:
-				if (wglSwapIntervalEXT(0) != 1)
-					debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
-				else
-                {
-                    debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
-                }
+
+				case VS_Adaptive:
+					if (!SupportsSwapControlTear)
+					{
+						debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control_tear is not supported by device. Falling back to SwapInterval 0 (VSync Off)."));
+						if (wglSwapIntervalEXT(0) != 1)
+							debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+						else
+						{
+							debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off"));
+						}
+						break;
+					}
+					if (wglSwapIntervalEXT(-1) != 1)
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed."));
+					else
+					{
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Adaptive"));
+					}
+					break;
+				default:
+					if (wglSwapIntervalEXT(0) != 1)
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
+					else
+					{
+						debugf(NAME_Init, TEXT("XOpenGL: Setting VSync: Off (default)"));
+					}
 			}
 		}
 	}
@@ -1409,14 +1376,9 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	}
 #endif
 
-	// Create a list of static lights.
-	if (StaticLightList.Num())
-		StaticLightList.Empty();
-
+	// Create a list of lights.
 	if (LightList.Num())
 		LightList.Empty();
-
-	NumStaticLights = 0;
 	NumLights = 0;
 
 	TArray<GLuint> Binds;
@@ -1459,8 +1421,8 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	if (Viewport && Viewport->GetOuterUClient())
 		SetGamma(Viewport->GetOuterUClient()->Brightness);
 
-	CurrentPolyFlags = 0;
-	CurrentAdditionalPolyFlags = 0;
+	CurrentBlendPolyFlags = 0;
+	CurrentAdditionalBlendPolyFlags = 0;
 
     SetProgram(No_Prog);
 
@@ -1474,8 +1436,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	StoredFY = 0;
 	appMemzero(&Stats, sizeof(Stats));
 
-	if (bGlobalBuffersMapped)
-        ResetFog();
+    ResetFog();
 
 	CHECK_GL_ERROR();
 	unguard;
@@ -1557,127 +1518,28 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 {
     guard(UXOpenGLRenderDevice::UpdateCoords);
 
-	auto Coords = GlobalCoordsBuffer.GetElementPtr(0); 
+	auto FrameState = FrameStateBuffer.GetElementPtr(0);
 
     // Update Coords:  World to Viewspace projection.
-	Coords->FrameCoords[0] = glm::vec4(Frame->Coords.Origin.X, Frame->Coords.Origin.Y, Frame->Coords.Origin.Z, 0.0f);
-	Coords->FrameCoords[1] = glm::vec4(Frame->Coords.XAxis.X, Frame->Coords.XAxis.Y, Frame->Coords.XAxis.Z, 0.0f);
-	Coords->FrameCoords[2] = glm::vec4(Frame->Coords.YAxis.X, Frame->Coords.YAxis.Y, Frame->Coords.YAxis.Z, 0.0f);
-	Coords->FrameCoords[3] = glm::vec4(Frame->Coords.ZAxis.X, Frame->Coords.ZAxis.Y, Frame->Coords.ZAxis.Z, 0.0f);
+	FrameState->FrameCoords[0] = glm::vec4(Frame->Coords.Origin.X, Frame->Coords.Origin.Y, Frame->Coords.Origin.Z, 0.0f);
+	FrameState->FrameCoords[1] = glm::vec4(Frame->Coords.XAxis.X, Frame->Coords.XAxis.Y, Frame->Coords.XAxis.Z, 0.0f);
+	FrameState->FrameCoords[2] = glm::vec4(Frame->Coords.YAxis.X, Frame->Coords.YAxis.Y, Frame->Coords.YAxis.Z, 0.0f);
+	FrameState->FrameCoords[3] = glm::vec4(Frame->Coords.ZAxis.X, Frame->Coords.ZAxis.Y, Frame->Coords.ZAxis.Z, 0.0f);
 
 	// And UnCoords: Viewspace to World projection.
-	Coords->FrameUncoords[0] = glm::vec4(Frame->Uncoords.Origin.X, Frame->Uncoords.Origin.Y, Frame->Uncoords.Origin.Z, 0.0f);
-	Coords->FrameUncoords[1] = glm::vec4(Frame->Uncoords.XAxis.X, Frame->Uncoords.XAxis.Y, Frame->Uncoords.XAxis.Z, 0.0f);
-	Coords->FrameUncoords[2] = glm::vec4(Frame->Uncoords.YAxis.X, Frame->Uncoords.YAxis.Y, Frame->Uncoords.YAxis.Z, 0.0f);
-	Coords->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
+	FrameState->FrameUncoords[0] = glm::vec4(Frame->Uncoords.Origin.X, Frame->Uncoords.Origin.Y, Frame->Uncoords.Origin.Z, 0.0f);
+	FrameState->FrameUncoords[1] = glm::vec4(Frame->Uncoords.XAxis.X, Frame->Uncoords.XAxis.Y, Frame->Uncoords.XAxis.Z, 0.0f);
+	FrameState->FrameUncoords[2] = glm::vec4(Frame->Uncoords.YAxis.X, Frame->Uncoords.YAxis.Y, Frame->Uncoords.YAxis.Z, 0.0f);
+	FrameState->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
-	GlobalCoordsBuffer.Bind();
-	GlobalCoordsBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
-	CHECK_GL_ERROR();
+	FrameStateBuffer.Bind();
+	FrameStateBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	unguard;
 }
 
 void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 {
 	guard(UXOpenGLRenderDevice::SetSceneNode);
-
-	auto Level = Frame->Level;
-	// stijn: this is also very very slow. FPS goes down by 50% by pushing these uniforms every frame
-#if !__APPLE__
-	if ( !UseHWLighting && Level && (!NumStaticLights || GIsEditor))
-	{
-		if (GIsEditor)
-			StaticLightList.Empty();
-
-		for (INT i = 0; i < Level->Actors.Num(); ++i)
-		{
-			AActor* Actor = Level->Actors(i);
-			if (Actor && !Actor->bDeleteMe && (Actor->bStatic || (Actor->bNoDelete && !Actor->bMovable)) && Actor->LightBrightness>0 && Actor->LightType && Actor->LightRadius)
-            {
-#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
-                StaticLightList.AddItem(Actor);
-#else
-                if (UseHWLighting || Actor->NormalLightRadius) //for normal mapping only add lights with normallightradius set. Needs performance tests if not.
-                    StaticLightList.AddItem(Actor);
-#endif
-            }
-		}
-		NumStaticLights = StaticLightList.Num();
-
-		for (INT i = 0; i < NumStaticLights; i++)
-		{
-			//debugf(TEXT("StaticLightList: %ls %f %f %f"), StaticLightList(i)->GetName(), StaticLightList(i)->Location.X, StaticLightList(i)->Location.Y, StaticLightList(i)->Location.Z);
-
-			StaticLightData.LightPos[i] = glm::vec4(StaticLightList(i)->Location.X, StaticLightList(i)->Location.Y, StaticLightList(i)->Location.Z, 1.f);
-
-			FPlane RGBColor = FGetHSV(StaticLightList(i)->LightHue, StaticLightList(i)->LightSaturation, StaticLightList(i)->LightBrightness);
-
-#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
-			StaticLightData.LightData1[i] = glm::vec4(RGBColor.X, RGBColor.Y, RGBColor.Z, StaticLightList(i)->LightCone);
-#else
-			StaticLightData.LightData1[i] = glm::vec4(RGBColor.R, RGBColor.G, RGBColor.B, StaticLightList(i)->LightCone);
-#endif
-			StaticLightData.LightData2[i] = glm::vec4(StaticLightList(i)->LightEffect, StaticLightList(i)->LightPeriod, StaticLightList(i)->LightPhase, StaticLightList(i)->LightRadius);
-			StaticLightData.LightData3[i] = glm::vec4(StaticLightList(i)->LightType, StaticLightList(i)->VolumeBrightness, StaticLightList(i)->VolumeFog, StaticLightList(i)->VolumeRadius);
-#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
-			StaticLightData.LightData4[i] = glm::vec4(StaticLightList(i)->WorldLightRadius(), NumStaticLights, (GLfloat)StaticLightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
-			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->LightRadius * 10, 1.0, 0.0, 0.0);
-#else
-			StaticLightData.LightData4[i] = glm::vec4(StaticLightList(i)->WorldLightRadius(), NumStaticLights, (GLfloat)StaticLightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
-			StaticLightData.LightData5[i] = glm::vec4(StaticLightList(i)->NormalLightRadius, (GLfloat)StaticLightList(i)->bZoneNormalLight, StaticLightList(i)->LightBrightness, 0.0);
-#endif
-			if (i == MAX_LIGHTS - 1)
-				break;
-		}
-		
-		StaticLightInfoBuffer.Bind();
-		StaticLightInfoBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
-		CHECK_GL_ERROR();
-	}
-	else if (UseHWLighting && Level)
-	{
-		LightList.Empty();
-
-		for (INT i = 0; i < Level->Actors.Num(); ++i)
-		{
-			AActor* Actor = Level->Actors(i);
-			if (Actor && !Actor->bDeleteMe && Actor->LightBrightness && Actor->LightType && Actor->LightRadius)
-				LightList.AddItem(Actor);
-		}
-		NumLights = LightList.Num();
-
-		for (INT i = 0; i < NumLights; i++)
-		{
-			//debugf(TEXT("LightList: %ls %f %f %f"), LightList(i)->GetName(), LightList(i)->Location.X, LightList(i)->Location.Y, LightList(i)->Location.Z);
-
-			StaticLightData.LightPos[i] = glm::vec4(LightList(i)->Location.X, LightList(i)->Location.Y, LightList(i)->Location.Z, 1.f);
-
-			FPlane RGBColor = FGetHSV(LightList(i)->LightHue, LightList(i)->LightSaturation, LightList(i)->LightBrightness);
-
-#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
-			StaticLightData.LightData1[i] = glm::vec4(RGBColor.X, RGBColor.Y, RGBColor.Z, LightList(i)->LightCone);
-#else
-			StaticLightData.LightData1[i] = glm::vec4(RGBColor.R, RGBColor.G, RGBColor.B, LightList(i)->LightCone);
-#endif
-			StaticLightData.LightData2[i] = glm::vec4(LightList(i)->LightEffect, LightList(i)->LightPeriod, LightList(i)->LightPhase, LightList(i)->LightRadius);
-			StaticLightData.LightData3[i] = glm::vec4(LightList(i)->LightType, LightList(i)->VolumeBrightness, LightList(i)->VolumeFog, LightList(i)->VolumeRadius);
-#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
-			StaticLightData.LightData4[i] = glm::vec4(LightList(i)->WorldLightRadius(), NumLights, (GLfloat)LightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
-			StaticLightData.LightData5[i] = glm::vec4(LightList(i)->LightRadius * 10, 1.0, 0.0, 0.0);
-#else
-			StaticLightData.LightData4[i] = glm::vec4(LightList(i)->WorldLightRadius(), NumLights, (GLfloat)LightList(i)->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
-			StaticLightData.LightData5[i] = glm::vec4(LightList(i)->NormalLightRadius, (GLfloat)LightList(i)->bZoneNormalLight, LightList(i)->LightBrightness, 0.0);
-#endif
-			if (i == MAX_LIGHTS - 1)
-				break;
-		}
-
-		StaticLightInfoBuffer.Bind();
-		StaticLightInfoBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
-		CHECK_GL_ERROR();
-	}
-	CHECK_GL_ERROR();
-#endif
 
 	//Flush Buffers.
 	SetProgram(No_Prog);
@@ -1692,6 +1554,8 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		SetOrthoProjection(Frame);
 	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || GIsEditor || StoredbNearZ)
 		SetProjection(Frame, 0);
+	if (StoredGamma != GetViewportGamma(Viewport) || StoredOneXBlending != OneXBlending || StoredActorXBlending != ActorXBlending)
+		SetFrameStateUniforms();
 
 	// Set clip planes.
 	SetSceneNodeHit(Frame);
@@ -1702,7 +1566,89 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		PopClipPlane();
 #endif
 
+	// Push light data to the GPU. We only need this if we enable HW lighting or bumpmaps.
+	// 
+	// The HW lighting implementation currently requires us to push data on _all_
+	// light-emitting actors every time we render a frame. This is VERY slow!
+	//
+	// If we enable BumpMaps but not HW Lighting, then we only need to push data on
+	// static light-emitting actors. If we're in-game, we only need to do this once!
+	auto Level = Frame->Level;
+	if (!Level || 
+		(!UseHWLighting && !BumpMaps) || // These are the only features that use light data
+		(!UseHWLighting && !GIsEditor && NumLights > 0)) // If we're in-game, we only push light data once
+		return;
+
+	// Gather actors
+	LightList.Empty();
+	for (INT i = 0; i < Level->Actors.Num(); ++i)
+	{
+		AActor* Actor = Level->Actors(i);
+
+		// Filter out invalid actors
+		if (!Actor || Actor->bDeleteMe)
+			continue;
+
+		// Filter out irrelevant lights
+		if (Actor->LightType == LE_None || Actor->LightRadius == 0 || Actor->LightBrightness == 0)
+			continue;
+
+		// Filter out non-static lights if we're not using HW Lighting
+		if (!Actor->bStatic && Actor->bMovable && !UseHWLighting)
+			continue;
+
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+		LightList.AddItem(Actor);
+#else
+		if (Actor->NormalLightRadius) //for normal mapping only add lights with normallightradius set. Needs performance tests if not.
+			LightList.AddItem(Actor);
+#endif
+	}
+	NumLights = LightList.Num();
+
+	auto LightData = LightInfoBuffer.GetElementPtr(0);
+	for (INT i = 0; i < NumLights; i++)
+	{
+		auto Actor = LightList(i);
+		LightData->LightPos[i] = glm::vec4(Actor->Location.X, Actor->Location.Y, Actor->Location.Z, 1.f);
+
+		FPlane RGBColor = FGetHSV(Actor->LightHue, Actor->LightSaturation, Actor->LightBrightness);
+
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+		LightData->LightData1[i] = glm::vec4(RGBColor.X, RGBColor.Y, RGBColor.Z, Actor->LightCone);
+#else
+		LightData->LightData1[i] = glm::vec4(RGBColor.R, RGBColor.G, RGBColor.B, Actor->LightCone);
+#endif
+		LightData->LightData2[i] = glm::vec4(Actor->LightEffect, Actor->LightPeriod, Actor->LightPhase, Actor->LightRadius);
+		LightData->LightData3[i] = glm::vec4(Actor->LightType, Actor->VolumeBrightness, Actor->VolumeFog, Actor->VolumeRadius);
+#if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
+		LightData->LightData4[i] = glm::vec4(Actor->WorldLightRadius(), NumLights, (GLfloat)Actor->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
+		LightData->LightData5[i] = glm::vec4(Actor->LightRadius * 10, 1.0, 0.0, 0.0);
+#else
+		LightData->LightData4[i] = glm::vec4(Actor->WorldLightRadius(), NumLights, (GLfloat)Actor->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->CameraRegion.ZoneNumber : 0.f));
+		LightData->LightData5[i] = glm::vec4(Actor->NormalLightRadius, (GLfloat)Actor->bZoneNormalLight, Actor->LightBrightness, 0.0);
+#endif
+		if (i == MAX_LIGHTS - 1)
+			break;
+	}
+
+	LightInfoBuffer.Bind();
+	LightInfoBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	unguard;
+}
+
+void UXOpenGLRenderDevice::SetFrameStateUniforms()
+{
+	StoredGamma = GetViewportGamma(Viewport);
+	StoredActorXBlending = ActorXBlending;
+	StoredOneXBlending = OneXBlending;
+
+	auto FrameState = FrameStateBuffer.GetElementPtr(0);
+	FrameState->Gamma = StoredGamma;
+	FrameState->LightColorIntensity = ActorXBlending ? 1.5f : 1.f;
+	FrameState->LightMapIntensity = OneXBlending ? 4.f : 2.f;
+	FrameStateBuffer.Bind();
+	FrameStateBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 }
 
 void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
@@ -1723,20 +1669,16 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 	RFX2 = 2.0*RProjZ / Frame->FX;
 	RFY2 = 2.0*RProjZ*Aspect / Frame->FY;
 
-	const auto GlobalMatrices = GlobalMatricesBuffer.GetElementPtr(0);
-	GlobalMatrices->projMat = glm::ortho(-RProjZ, +RProjZ, -Aspect*RProjZ, +Aspect*RProjZ, -zFar, zFar);
+	const auto FrameState = FrameStateBuffer.GetElementPtr(0);
+	FrameState->projMat = glm::ortho(-RProjZ, +RProjZ, -Aspect*RProjZ, +Aspect*RProjZ, -zFar, zFar);
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
 	CHECK_GL_ERROR();
 	bIsOrtho = true;
 
-	GlobalMatrices->modelviewprojMat = GlobalMatrices->projMat * GlobalMatrices->viewMat * GlobalMatrices->modelMat; //yes, this is right.
-	GlobalMatrices->modelviewMat = GlobalMatrices->viewMat * GlobalMatrices->modelMat;
-
-	GlobalMatricesBuffer.Bind();
-	GlobalMatricesBuffer.BufferData(false, false, GL_STATIC_DRAW);
-	CHECK_GL_ERROR();
+	FrameState->modelviewprojMat = FrameState->projMat * FrameState->viewMat * FrameState->modelMat; //yes, this is right.
+	FrameState->modelviewMat = FrameState->viewMat * FrameState->modelMat;
 
 	UpdateCoords(Frame);
 	unguard;
@@ -1775,19 +1717,15 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 	RFX2 = 2.0*RProjZ / Frame->FX;
 	RFY2 = 2.0*RProjZ*Aspect / Frame->FY;
 
-	const auto GlobalMatrices = GlobalMatricesBuffer.GetElementPtr(0);
-	GlobalMatrices->projMat = glm::frustum(-RProjZ*zNear, +RProjZ*zNear, -Aspect*RProjZ*zNear, +Aspect*RProjZ*zNear, zNear, zFar);
+	const auto FrameState = FrameStateBuffer.GetElementPtr(0);
+	FrameState->projMat = glm::frustum(-RProjZ*zNear, +RProjZ*zNear, -Aspect*RProjZ*zNear, +Aspect*RProjZ*zNear, zNear, zFar);
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
 	CHECK_GL_ERROR();
 
-	GlobalMatrices->modelviewprojMat = GlobalMatrices->projMat * GlobalMatrices->viewMat * GlobalMatrices->modelMat;
-	GlobalMatrices->modelviewMat = GlobalMatrices->viewMat * GlobalMatrices->modelMat;
-
-	GlobalMatricesBuffer.Bind();
-	GlobalMatricesBuffer.BufferData(false, false, GL_STATIC_DRAW);
-	CHECK_GL_ERROR();
+	FrameState->modelviewprojMat = FrameState->projMat * FrameState->viewMat * FrameState->modelMat;
+	FrameState->modelviewMat = FrameState->viewMat * FrameState->modelMat;
 
 	UpdateCoords(Frame);
 	unguard;
@@ -1799,6 +1737,8 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	if (NumClipPlanes == MaxClippingPlanes)
 		return 2;
 
+	Shaders[ActiveProgram]->Flush(false);
+
 	glEnable(GL_CLIP_DISTANCE0 + NumClipPlanes);
 
 	const auto ClipPlaneInfo = GlobalClipPlaneBuffer.GetElementPtr(0);
@@ -1806,7 +1746,7 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	ClipPlaneInfo->ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	++NumClipPlanes;
@@ -1814,11 +1754,14 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	return 1;
 	unguard;
 }
+
 BYTE UXOpenGLRenderDevice::PopClipPlane()
 {
 	guard(UXOpenGLRenderDevice::PopClipPlane);
 	if (NumClipPlanes == 0)
 		return 2;
+
+	Shaders[ActiveProgram]->Flush(false);
 
 	--NumClipPlanes;
 	glDisable(GL_CLIP_DISTANCE0 + NumClipPlanes);
@@ -1828,48 +1771,25 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	ClipPlaneInfo->ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, GL_DYNAMIC_DRAW);
+	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	return 1;
 	unguard;
 }
 
-
-#define FPS_DEBUG 0
-#if FPS_DEBUG
-unsigned long long XFrameCounter = 0;
-DOUBLE LastFrameLog = 0.0;
-#endif
-
 static INT LockCount = 0;
 void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
 	guard(UXOpenGLRenderDevice::Lock);
 
-#if FPS_DEBUG
-	struct timeval TimeOfDay;
-	gettimeofday(&TimeOfDay, NULL);
-	DOUBLE NewTime = TimeOfDay.tv_sec + TimeOfDay.tv_usec / 1000000.0;
-	if (NewTime - LastFrameLog > 1.0)
-	{
-		debugf(TEXT("%d FPS"), XFrameCounter);
-		XFrameCounter = 0;
-		LastFrameLog = NewTime;
-	}
-	XFrameCounter++;
-#endif
-
 	check(LockCount == 0);
 	++LockCount;
-	CLEAR_GL_ERROR();
-
+    
 	MakeCurrent();
-	CHECK_GL_ERROR();
 
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
-	CHECK_GL_ERROR();
 
 	if (glClearDepthf)
 		glClearDepthf(1.f);
@@ -1884,7 +1804,6 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 		glDepthRange(0.0, 1.0);
 #endif
 
-	CHECK_GL_ERROR();
 	glPolygonOffset(-1.f, -1.f);
     SetBlend(PF_Occlude, false);
 #if MACOSX // stijn: on macOS, it's much faster to just clear everything
@@ -1907,6 +1826,15 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	// Reset stats.
 	appMemzero(&Stats, sizeof(Stats));
+
+	if (GIsEditor)
+	{
+		auto EditorState = EditorStateBuffer.GetElementPtr(0);
+		EditorState->HitTesting = HitTesting();
+		EditorState->RendMap = Viewport->Actor->RendMap;
+		EditorStateBuffer.Bind();
+		EditorStateBuffer.BufferData(false, true, UNIFORM_BUFFER_USAGE_PATTERN);
+	}
 
 	LockHit(InHitData, InHitSize);
 	unguard;
@@ -2049,21 +1977,15 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 	guard(UXOpenGLRenderDevice::SetProgram);
 
 	if (ActiveProgram != NextProgram)
-	{
-		CHECK_GL_ERROR();
-		
+	{		
 		// Flush the old program
 		Shaders[ActiveProgram]->DeactivateShader();
-
-		CHECK_GL_ERROR();
 
 		// Switch and initialize the new program
 		PrevProgram = ActiveProgram;
 		ActiveProgram = NextProgram;
 
 		Shaders[ActiveProgram]->ActivateShader();
-
-		CHECK_GL_ERROR();
 	}
 
 	unguard;
@@ -2093,7 +2015,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	SetProgram(CurrentProgram);
 
 	// stijn: you have a serious problem in Engine/Render if you need this SetSceneNode call here!
-#if !__APPLE__
+#if !MACOSX
 	SetSceneNode(Frame);
 #endif
 	SetBlend(PF_Occlude, false);
@@ -2138,14 +2060,14 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 			}
 		}
 	}
-	CHECK_GL_ERROR();
+    
 	unguard;
 }
 
 void UXOpenGLRenderDevice::PrecacheTexture(FTextureInfo& Info, DWORD PolyFlags)
 {
 	guard(UXOpenGLRenderDevice::PrecacheTexture);
-	SetTexture(0, Info, PolyFlags, 0.0, DF_DiffuseTexture);
+	SetTexture(DiffuseTextureIndex, Info, PolyFlags, 0.0);
 	unguard;
 }
 
@@ -2164,12 +2086,8 @@ void UXOpenGLRenderDevice::Exit()
 
 #ifdef SDL2BUILD
 	ResetShaders();
-	if (SharedBindMap)
-	{
-		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
-		delete SharedBindMap;
-		SharedBindMap = NULL;
-	}
+	delete SharedBindMap;
+	SharedBindMap = NULL;
 	CurrentGLContext = NULL;
 
 # if !UNREAL_TOURNAMENT_OLDUNREAL
@@ -2196,9 +2114,8 @@ void UXOpenGLRenderDevice::Exit()
 	ResetShaders();
 	if (AllContexts.Num() == 0 && SharedBindMap)
 	{
-		SharedBindMap->~TOpenGLMap<QWORD, FCachedTexture>();
-		delete SharedBindMap;
-		SharedBindMap = NULL;
+	  delete SharedBindMap;
+	  SharedBindMap = NULL;
 	}
 
 	// Shut down global GL.
@@ -2206,7 +2123,7 @@ void UXOpenGLRenderDevice::Exit()
 		AllContexts.~TArray<HGLRC>();
 #endif
 
-#if _WIN32 && ENGINE_VERSION!=227
+#if _WIN32 && ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerEnd();
 #endif
 
@@ -2217,7 +2134,6 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoDrawGouraudList"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoDrawGouraudList)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoDrawGouraud"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoDrawGouraud)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoDrawComplexSurface"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoDrawComplexSurface)));
-	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoBuffering"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoBuffering)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseOpenGLDebug"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseOpenGLDebug)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
@@ -2307,7 +2223,7 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 
 #endif
 
-#if _WIN32 && ENGINE_VERSION!=227
+#if _WIN32 && ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerEnd();
 #endif
 
@@ -2332,7 +2248,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 	);
 
 #if ENGINE_VERSION==227
-    StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumStaticLights);
+    StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumLights);
 #endif
 
 #ifndef __LINUX_ARM__
@@ -2414,7 +2330,7 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	#if ENGINE_VERSION==227
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
-	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of static Lights: %i"), NumStaticLights);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of static Lights: %i"), NumLights);
     #endif
     Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);

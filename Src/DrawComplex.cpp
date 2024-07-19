@@ -4,9 +4,6 @@
 
 	Copyright 2014-2021 Oldunreal
 
-    Todo:
-    * implement proper usage of persistent buffers.
-
 	Revision history:
 		* Created by Smirftsch
 =============================================================================*/
@@ -18,165 +15,165 @@
 #include "XOpenGL.h"
 
 /*-----------------------------------------------------------------------------
+	Helpers
+-----------------------------------------------------------------------------*/
+
+static void SetTextureHelper
+(
+	UXOpenGLRenderDevice* RenDev,
+	INT Multi,
+	FTextureInfo& Info,
+	DWORD PolyFlags,
+	FLOAT PanBias,
+	glm::vec4* TextureCoords,
+	glm::vec4* TextureInfo,
+	glm::uvec4* TexHandles
+)
+{
+	RenDev->SetTexture(Multi, Info, PolyFlags, PanBias);
+	if (TextureCoords)
+		*TextureCoords = glm::vec4(RenDev->TexInfo[Multi].UMult, RenDev->TexInfo[Multi].VMult, RenDev->TexInfo[Multi].UPan, RenDev->TexInfo[Multi].VPan);
+	if (TextureInfo)
+		*TextureInfo = glm::vec4(Info.Texture->Diffuse > 0.f ? Info.Texture->Diffuse : 1.f, Info.Texture->Specular, Info.Texture->Alpha > 0.f ? Info.Texture->Alpha : 1.f, Info.Texture->TEXTURE_SCALE_NAME);
+	StoreTexHandle(Multi, TexHandles, RenDev->TexInfo[Multi].BindlessTexHandle);
+}
+
+/*-----------------------------------------------------------------------------
 	RenDev Interface
 -----------------------------------------------------------------------------*/
 
 void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet)
 {
+	guard(UXOpenGLRenderDevice::DrawComplexSurface);
+
 	if (NoDrawComplexSurface)
 		return;
 
-	clockFast(Stats.ComplexCycles);
+	auto Shader = dynamic_cast<DrawComplexProgram*>(Shaders[Complex_Prog]);
+
+    STAT(clockFast(Stats.ComplexCycles));
 	SetProgram(Complex_Prog);
-	dynamic_cast<DrawComplexProgram*>(Shaders[Complex_Prog])->DrawComplexSurface(Frame, Surface, Facet);
-	unclockFast(Stats.ComplexCycles);
-}
 
-#if ENGINE_VERSION==227
-//Draw everything after one pass. This function is called after each internal rendering pass, everything has to be properly indexed before drawing. Used for DrawComplexSurface.
-void UXOpenGLRenderDevice::DrawPass(FSceneNode* Frame, INT Pass)
-{
-	guard(UXOpenGLRenderDevice::DrawPass);
-	unguard;
-}
-#endif
-
-/*-----------------------------------------------------------------------------
-	ShaderProgram Implementation
------------------------------------------------------------------------------*/
-
-void UXOpenGLRenderDevice::DrawComplexProgram::SetTexture
-(
-	INT Multi,
-	FTextureInfo& Info,
-	DWORD PolyFlags,
-	FLOAT PanBias,
-	DWORD DrawFlags,
-	glm::vec4* TextureCoords, 
-	glm::vec4* TextureInfo
-)
-{
-	DrawCallParams.DrawFlags |= DrawFlags;
-	RenDev->SetTexture(Multi, Info, PolyFlags, PanBias, DrawFlags);
-	if (TextureCoords)
-		*TextureCoords = glm::vec4(RenDev->TexInfo[Multi].UMult, RenDev->TexInfo[Multi].VMult, RenDev->TexInfo[Multi].UPan, RenDev->TexInfo[Multi].VPan);
-	if (TextureInfo)
-		*TextureInfo = glm::vec4(Info.Texture->Diffuse, Info.Texture->Specular, Info.Texture->Alpha, Info.Texture->TEXTURE_SCALE_NAME);
-	StoreTexHandle(Multi, DrawCallParams.TexHandles, RenDev->TexInfo[Multi].BindlessTexHandle);
-}
-
-void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, const FSurfaceFacet& Facet)
-{
-	guard(UXOpenGLRenderDevice::DrawComplexSurface);
 	check(Surface.Texture);
 
-	//if(Frame->Recursion > MAX_FRAME_RECURSION)
-	//return;		
+	// Gather options
+	DWORD Options = ShaderOptions::OPT_None;
+	const DWORD NextPolyFlags = GetPolyFlagsAndShaderOptions(Surface.PolyFlags, Options, FALSE);
+	Options |= ShaderOptions::OPT_DiffuseTexture;
 
-	// stijn: this absolutely kills performance on mac. You're updating global state here for every gouraud mesh/complex surface!
-#if ENGINE_VERSION==227 && !__APPLE__
-	// Update FrameCoords
-    if (RenDev->BumpMaps)
-		RenDev->UpdateCoords(Frame);
-#endif
-
-	const DWORD NextPolyFlags = SetPolyFlags(Surface.PolyFlags);
-
-	// Check if the uniforms will change
-	if (!RenDev->UsingShaderDrawParameters ||
-		DrawCallParams.HitTesting != RenDev->HitTesting() ||
-		// Check if the blending mode will change
-		WillBlendStateChange(DrawCallParams.PolyFlags, NextPolyFlags) ||
-		// Check if the surface textures will change
-		RenDev->WillTextureStateChange(0, *Surface.Texture, NextPolyFlags) ||
-		(Surface.LightMap && RenDev->WillTextureStateChange(1, *Surface.LightMap, NextPolyFlags)) ||
-		((Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr) && RenDev->WillTextureStateChange(2, *Surface.FogMap, NextPolyFlags)) ||
-		(Surface.DetailTexture && RenDev->DetailTextures && RenDev->WillTextureStateChange(3, *Surface.DetailTexture, NextPolyFlags)) ||
-		(Surface.MacroTexture && RenDev->MacroTextures && RenDev->WillTextureStateChange(4, *Surface.MacroTexture, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
-		(Surface.BumpMap && RenDev->BumpMaps && RenDev->WillTextureStateChange(5, *Surface.BumpMap, NextPolyFlags)) ||
-		(Surface.EnvironmentMap && RenDev->EnvironmentMaps && RenDev->WillTextureStateChange(6, *Surface.EnvironmentMap, NextPolyFlags)) ||
-		(Surface.HeightMap && RenDev->WillTextureStateChange(7, *Surface.HeightMap, NextPolyFlags)) ||
+	Options |= ShaderOptions::OPT_DistanceFog;
+	
+	if (Surface.EnvironmentMap && EnvironmentMaps)
+		Options |= ShaderOptions::OPT_EnvironmentMap;
+
+	if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
+		Options |= ShaderOptions::OPT_HeightMap;
+
+	if (Surface.BumpMap && BumpMaps)
+		Options |= ShaderOptions::OPT_BumpMap;
+#else
+	if (BumpMaps && Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap)
+		Options |= ShaderOptions::OPT_BumpMap;
 #endif
-		// Check if we have room left in the multi-draw array
-		DrawBuffer.IsFull())
-	{
-		// Dispatch buffered data
-		Flush(true);
-
-		// Update global GL state
-		RenDev->SetBlend(NextPolyFlags, false);
-	}
-
-	DrawCallParams.PolyFlags = NextPolyFlags;
-	DrawCallParams.DrawFlags = 0;
-
-	// Editor Support.
-	DrawCallParams.HitTesting = (GIsEditor && RenDev->HitTesting()) ? 1 : 0;
-	if (GIsEditor)
-	{
-		DrawCallParams.DrawColor = 
-			RenDev->HitTesting() ? FPlaneToVec4(RenDev->HitColor) : FPlaneToVec4(Surface.FlatColor.Plane());
-		
-		if (Frame->Viewport->Actor) // needed? better safe than sorry.
-			DrawCallParams.RendMap = Frame->Viewport->Actor->RendMap;
-	}
-
-	// Set Textures
-	SetTexture(0, *Surface.Texture, DrawCallParams.PolyFlags, 0.0, DF_DiffuseTexture, &DrawCallParams.DiffuseUV, Surface.Texture->Texture ? &DrawCallParams.DiffuseInfo : nullptr);
-	DrawCallParams.TextureFormat = Surface.Texture->Format;
-
-	if (!Surface.Texture->Texture)
-		DrawCallParams.DiffuseInfo = glm::vec4(1.f, 0.f, 0.f, 1.f);
 
 	if (Surface.LightMap)
-		SetTexture(1, *Surface.LightMap, DrawCallParams.PolyFlags, -0.5, DF_LightMap, &DrawCallParams.LightMapUV);
+		Options |= ShaderOptions::OPT_LightMap;
 
 	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
-		SetTexture(2, *Surface.FogMap, PF_AlphaBlend, -0.5, DF_FogMap, &DrawCallParams.FogMapUV);
-	
-	if (Surface.DetailTexture && RenDev->DetailTextures)
-		SetTexture(3, *Surface.DetailTexture, DrawCallParams.PolyFlags, 0.0, DF_DetailTexture, &DrawCallParams.DetailUV);
+		Options |= ShaderOptions::OPT_FogMap;
 
-	if (Surface.MacroTexture && RenDev->MacroTextures)
-		SetTexture(4, *Surface.MacroTexture, DrawCallParams.PolyFlags, 0.0, DF_MacroTexture, &DrawCallParams.MacroUV, &DrawCallParams.MacroInfo);
-	
+	if (Surface.DetailTexture && DetailTextures)
+		Options |= ShaderOptions::OPT_DetailTexture;
+
+	if (Surface.MacroTexture && MacroTextures)
+		Options |= ShaderOptions::OPT_MacroTexture;
+
+	if (GIsEditor && NextPolyFlags & PF_Selected)
+		Options |= ShaderOptions::OPT_Selected;
+
+	Shader->SelectShaderSpecialization(ShaderOptions(Options));
+
+	const bool CanBuffer = Shader->DrawBuffer.IsFull() || !Shader->ParametersBuffer.CanBuffer(1);
+
+	// Check if this draw call will change any global state. If so, we want to flush any pending draw calls before we make the changes
+	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
+		WillTextureStateChange(DiffuseTextureIndex, *Surface.Texture, NextPolyFlags) || // Check if the surface textures will change
+		(Surface.LightMap && WillTextureStateChange(LightMapIndex, *Surface.LightMap, NextPolyFlags)) ||
+		((Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr) && WillTextureStateChange(FogMapIndex, *Surface.FogMap, NextPolyFlags)) ||
+		(Surface.DetailTexture && DetailTextures && WillTextureStateChange(DetailTextureIndex, *Surface.DetailTexture, NextPolyFlags)) ||
+		(Surface.MacroTexture && MacroTextures && WillTextureStateChange(MacroTextureIndex, *Surface.MacroTexture, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
-	if (Surface.BumpMap && RenDev->BumpMaps)
+		(Surface.BumpMap && BumpMaps && WillTextureStateChange(BumpMapIndex, *Surface.BumpMap, NextPolyFlags)) ||
+		(Surface.EnvironmentMap && EnvironmentMaps && WillTextureStateChange(EnvironmentMapIndex, *Surface.EnvironmentMap, NextPolyFlags)) ||
+		(Surface.HeightMap && WillTextureStateChange(HeightMapIndex, *Surface.HeightMap, NextPolyFlags)) ||
+#endif
+		!CanBuffer)
 	{
-		BumpMapInfo = Surface.BumpMap;
+		// Dispatch buffered data
+		Shader->Flush(!CanBuffer);
+
+		// Update global GL state
+		SetBlend(NextPolyFlags, false);
+	}
+
+	DrawComplexParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();
+
+	// Editor Support.
+	if (GIsEditor)
+		DrawCallParams->DrawColor = HitTesting() ? FPlaneToVec4(HitColor) : FPlaneToVec4(Surface.FlatColor.Plane());
+
+	// Set Textures
+	SetTextureHelper(this, DiffuseTextureIndex, *Surface.Texture, NextPolyFlags, 0.0, &DrawCallParams->DiffuseUV, Surface.Texture->Texture ? &DrawCallParams->DiffuseInfo : nullptr, DrawCallParams->TexHandles);
+	if (!Surface.Texture->Texture)
+		DrawCallParams->DiffuseInfo = glm::vec4(1.f, 0.f, 0.f, 1.f);
+
+	if (Surface.LightMap)
+		SetTextureHelper(this, LightMapIndex, *Surface.LightMap, PF_None, -0.5, &DrawCallParams->LightMapUV, nullptr, DrawCallParams->TexHandles);
+
+	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
+		SetTextureHelper(this, FogMapIndex, *Surface.FogMap, PF_AlphaBlend, -0.5, &DrawCallParams->FogMapUV, nullptr, DrawCallParams->TexHandles);
+
+	if (Surface.DetailTexture && DetailTextures)
+		SetTextureHelper(this, DetailTextureIndex, *Surface.DetailTexture, PF_None, 0.0, &DrawCallParams->DetailUV, nullptr, DrawCallParams->TexHandles);
+
+	if (Surface.MacroTexture && MacroTextures)
+		SetTextureHelper(this, MacroTextureIndex, *Surface.MacroTexture, PF_None, 0.0, &DrawCallParams->MacroUV, &DrawCallParams->MacroInfo, DrawCallParams->TexHandles);
+
+#if ENGINE_VERSION==227
+	if (Surface.BumpMap && BumpMaps)
+	{
+		Shader->BumpMapInfo = Surface.BumpMap;
 #else
-	if (RenDev->BumpMaps && Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap)
+	if (BumpMaps && Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap)
 	{
 # if ENGINE_VERSION==1100
-		Surface.Texture->Texture->BumpMap->Lock(BumpMapInfo, Viewport->CurrentTime, 0, RenDev);
+		Surface.Texture->Texture->BumpMap->Lock(Shader->BumpMapInfo, Viewport->CurrentTime, 0, this);
 # else
-		Surface.Texture->Texture->BumpMap->Lock(BumpMapInfo, FTime(), 0, RenDev);
+		Surface.Texture->Texture->BumpMap->Lock(Shader->BumpMapInfo, FTime(), 0, this);
 # endif
 #endif
-		SetTexture(5, FTEXTURE_GET(BumpMapInfo), DrawCallParams.PolyFlags, 0.0, DF_BumpMap, nullptr, &DrawCallParams.BumpMapInfo);
+		SetTextureHelper(this, BumpMapIndex, FTEXTURE_GET(Shader->BumpMapInfo), PF_None, 0.0, nullptr, &DrawCallParams->BumpMapInfo, DrawCallParams->TexHandles);
 	}
-		
-#if ENGINE_VERSION==227
-	if (Surface.EnvironmentMap && RenDev->EnvironmentMaps)
-		SetTexture(6, *Surface.EnvironmentMap, DrawCallParams.PolyFlags, 0.0, DF_EnvironmentMap, &DrawCallParams.EnviroMapUV);
 
-    if (Surface.HeightMap && RenDev->ParallaxVersion != Parallax_Disabled)
-		SetTexture(7, *Surface.HeightMap, DrawCallParams.PolyFlags, 0.0, DF_HeightMap, nullptr, &DrawCallParams.HeightMapInfo);
+#if ENGINE_VERSION==227
+	if (Surface.EnvironmentMap && EnvironmentMaps)
+		SetTextureHelper(this, EnvironmentMapIndex, *Surface.EnvironmentMap, PF_None, 0.0, &DrawCallParams->EnviroMapUV, nullptr, DrawCallParams->TexHandles);
+
+	if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
+		SetTextureHelper(this, HeightMapIndex, *Surface.HeightMap, PF_None, 0.0, nullptr, &DrawCallParams->HeightMapInfo, DrawCallParams->TexHandles);
 #endif
 
 	// Other draw data
-	DrawCallParams.XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
-	DrawCallParams.YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
-	DrawCallParams.ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, RenDev->GetViewportGamma(Frame->Viewport));
-	DrawCallParams.DistanceFogColor = RenDev->DistanceFogColor;
-	DrawCallParams.DistanceFogInfo = RenDev->DistanceFogValues;
-	DrawCallParams.DistanceFogMode = RenDev->DistanceFogMode;
+	DrawCallParams->XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
+	DrawCallParams->YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
+	DrawCallParams->ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, 0.0);
+	DrawCallParams->DistanceFogColor = DistanceFogColor;
+	DrawCallParams->DistanceFogInfo = DistanceFogValues;
+	DrawCallParams->DistanceFogMode = DistanceFogMode;	
 
-	if (RenDev->UsingShaderDrawParameters)
-		memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
-
-	DrawBuffer.StartDrawCall();
+	Shader->DrawBuffer.StartDrawCall();
+	auto DrawID = Shader->DrawBuffer.GetDrawID();
 
 	INT FacetVertexCount = 0;
 	for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
@@ -185,19 +182,14 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		if (NumPts < 3) //Skip invalid polygons,if any?
 			continue;
 
-		if (!VertBuffer.CanBuffer((NumPts - 2) * 3))
+		if (!Shader->VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
-			DrawBuffer.EndDrawCall(FacetVertexCount);
-			if (RenDev->UsingShaderDrawParameters)
-				ParametersBuffer.Advance(1);
-			
-			Flush(true);
+			Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
+			Shader->Flush(true);
+			DrawID = Shader->DrawBuffer.GetDrawID();
 
-			if (RenDev->UsingShaderDrawParameters)
-				memcpy(ParametersBuffer.GetCurrentElementPtr(), &DrawCallParams, sizeof(DrawCallParameters));
-			
 			// just in case...
-			if (sizeof(BufferedVert) * (NumPts - 2) * 3 >= DRAWCOMPLEX_SIZE)
+			if (sizeof(DrawComplexVertex) * (NumPts - 2) * 3 >= DRAWCOMPLEX_SIZE)
 			{
 				debugf(NAME_DevGraphics, TEXT("DrawComplexSurface facet too big!"));
 				continue;
@@ -207,142 +199,82 @@ void UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexSurface(FSceneNode* Fr
 		}
 
 		FTransform** In = &Poly->Pts[0];
-		auto Out = VertBuffer.GetCurrentElementPtr();
+		auto Out = Shader->VertBuffer.GetCurrentElementPtr();
 
-		for (INT i = 0; i < NumPts-2; i++)
+		for (INT i = 0; i < NumPts - 2; i++)
 		{
 			// stijn: not using the normals currently, but we're keeping them in
 			// because they make our vertex data aligned to a 32 byte boundary
-			(Out++)->Coords = FPlaneToVec4(In[0    ]->Point);
-			(Out++)->Coords = FPlaneToVec4(In[i + 1]->Point);
-			(Out++)->Coords = FPlaneToVec4(In[i + 2]->Point);
+			(Out  )->Coords = FPlaneToVec4(In[0    ]->Point);
+			(Out++)->DrawID = DrawID;
+			(Out  )->Coords = FPlaneToVec4(In[i + 1]->Point);
+			(Out++)->DrawID = DrawID;
+			(Out  )->Coords = FPlaneToVec4(In[i + 2]->Point);
+			(Out++)->DrawID = DrawID;
 		}
 
-		FacetVertexCount  += (NumPts - 2) * 3;
-		VertBuffer.Advance((NumPts - 2) * 3);
+		FacetVertexCount += (NumPts - 2) * 3;
+		Shader->VertBuffer.Advance((NumPts - 2) * 3);
 	}
 
-	DrawBuffer.EndDrawCall(FacetVertexCount);
-	if (RenDev->UsingShaderDrawParameters)
-		ParametersBuffer.Advance(1);
+	Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
+	Shader->ParametersBuffer.Advance(1);
 
 #if ENGINE_VERSION!=227
-	if(DrawCallParams.DrawFlags & DF_BumpMap)
-		Surface.Texture->Texture->BumpMap->Unlock(BumpMapInfo);
+	if (Options & ShaderOptions::OPT_BumpMap)
+		Surface.Texture->Texture->BumpMap->Unlock(Shader->BumpMapInfo);
 #endif
+
+    STAT(unclockFast(Stats.ComplexCycles));
 
 	unguard;
 }
 
-void UXOpenGLRenderDevice::DrawComplexProgram::Flush(bool Wait)
+#if ENGINE_VERSION==227
+//Draw everything after one pass. This function is called after each internal rendering pass, everything has to be properly indexed before drawing. Used for DrawComplexSurface.
+void UXOpenGLRenderDevice::DrawPass(FSceneNode* Frame, INT Pass) {}
+#endif
+
+/*-----------------------------------------------------------------------------
+	Complex Surface Shader
+-----------------------------------------------------------------------------*/
+
+UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+	: ShaderProgramImpl(Name, RenDev)
 {
-	if (VertBuffer.IsEmpty())
-		return;
-
-	VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, GL_STREAM_DRAW);
-	if (!RenDev->UsingShaderDrawParameters)
-	{
-		auto Out = ParametersBuffer.GetElementPtr(0);
-		memcpy(Out, &DrawCallParams, sizeof(DrawCallParameters));
-	}
-	ParametersBuffer.Bind();
-	ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
-
-	if (!VertBuffer.IsInputLayoutCreated())
-		CreateInputLayout();
-
-	DrawBuffer.Draw(GL_TRIANGLES, RenDev);
-
-	if (RenDev->UsingShaderDrawParameters)
-		ParametersBuffer.Rotate(false);
-
-	VertBuffer.Lock();
-	VertBuffer.Rotate(Wait);
-
-	DrawBuffer.Reset(
-		VertBuffer.BeginOffsetBytes() / sizeof(BufferedVert),
-		ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParameters));
+	VertexBufferSize				= DRAWCOMPLEX_SIZE;
+	ParametersBufferSize			= DRAWCOMPLEX_SIZE;
+	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::ComplexParametersIndex;
+	NumTextureSamplers				= 8;
+	DrawMode						= GL_TRIANGLES;
+	NumVertexAttributes				= 3;
+	UseSSBOParametersBuffer			= RenDev->UsingShaderDrawParameters;
+	ParametersInfo					= DrawComplexParametersInfo;
+	VertexShaderFunc				= &BuildVertexShader;
+	GeoShaderFunc					= nullptr;
+	FragmentShaderFunc				= &BuildFragmentShader;
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 {
-	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(0));
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(BufferedVert), (GLvoid*)(offsetof(BufferedVert, Normal)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, DrawID)));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, Normal)));
 	VertBuffer.SetInputLayoutCreated();
 }
 
-void UXOpenGLRenderDevice::DrawComplexProgram::ActivateShader()
+void UXOpenGLRenderDevice::DrawComplexProgram::BuildCommonSpecializations()
 {
-	VertBuffer.Wait();
-
-	glUseProgram(ShaderProgramObject);
-	VertBuffer.Bind();
-	ParametersBuffer.Bind();
-
-	glEnableVertexAttribArray(0);
-	glEnableVertexAttribArray(1);
-
-	DrawCallParams.PolyFlags = 0;// SetPolyFlags(CurrentAdditionalPolyFlags | CurrentPolyFlags);
-}
-
-void UXOpenGLRenderDevice::DrawComplexProgram::DeactivateShader()
-{
-	Flush(false);
-
-	glDisableVertexAttribArray(0);
-	glDisableVertexAttribArray(1);
-}
-
-void UXOpenGLRenderDevice::DrawComplexProgram::BindShaderState()
-{
-	ShaderProgram::BindShaderState();
-
-	if (!RenDev->UsingShaderDrawParameters)
-		BindUniform(ComplexParametersIndex, "DrawCallParameters");
-
-	// Bind regular texture samplers to their respective TMUs
-	for (INT i = 0; i < 8; i++)
-	{
-		GLint MultiTextureUniform;
-		GetUniformLocation(MultiTextureUniform, appToAnsi(*FString::Printf(TEXT("Texture%i"), i)));
-		if (MultiTextureUniform != -1)
-			glUniform1i(MultiTextureUniform, i);
-	}
-}
-
-void UXOpenGLRenderDevice::DrawComplexProgram::MapBuffers()
-{
-	VertBuffer.GenerateVertexBuffer(RenDev);
-	VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffersComplex, DRAWCOMPLEX_SIZE);
-
-	if (RenDev->UsingShaderDrawParameters)
-	{
-		ParametersBuffer.GenerateSSBOBuffer(RenDev, ComplexParametersIndex);
-		ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, MAX_DRAWCOMPLEX_BATCH, DRAWCALL_BUFFER_USAGE_PATTERN);
-	}
-	else
-	{
-		ParametersBuffer.GenerateUBOBuffer(RenDev, ComplexParametersIndex);
-		ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffersDrawcallParams, 1, DRAWCALL_BUFFER_USAGE_PATTERN);
-		ParametersBuffer.Advance(1);
-	}
-}
-
-void UXOpenGLRenderDevice::DrawComplexProgram::UnmapBuffers()
-{
-	VertBuffer.DeleteBuffer();
-	ParametersBuffer.DeleteBuffer();
-}
-
-bool UXOpenGLRenderDevice::DrawComplexProgram::BuildShaderProgram()
-{
-	return ShaderProgram::BuildShaderProgram(BuildVertexShader, nullptr, BuildFragmentShader, EmitHeader);
-}
-
-UXOpenGLRenderDevice::DrawComplexProgram::~DrawComplexProgram()
-{
-	DeleteShader();
-	DrawComplexProgram::UnmapBuffers();
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_DetailTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_FogMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_FogMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_MacroTexture));
 }
 
 /*-----------------------------------------------------------------------------

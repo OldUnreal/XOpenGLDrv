@@ -1,7 +1,7 @@
 /*=============================================================================
 	UnShader.cpp: Unreal XOpenGL shader support code.
 
-	Copyright 2014-2017 Oldunreal
+	Copyright 2014-2017 OldUnreal
 
 	Revision history:
 	* Created by Smirftsch
@@ -16,7 +16,7 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
+static void EmitGlobals(UXOpenGLRenderDevice::ShaderProgram* Program, UXOpenGLRenderDevice::ShaderOptions Options, GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, bool HaveGeoShader)
 {
 	// VERSION
 	if (GL->OpenGLVersion == GL_Core)
@@ -29,7 +29,7 @@ static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 			Out << "#version 330 core" END_LINE;
 	}
 	else
-        {	  
+	{	  
 	  Out << "#version 310 es" END_LINE;
 	  Out << "#extension GL_OES_shader_io_blocks : require" END_LINE;
 	}
@@ -44,6 +44,7 @@ static void Emit_Globals(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 #extension GL_ARB_shading_language_420pack : require
 )";
 	}
+
 	if (GL->OpenGLVersion == GL_ES)
 	{
 		Out << R"(
@@ -60,15 +61,80 @@ precision lowp int;
 )";
 	}
 
+	// Emit specialization options
+	Out << appToAnsi(*Options.GetPreprocessorString());
+
+	// Emit hardcoded options
+	Out << "#define OPT_GLCore " << (GL->OpenGLVersion == GL_Core ? 1 : 0) << END_LINE;
+	Out << "#define OPT_GLES " << (GL->OpenGLVersion == GL_Core ? 0 : 1) << END_LINE;
+	Out << "#define OPT_GeometryShaders " << (GL->UsingGeometryShaders ? 1 : 0) << END_LINE;
+	Out << "#define OPT_DetailMax " << GL->DetailMax << END_LINE;
+	Out << "#define OPT_SimulateMultiPass " << (GL->SimulateMultiPass ? 1 : 0) << END_LINE;
+	Out << "#define OPT_HWLighting " << (GL->UseHWLighting ? 1 : 0) << END_LINE;
+	Out << "#define OPT_SupportsClipDistance " << (GL->SupportsClipDistance ? 1 : 0) << END_LINE;
+	Out << "#define OPT_MaxClippingPlanes " << GL->MaxClippingPlanes << END_LINE;
+	Out << "#define OPT_Editor " << (GIsEditor ? 1 : 0) << END_LINE;
+
+	// Emit engine constants
+#if ENGINE_VERSION==227
+	Out << "#define LE_Sunlight " << LE_Sunlight << END_LINE;
+#else
+	Out << "#define LE_Sunlight " << (LE_MAX + 1) << END_LINE;
+#endif
+	Out << "#define ENGINE_VERSION " << ENGINE_VERSION << END_LINE;	
+	Out << "#define MAX_LIGHTS " << MAX_LIGHTS << END_LINE;	
+
+	if (GIsEditor)
+	{
+		Out << "#define REN_None " << REN_None << "u" << END_LINE;
+		Out << "#define REN_Wire " << REN_Wire << "u" << END_LINE;
+		Out << "#define REN_Zones " << REN_Zones << "u" << END_LINE;
+		Out << "#define REN_Polys " << REN_Polys << "u" << END_LINE;
+		Out << "#define REN_PolyCuts " << REN_PolyCuts << "u" << END_LINE;
+		Out << "#define REN_DynLight " << REN_DynLight << "u" << END_LINE;
+		Out << "#define REN_PlainTex " << REN_PlainTex << "u" << END_LINE;
+		Out << "#define REN_OrthXY " << REN_OrthXY << "u" << END_LINE;
+		Out << "#define REN_OrthXZ " << REN_OrthXZ << "u" << END_LINE;
+		Out << "#define REN_TexView " << REN_TexView << "u" << END_LINE;
+		Out << "#define REN_TexBrowser " << REN_TexBrowser << "u" << END_LINE;
+		Out << "#define REN_MeshView " << REN_MeshView << "u" << END_LINE;
+#if ENGINE_VERSION==227
+		Out << "#define REN_Normals " << REN_Normals << "u" << END_LINE;
+#else
+		Out << "#define REN_Normals " << (REN_MAX + 1) << "u" << END_LINE;
+#endif
+	}
+
 	Out << R"(
-layout(std140) uniform GlobalMatrices
-{
+layout(std140) uniform FrameState
+{  
   mat4 projMat;
   mat4 viewMat;
   mat4 modelMat;
   mat4 modelviewMat;
   mat4 modelviewprojMat;
   mat4 lightSpaceMat;
+  mat4 FrameCoords;
+  mat4 FrameUncoords;
+  float Gamma;
+  float LightMapIntensity;
+  float LightColorIntensity;  
+};
+)";
+
+	for (INT i = 0; i < Program->NumTextureSamplers; ++i)
+		Out << "uniform sampler2D Texture" << i << ";" << END_LINE;
+
+	Out << R"(
+// Light information.
+layout(std140) uniform LightInfo
+{  
+  vec4 LightData1[MAX_LIGHTS]; // LightBrightness, LightHue, LightSaturation, LightCone
+  vec4 LightData2[MAX_LIGHTS]; // LightEffect, LightPeriod, LightPhase, LightRadius
+  vec4 LightData3[MAX_LIGHTS]; // LightType, VolumeBrightness, VolumeFog, VolumeRadius
+  vec4 LightData4[MAX_LIGHTS]; // WorldLightRadius, NumLights, ZoneNumber, CameraRegion->ZoneNumber
+  vec4 LightData5[MAX_LIGHTS]; // NormalLightRadius, bZoneNormalLight, unused, unused
+  vec4 LightPos[MAX_LIGHTS];
 };
 
 layout(std140) uniform ClipPlaneParams
@@ -77,46 +143,15 @@ layout(std140) uniform ClipPlaneParams
   vec4  ClipPlane;  // Clipping planes. Plane.X, Plane.Y, Plane.Z, Plane.W
 };
 
-// Light information.
-layout(std140) uniform StaticLightInfo
+#if OPT_Editor
+layout(std140) uniform EditorState
 {
-  vec4 LightPos[)" << MAX_LIGHTS << R"(];
-  vec4 LightData1[)" << MAX_LIGHTS << R"(]; // LightBrightness, LightHue, LightSaturation, LightCone
-  vec4 LightData2[)" << MAX_LIGHTS << R"(]; // LightEffect, LightPeriod, LightPhase, LightRadius
-  vec4 LightData3[)" << MAX_LIGHTS << R"(]; // LightType, VolumeBrightness, VolumeFog, VolumeRadius
-  vec4 LightData4[)" << MAX_LIGHTS << R"(]; // WorldLightRadius, NumLights, ZoneNumber, CameraRegion->ZoneNumber
-  vec4 LightData5[)" << MAX_LIGHTS << R"(]; // NormalLightRadius, bZoneNormalLight, unused, unused
+  uint HitTesting;
+  uint RendMap;
 };
+#endif
 
-layout(std140) uniform GlobalCoords
-{
-  mat4 FrameCoords;
-  mat4 FrameUncoords;
-};
-)";
-
-	if (GL->UsingBindlessTextures)
-	{
-		Out << R"(
-vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
-{
-  return texture(sampler2D(BindlessTexHandle), TexCoords);
-}
-)";
-	}
-	else
-	{
-		// texture bound to TMU. BindlessTexBum is meaningless here
-		Out << R"(
-vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
-{
-  return texture(BoundSampler, TexCoords);
-}
-)";
-	}
-
-	//DistanceFog
-    Out << R"(
+#if OPT_DistanceFog
 struct FogParameters
 {
   vec4  FogColor;   // Fog color
@@ -145,6 +180,7 @@ float getFogFactor(FogParameters DistanceFog)
   FogResult = 1.0 - clamp(FogResult, 0.0, 1.0);
   return FogResult;
 }
+#endif
 
 float PlaneDot(vec4 Plane, vec3 Point)
 {
@@ -160,27 +196,138 @@ vec4 GammaCorrect(float Gamma, vec4 Color)
     return Color;
 }
 
-// The following directive resets the line number to 1 
-// to have the correct output logging for a possible 
-// error within the shader files.
-#line 1
-)";	
-
+vec3 rgb2hsv(vec3 c)
+{
+  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0); // some nice stuff from http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl
+  vec4 p = c.g < c.b ? vec4(c.bg, K.wz) : vec4(c.gb, K.xy);
+  vec4 q = c.r < p.x ? vec4(p.xyw, c.r) : vec4(c.r, p.yzx);
+  float d = q.x - min(q.w, q.y);
+  float e = 1.0e-10;
+  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint ShaderType, class UXOpenGLRenderDevice* GL, const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseInstanceID)
+vec3 hsv2rgb(vec3 c)
 {
-	// gl_DrawID is only accessible in vertex shaders
-	if (GL->UsingShaderDrawParameters && ShaderType != GL_VERTEX_SHADER)
-		return;
+  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+)";
 
-	// Emit draw call parameters struct
-	if (GL->UsingShaderDrawParameters)
-		Out << "struct ";
+	if (GL->UsingBindlessTextures)
+	{
+		Out << R"(
+vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
+{
+  return texture(sampler2D(BindlessTexHandle), TexCoords);
+}
+)";
+	}
 	else
-		Out << "layout(std140) uniform ";
+	{
+		// texture bound to TMU. BindlessTexBum is meaningless here
+		Out << R"(
+vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
+{
+  return texture(BoundSampler, TexCoords);
+}
+)";
+	}
 
-	Out << R"(DrawCallParameters
+	if (ShaderType == GL_FRAGMENT_SHADER)
+	{
+		Out << R"(
+vec4 ApplyPolyFlags(vec4 Color)
+{
+#if OPT_Masked
+    if (Color.a < 0.5)
+      discard;
+    else Color.rgb /= Color.a;
+#elif OPT_AlphaBlended
+    if (Color.a < 0.01)
+      discard;
+#endif
+  return Color;
+}
+)";
+	}
+
+	if (ShaderType == GL_VERTEX_SHADER)
+	{
+		Out << "flat out uint vDrawID;" END_LINE;
+	}
+	else if (ShaderType == GL_GEOMETRY_SHADER)
+	{
+		Out << "flat in uint vDrawID[];" END_LINE;
+		Out << "flat out uint gDrawID;" END_LINE;
+	}
+	else if (HaveGeoShader)
+	{
+		Out << "flat in uint gDrawID;" END_LINE;
+	}
+	else
+	{
+		Out << "flat in uint vDrawID;" END_LINE;
+	}
+
+    // The following directive resets the line number to 1 
+    // to have the correct output logging for a possible 
+    // error within the shader files.
+	Out << "#line 1" END_LINE;
+}
+
+static void GetTypeInfo(const char* TypeName, INT& SizeBytes, INT& Components)
+{
+	if (!strcmp("vec4", TypeName) || !strcmp("uvec4", TypeName))
+	{
+		SizeBytes = 16;
+		Components = 4;
+	}
+	else if (!strcmp("int", TypeName) || !strcmp("uint", TypeName) || !strcmp("float", TypeName))
+	{
+		SizeBytes = 4;
+		Components = 1;
+	}
+	else
+		appErrorf(TEXT("Unknown GLSL type: %ls"), appFromAnsi(TypeName));
+}
+
+INT UXOpenGLRenderDevice::ShaderProgram::GetMaximumUniformBufferSize(const DrawCallParameterInfo* Info) const
+{
+	INT TotalSizeBytes = 0;
+	INT TotalComponents = 0;
+
+	while (true)
+	{
+		if (!Info->Type)
+			break;
+
+		INT Size = 0, Components = 0;
+		GetTypeInfo(Info->Type, Size, Components);
+		TotalSizeBytes += Size * Max<INT>(Info->ArrayCount, 1);
+		TotalComponents += Components * Max<INT>(Info->ArrayCount, 1);
+		Info++;
+	}
+
+	// TODO: Check the various component limits
+
+	if (TotalSizeBytes > 0)
+		return (RenDev->MaxUniformBlockSize / TotalSizeBytes / 2);
+	return 16;
+}
+
+void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader
+(
+	const DrawCallParameterInfo* Info, 
+	FShaderWriterX& Out, 
+	ShaderProgram* Program, 
+	INT BufferBindingIndex, 
+	bool UseSSBO, 
+	bool EmitGetters
+)
+{
+	// Emit draw call parameters struct
+	Out << R"(struct DrawCallParameters
 {
 )";
 
@@ -201,15 +348,28 @@ void UXOpenGLRenderDevice::ShaderProgram::EmitDrawCallParametersHeader(GLuint Sh
 	Out << "};" END_LINE;
 
 	// Emit SSBO buffer (if necessary)
-	if (GL->UsingShaderDrawParameters)
+	if (UseSSBO)
 	{
 		Out << R"(
 layout(std430, binding = )" << BufferBindingIndex << R"() buffer All)" << appToAnsi(Program->ShaderName) << R"(ShaderDrawParams
 {
-	DrawCallParameters Draw)" << appToAnsi(Program->ShaderName) << R"(Params[];
+  DrawCallParameters Draw)" << appToAnsi(Program->ShaderName) << R"(Params[];
 };
 )";
 	}
+	else
+	{
+		//, binding = )" << BufferBindingIndex << R"(
+		Out << R"(
+layout(std140) uniform All)" << appToAnsi(Program->ShaderName) << R"(ShaderDrawParams
+{
+  DrawCallParameters Draw)"	<< appToAnsi(Program->ShaderName) << R"(Params[)" << Program->ParametersBufferSize << R"(];
+};
+)";
+	}
+	
+	if (!EmitGetters)
+		return;
 
 	// Emit getters
 	while (true)
@@ -219,21 +379,15 @@ layout(std430, binding = )" << BufferBindingIndex << R"() buffer All)" << appToA
 
 		Out << Info->Type << " Get" << Info->Name;
 		if (Info->ArrayCount > 0)
-			Out << "(int Index)" END_LINE;
+			Out << "(uint DrawID, int Index)" END_LINE;
 		else
-			Out << "()" END_LINE;
+			Out << "(uint DrawID)" END_LINE;
 		Out << "{" END_LINE;
 
-		Out << "  return ";
-		if (GL->UsingShaderDrawParameters)
-		{
-			Out << "Draw" << appToAnsi(Program->ShaderName);
-			if (UseInstanceID)
-				Out << "Params[gl_BaseInstance + gl_InstanceID].";
-			else
-				Out	<< "Params[gl_DrawID].";
-		}
-		Out << Info->Name;
+		Out << "  return Draw"
+			<< appToAnsi(Program->ShaderName)
+			<< "Params[DrawID]."
+			<< Info->Name;
 		if (Info->ArrayCount > 0)
 			Out << "[Index]";
 		Out << ";" END_LINE;
@@ -244,21 +398,21 @@ layout(std430, binding = )" << BufferBindingIndex << R"() buffer All)" << appToA
 }
 
 // Helpers
-void UXOpenGLRenderDevice::ShaderProgram::BindUniform(const GLuint BindingIndex, const char* Name) const
+void UXOpenGLRenderDevice::ShaderProgram::BindUniform(ShaderSpecialization* Specialization, const GLuint BindingIndex, const char* Name) const
 {
-	const GLuint BlockIndex = glGetUniformBlockIndex(ShaderProgramObject, Name);
+	const GLuint BlockIndex = glGetUniformBlockIndex(Specialization->ShaderProgramObject, Name);
 	if (BlockIndex == GL_INVALID_INDEX)
 	{
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), ShaderName);
 		if (RenDev->UseOpenGLDebug && LogLevel >= 2)
 			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), ShaderName);
 	}
-	glUniformBlockBinding(ShaderProgramObject, BlockIndex, BindingIndex);
+	glUniformBlockBinding(Specialization->ShaderProgramObject, BlockIndex, BindingIndex);
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::GetUniformLocation(GLint& Uniform, const char* Name) const
+void UXOpenGLRenderDevice::ShaderProgram::GetUniformLocation(ShaderSpecialization* Specialization, GLint& Uniform, const char* Name) const
 {
-	Uniform = glGetUniformLocation(ShaderProgramObject, Name);
+	Uniform = glGetUniformLocation(Specialization->ShaderProgramObject, Name);
 	if (Uniform == GL_INVALID_INDEX)
 	{
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), ShaderName);
@@ -271,14 +425,14 @@ static const TCHAR* ShaderTypeString(GLuint ShaderType)
 {
 	switch (ShaderType)
 	{
-	case GL_VERTEX_SHADER: return TEXT("Vertex");
-	case GL_GEOMETRY_SHADER: return TEXT("Geometry");
-	case GL_FRAGMENT_SHADER: return TEXT("Fragment");
-	default: return TEXT("Unknown");
+		case GL_VERTEX_SHADER: return TEXT("Vertex");
+		case GL_GEOMETRY_SHADER: return TEXT("Geometry");
+		case GL_FRAGMENT_SHADER: return TEXT("Fragment");
+		default: return TEXT("Unknown");
 	}
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::DumpShader(const char* Source, bool AddLineNumbers)
+static void DumpShader(const char* Source, bool AddLineNumbers)
 {
 	FString ShaderSource(Source);
 	TArray<FString> Lines;
@@ -292,7 +446,7 @@ void UXOpenGLRenderDevice::ShaderProgram::DumpShader(const char* Source, bool Ad
 		if (Line.InStr(TEXT("#line 1")) == 0)
 			LineNum = 0;
 		if (AddLineNumbers)
-			Lines.AddItem(FString::Printf(TEXT("%d:\t%ls"), LineNum++, *Line));
+			Lines.AddItem(FString::Printf(TEXT("%03d:\t%ls"), LineNum++, *Line));
 		else
 			Lines.AddItem(*Line);
 		if (NewLine == -1)
@@ -304,14 +458,16 @@ void UXOpenGLRenderDevice::ShaderProgram::DumpShader(const char* Source, bool Ad
 		debugf(TEXT("%ls"), *Lines(i));
 }
 
-bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuint& ShaderObject, ShaderWriterFunc Func, ShaderWriterFunc EmitHeaderFunc)
+bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFunctionObject, GLuint FunctionType, ShaderOptions Options, ShaderWriterFunc Func, bool HaveGeoShader)
 {
 	guard(CompileShader);
 	FShaderWriterX ShOut;
-	Emit_Globals(RenDev, ShOut);
-	if (EmitHeaderFunc)
-		(*EmitHeaderFunc)(ShaderType, RenDev, ShOut, this);
-	(*Func)(ShaderType, RenDev, ShOut, this);
+	EmitGlobals(this, Options, FunctionType, RenDev, ShOut, HaveGeoShader);
+
+	if (ParametersInfo)
+		EmitDrawCallParametersHeader(ParametersInfo, ShOut, this, ParametersBufferBindingIndex, UseSSBOParametersBuffer, true);
+
+	(*Func)(FunctionType, RenDev, ShOut);
 
 	GLint blen = 0;
 	GLsizei slen = 0;
@@ -319,18 +475,18 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 	const GLchar* Shader = *ShOut;
 	GLint length = ShOut.Length();
 	bool Result = true;
-	glShaderSource(ShaderObject, 1, &Shader, &length);
-	glCompileShader(ShaderObject);
+	glShaderSource(ShaderFunctionObject, 1, &Shader, &length);
+	glCompileShader(ShaderFunctionObject);
 
-	glGetShaderiv(ShaderObject, GL_COMPILE_STATUS, &IsCompiled);
+	glGetShaderiv(ShaderFunctionObject, GL_COMPILE_STATUS, &IsCompiled);
 	if (!IsCompiled)
 	{		
-		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
-		glGetShaderiv(ShaderObject, GL_INFO_LOG_LENGTH, &blen);
+		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls %ls Shader (Options %ls)"), ShaderName, ShaderTypeString(FunctionType), *Options.GetShortString());
+		glGetShaderiv(ShaderFunctionObject, GL_INFO_LOG_LENGTH, &blen);
 		if (blen > 1)
 		{
 			GLchar* compiler_log = new GLchar[blen + 1];
-			glGetShaderInfoLog(ShaderObject, blen, &slen, compiler_log);
+			glGetShaderInfoLog(ShaderFunctionObject, blen, &slen, compiler_log);
 			debugf(TEXT("XOpenGL: ErrorLog compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
 			delete[] compiler_log;
 		}
@@ -340,25 +496,22 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShader(GLuint ShaderType, GLuin
 	}
 	else 
 	{
-		glGetShaderiv(ShaderObject, GL_INFO_LOG_LENGTH, &blen);
+		glGetShaderiv(ShaderFunctionObject, GL_INFO_LOG_LENGTH, &blen);
 		if (blen > 1)
 		{
 			GLchar* compiler_log = new GLchar[blen + 1];
-			glGetShaderInfoLog(ShaderObject, blen, &slen, compiler_log);
+			glGetShaderInfoLog(ShaderFunctionObject, blen, &slen, compiler_log);
 			debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
 			delete[] compiler_log;
 		}
-		else debugf(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader"), ShaderName, ShaderTypeString(ShaderType));
+		else debugf(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader (Options %ls)"), ShaderName, ShaderTypeString(FunctionType), *Options.GetShortString());
 	}
-
-	//debugf(TEXT("XOpenGL: %ls %ls Shader Source"), ShaderName, ShaderTypeString(ShaderType));
-	//DumpShader(*ShOut, false);
 
 	return Result;
 	unguard;
 }
 
-bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram()
+bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram(GLuint ShaderProgramObject) const
 {
 	guard(UXOpenGLRenderDevice::LinkShader);
 	GLint IsLinked = 0;
@@ -395,44 +548,37 @@ void UXOpenGLRenderDevice::InitShaders()
 
 	CHECK_GL_ERROR();
 
-	Shaders[No_Prog]      = new NoProgram(TEXT("No"), this);
-	Shaders[Simple_Prog]  = new DrawSimpleProgram(TEXT("DrawSimple"), this);
-	Shaders[Tile_Prog]    = new DrawTileProgram(TEXT("DrawTile"), this);
-	Shaders[Gouraud_Prog] = new DrawGouraudProgram(TEXT("DrawGouraud"), this);
-	Shaders[Complex_Prog] = new DrawComplexProgram(TEXT("DrawComplex"), this);
+	memset(Shaders, 0, sizeof(Shaders));
+	Shaders[No_Prog]				= new NoProgram(TEXT("No"), this);
+	Shaders[Simple_Triangle_Prog]	= new DrawSimpleTriangleProgram(TEXT("DrawSimpleTriangle"), this);
+	Shaders[Simple_Line_Prog]		= new DrawSimpleLineProgram(TEXT("DrawSimpleLine"), this);
+	Shaders[Tile_Prog]				= (OpenGLVersion == GL_Core && UsingGeometryShaders) 
+		? static_cast<ShaderProgram*>(new DrawTileCoreProgram(TEXT("DrawTile"), this)) 
+		: static_cast<ShaderProgram*>(new DrawTileESProgram(TEXT("DrawTile"), this));
+	Shaders[Gouraud_Prog]			= new DrawGouraudProgram(TEXT("DrawGouraud"), this);
+	Shaders[Complex_Prog]			= new DrawComplexProgram(TEXT("DrawComplex"), this);
 
 	// (Re)initialize UBOs
-	if (!GlobalMatricesBuffer.Buffer)
+	if (!FrameStateBuffer.Buffer)
 	{
-		GlobalMatricesBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::MatricesIndex);
-		GlobalMatricesBuffer.MapUBOBuffer(false, 1);
-		GlobalMatricesBuffer.Advance(1);
+		FrameStateBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::FrameStateIndex);
+		FrameStateBuffer.MapUBOBuffer(false, 1);
+		FrameStateBuffer.Advance(1);
 	}
 	else
 	{
-		GlobalMatricesBuffer.RebindBufferBase(GlobalShaderBindingIndices::MatricesIndex);
+		FrameStateBuffer.RebindBufferBase(GlobalShaderBindingIndices::FrameStateIndex);
 	}
 	
-	if (!StaticLightInfoBuffer.Buffer)
+	if (!LightInfoBuffer.Buffer)
 	{
-		StaticLightInfoBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::StaticLightInfoIndex);
-		StaticLightInfoBuffer.MapUBOBuffer(false, 1);
-		StaticLightInfoBuffer.Advance(1);
+		LightInfoBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::LightInfoIndex);
+		LightInfoBuffer.MapUBOBuffer(false, 1);
+		LightInfoBuffer.Advance(1);
 	}
 	else
 	{
-		StaticLightInfoBuffer.RebindBufferBase(GlobalShaderBindingIndices::StaticLightInfoIndex);
-	}
-
-	if (!GlobalCoordsBuffer.Buffer)
-	{
-		GlobalCoordsBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::CoordsIndex);
-		GlobalCoordsBuffer.MapUBOBuffer(false, 1);
-		GlobalCoordsBuffer.Advance(1);
-	}
-	else
-	{
-		GlobalCoordsBuffer.RebindBufferBase(GlobalShaderBindingIndices::CoordsIndex);
+		LightInfoBuffer.RebindBufferBase(GlobalShaderBindingIndices::LightInfoIndex);
 	}
 
 	if (!GlobalClipPlaneBuffer.Buffer)
@@ -445,14 +591,28 @@ void UXOpenGLRenderDevice::InitShaders()
 	{
 		GlobalClipPlaneBuffer.RebindBufferBase(GlobalShaderBindingIndices::ClipPlaneIndex);
 	}
+
+	if (GIsEditor)
+	{
+		if (!EditorStateBuffer.Buffer)
+		{
+			EditorStateBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::EditorStateIndex);
+			EditorStateBuffer.MapUBOBuffer(false, 1);
+			EditorStateBuffer.Advance(1);
+		}
+		else
+		{
+			EditorStateBuffer.RebindBufferBase(GlobalShaderBindingIndices::EditorStateIndex);
+		}
+	}
 	
 	for (const auto Shader : Shaders)
 	{
+		if (!Shader)
+			continue;
+
 		Shader->MapBuffers();
-		Shader->BuildShaderProgram();
-		Shader->ActivateShader();
-		Shader->BindShaderState();			// We call this with the shader activated so we can bind uniform samplers immediately
-		Shader->DeactivateShader();
+		Shader->BuildCommonSpecializations();
 	}
 
 	unguard;
@@ -480,93 +640,211 @@ void UXOpenGLRenderDevice::ResetShaders()
 
 void UXOpenGLRenderDevice::RecompileShaders()
 {
-	for (const auto Shader : Shaders)
+	// This forces us to select new shader specalizations
+	CachedPolyFlags = 0;
+	CachedShaderOptions = 0;
+}
+
+void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* Specialization)
+{
+	BindUniform(Specialization, FrameStateIndex, "FrameState");
+	BindUniform(Specialization, LightInfoIndex, "LightInfo");
+	BindUniform(Specialization, ClipPlaneIndex, "ClipPlaneParams");
+	if (GIsEditor)
+		BindUniform(Specialization, EditorStateIndex, "EditorState");
+
+	if (UseSSBOParametersBuffer)
+		BindUniform(Specialization, ParametersBufferBindingIndex, "DrawCallParameters");
+	else
+		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%lsShaderDrawParams"), ShaderName)));
+
+	// Bind regular texture samplers to their respective TMUs
+	check(NumTextureSamplers >= 0 && NumTextureSamplers < 9);
+	for (INT i = 0; i < NumTextureSamplers; i++)
 	{
-		Shader->DeleteShader();
-		Shader->BuildShaderProgram();
-		Shader->ActivateShader();
-		Shader->BindShaderState();
-		Shader->DeactivateShader();
+		GLint MultiTextureUniform;
+		GetUniformLocation(Specialization, MultiTextureUniform, appToAnsi(*FString::Printf(TEXT("Texture%i"), i)));
+		if (MultiTextureUniform != -1)
+			glUniform1i(MultiTextureUniform, i);
 	}
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::BindShaderState()
+void UXOpenGLRenderDevice::ShaderProgram::SelectShaderSpecialization(ShaderOptions Options)
 {
-	BindUniform(MatricesIndex, "GlobalMatrices");
-	BindUniform(ClipPlaneIndex, "ClipPlaneParams");
-	BindUniform(StaticLightInfoIndex, "StaticLightInfo");
-	BindUniform(CoordsIndex, "GlobalCoords");
+	// Fast path to avoid an expensive pipeline state lookup
+	if (Options == LastOptions && LastSpecialization)
+		return;
+
+	// We have to change to a different shader. Make sure we flush all buffered data
+	Flush(true);
+
+	// We have to switch to a different specialization. See if we've already compiled it
+	auto Specialization = Specializations.FindRef(Options);
+	if (Specialization)
+	{
+		LastOptions = Options;
+		LastSpecialization = Specialization;
+		glUseProgram(Specialization->ShaderProgramObject);
+		return;
+	}
+
+	// Awww, we'll have to compile it
+	Specialization = new ShaderSpecialization;
+	Specializations.Set(Options, Specialization);
+
+	Specialization->Options = Options;
+	Specialization->SpecializationName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
+
+	check(BuildShaderProgram(Specialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
+
+	LastOptions = Options;
+	LastSpecialization = Specialization;
+	glUseProgram(Specialization->ShaderProgramObject);
+	BindShaderState(Specialization);
 }
 
-bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc, ShaderWriterFunc EmitHeaderFunc)
+bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderSpecialization* Specialization, ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc)
 {
-	VertexShaderObject   = glCreateShader(GL_VERTEX_SHADER);
+	Specialization->VertexShaderObject   = glCreateShader(GL_VERTEX_SHADER);
 	if (GeoShaderFunc)
-		GeoShaderObject  = glCreateShader(GL_GEOMETRY_SHADER);
-	FragmentShaderObject = glCreateShader(GL_FRAGMENT_SHADER);
+		Specialization->GeoShaderObject  = glCreateShader(GL_GEOMETRY_SHADER);
+	Specialization->FragmentShaderObject = glCreateShader(GL_FRAGMENT_SHADER);
 
-	if (!CompileShader(GL_VERTEX_SHADER, VertexShaderObject, VertexShaderFunc, EmitHeaderFunc) ||
-		(GeoShaderFunc && !CompileShader(GL_GEOMETRY_SHADER, GeoShaderObject, GeoShaderFunc, EmitHeaderFunc)) ||
-		!CompileShader(GL_FRAGMENT_SHADER, FragmentShaderObject, FragmentShaderFunc, EmitHeaderFunc))
+	if (!CompileShaderFunction(Specialization->VertexShaderObject, GL_VERTEX_SHADER, Specialization->Options, VertexShaderFunc, GeoShaderFunc != nullptr) ||
+		(GeoShaderFunc && !CompileShaderFunction(Specialization->GeoShaderObject, GL_GEOMETRY_SHADER, Specialization->Options, GeoShaderFunc, GeoShaderFunc != nullptr)) ||
+		!CompileShaderFunction(Specialization->FragmentShaderObject, GL_FRAGMENT_SHADER, Specialization->Options, FragmentShaderFunc, GeoShaderFunc != nullptr))
 		return false;
 
-	ShaderProgramObject = glCreateProgram();
-	glAttachShader(ShaderProgramObject, VertexShaderObject);
+	Specialization->ShaderProgramObject = glCreateProgram();
+	glAttachShader(Specialization->ShaderProgramObject, Specialization->VertexShaderObject);
 	if (GeoShaderFunc)
-		glAttachShader(ShaderProgramObject, GeoShaderObject);
-	glAttachShader(ShaderProgramObject, FragmentShaderObject);
+		glAttachShader(Specialization->ShaderProgramObject, Specialization->GeoShaderObject);
+	glAttachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
 
-	if (!LinkShaderProgram())
+	if (!LinkShaderProgram(Specialization->ShaderProgramObject))
 		return false;
-
+	
 	return true;
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::DeleteShader()
+void UXOpenGLRenderDevice::ShaderProgram::DeleteShaders()
 {
-	if (!ShaderProgramObject)
-		return;
+	for (TMap<ShaderOptions, ShaderSpecialization*>::TIterator It(Specializations); It; ++It)
+	{
+		const auto Specialization = It.Value();
 
-	if (VertexShaderObject)
-		glDetachShader(ShaderProgramObject, VertexShaderObject);
+		if (!Specialization->ShaderProgramObject)
+			continue;
 
-	if (GeoShaderObject)
-		glDetachShader(ShaderProgramObject, GeoShaderObject);
+		if (Specialization->VertexShaderObject)
+			glDetachShader(Specialization->ShaderProgramObject, Specialization->VertexShaderObject);
 
-	if (FragmentShaderObject)
-		glDetachShader(ShaderProgramObject, FragmentShaderObject);
+		if (Specialization->GeoShaderObject)
+			glDetachShader(Specialization->ShaderProgramObject, Specialization->GeoShaderObject);
 
-	glDeleteProgram(ShaderProgramObject);
+		if (Specialization->FragmentShaderObject)
+			glDetachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
 
-	ShaderProgramObject = VertexShaderObject = GeoShaderObject = FragmentShaderObject = 0;
+		glDeleteProgram(Specialization->ShaderProgramObject);
+	}
+
+	Specializations.Empty();
 }
 
 UXOpenGLRenderDevice::ShaderProgram::~ShaderProgram()
 = default;
 
 /*-----------------------------------------------------------------------------
+    ShaderOptions
+-----------------------------------------------------------------------------*/
+FString UXOpenGLRenderDevice::ShaderOptions::GetStringHelper(void (*AddOptionFunc)(FString&, const TCHAR*, bool)) const
+{
+    FString Result;
+#define ADD_OPTION(x) \
+AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
+    
+    ADD_OPTION(OPT_DiffuseTexture)
+    ADD_OPTION(OPT_LightMap)
+    ADD_OPTION(OPT_FogMap)
+    ADD_OPTION(OPT_DetailTexture)
+    ADD_OPTION(OPT_MacroTexture)
+    ADD_OPTION(OPT_BumpMap)
+    ADD_OPTION(OPT_EnvironmentMap)
+    ADD_OPTION(OPT_HeightMap)
+    ADD_OPTION(OPT_Masked)
+    ADD_OPTION(OPT_Unlit)
+    ADD_OPTION(OPT_Modulated)
+    ADD_OPTION(OPT_Translucent)
+    ADD_OPTION(OPT_Environment)
+    ADD_OPTION(OPT_RenderFog)
+    ADD_OPTION(OPT_AlphaBlended)
+    ADD_OPTION(OPT_DistanceFog)
+	ADD_OPTION(OPT_NoNearZ)
+	ADD_OPTION(OPT_Selected)
+    
+    if (Result.Len() == 0)
+        AddOptionFunc(Result, TEXT("OPT_None"), true);
+    return Result;
+}
+
+FString UXOpenGLRenderDevice::ShaderOptions::GetShortString() const
+{
+    return GetStringHelper([](FString& Result, const TCHAR* OptionName, bool IsSet) {
+		if (IsSet)
+		{
+			if (Result.Len() > 0)
+				Result += TEXT("|");
+			Result += OptionName;
+		}
+    });
+}
+
+FString UXOpenGLRenderDevice::ShaderOptions::GetPreprocessorString() const
+{
+    return GetStringHelper([](FString& Result, const TCHAR* OptionName, bool IsSet) {
+        Result += FString::Printf(TEXT("#define %ls %d\n"), OptionName, IsSet ? 1 : 0);
+    });
+}
+
+void UXOpenGLRenderDevice::ShaderOptions::SetOption(DWORD Option)
+{
+    OptionsMask |= Option;
+}
+
+void UXOpenGLRenderDevice::ShaderOptions::UnsetOption(DWORD Option)
+{
+    OptionsMask &= ~Option;
+}
+
+bool UXOpenGLRenderDevice::ShaderOptions::HasOption(DWORD Option) const
+{
+    return OptionsMask & Option;
+}
+
+/*-----------------------------------------------------------------------------
 	Dummy Shader
 -----------------------------------------------------------------------------*/
 
-void UXOpenGLRenderDevice::NoProgram::ActivateShader()
+UXOpenGLRenderDevice::NoProgram::NoProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+	: ShaderProgramImpl(Name, RenDev)
 {
-	/*
-	if (RenDev->ArrayPoint)
-	{
-		RenDev->ArrayPoint->Unbind();
-		RenDev->ArrayPoint = nullptr;
-	}
-	
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindVertexArray(0);
-    glUseProgram(0);
-	*/
+	VertexBufferSize				= 0;
+	ParametersBufferSize			= 0;
+	ParametersBufferBindingIndex	= 0;
+	NumTextureSamplers				= 0;
+	DrawMode						= GL_TRIANGLES;
+	NumVertexAttributes				= 0;
+	UseSSBOParametersBuffer			= false;
+	ParametersInfo					= nullptr;
+	VertexShaderFunc				= nullptr;
+	GeoShaderFunc					= nullptr;
+	FragmentShaderFunc				= nullptr;
 }
 
-void UXOpenGLRenderDevice::NoProgram::DeactivateShader()	{}
-void UXOpenGLRenderDevice::NoProgram::BindShaderState()		{}
-bool UXOpenGLRenderDevice::NoProgram::BuildShaderProgram()	{ return true; }
-void UXOpenGLRenderDevice::NoProgram::CreateInputLayout()	{}
-void UXOpenGLRenderDevice::NoProgram::Flush(bool Wait)		{}
-void UXOpenGLRenderDevice::NoProgram::MapBuffers()			{}
-void UXOpenGLRenderDevice::NoProgram::UnmapBuffers()		{}
+void UXOpenGLRenderDevice::NoProgram::BuildCommonSpecializations()	{}
+void UXOpenGLRenderDevice::NoProgram::CreateInputLayout()			{}
+void UXOpenGLRenderDevice::NoProgram::Flush(bool Rotate)			{}
+void UXOpenGLRenderDevice::NoProgram::MapBuffers()					{}
+void UXOpenGLRenderDevice::NoProgram::UnmapBuffers()				{}
+void UXOpenGLRenderDevice::NoProgram::ActivateShader()				{}
+void UXOpenGLRenderDevice::NoProgram::DeactivateShader()			{}

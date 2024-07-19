@@ -27,52 +27,24 @@ void UXOpenGLRenderDevice::DebugCallback(unsigned int source, unsigned int type,
 
 	switch (source)
 	{
-		case GL_DEBUG_SOURCE_API:
-			SourceMessage=TEXT("API");
-			break;
-		case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
-			SourceMessage=TEXT("WINDOW_SYSTEM");
-			break;
-		case GL_DEBUG_SOURCE_SHADER_COMPILER:
-			SourceMessage=TEXT("SHADER_COMPILER");
-			break;
-		case GL_DEBUG_SOURCE_THIRD_PARTY:
-			SourceMessage=TEXT("THIRD_PARTY");
-			break;
-		case GL_DEBUG_SOURCE_APPLICATION:
-			SourceMessage=TEXT("APPLICATION");
-			break;
-		case GL_DEBUG_SOURCE_OTHER:
-			SourceMessage=TEXT("OTHER");
-			break;
-		default:
-			SourceMessage=TEXT("NONE");
-			break;
+		case GL_DEBUG_SOURCE_API:				SourceMessage=TEXT("API");				break;
+		case GL_DEBUG_SOURCE_WINDOW_SYSTEM:		SourceMessage=TEXT("WINDOW_SYSTEM");	break;
+		case GL_DEBUG_SOURCE_SHADER_COMPILER:	SourceMessage=TEXT("SHADER_COMPILER");	break;
+		case GL_DEBUG_SOURCE_THIRD_PARTY:		SourceMessage=TEXT("THIRD_PARTY");		break;
+		case GL_DEBUG_SOURCE_APPLICATION:		SourceMessage=TEXT("APPLICATION");		break;
+		case GL_DEBUG_SOURCE_OTHER:				SourceMessage=TEXT("OTHER");			break;
+		default:								SourceMessage=TEXT("NONE");				break;
 	}
 
 	switch (type)
 	{
-		case GL_DEBUG_TYPE_ERROR:
-			TypeMessage=TEXT("ERROR");
-			break;
-		case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
-			TypeMessage=TEXT("DEPRECATED_BEHAVIOR");
-			break;
-		case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
-			TypeMessage=TEXT("UNDEFINED_BEHAVIOR");
-			break;
-		case GL_DEBUG_TYPE_PORTABILITY:
-			TypeMessage=TEXT("PORTABILITY");
-			break;
-		case GL_DEBUG_TYPE_PERFORMANCE:
-			TypeMessage=TEXT("PERFORMANCE");
-			break;
-		case GL_DEBUG_TYPE_OTHER:
-			TypeMessage=TEXT("OTHER");
-			break;
-		default:
-			TypeMessage=TEXT("NONE");
-			break;
+		case GL_DEBUG_TYPE_ERROR:				TypeMessage=TEXT("ERROR");				break;
+		case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:	TypeMessage=TEXT("DEPRECATED_BEHAVIOR");break;
+		case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:	TypeMessage=TEXT("UNDEFINED_BEHAVIOR");	break;
+		case GL_DEBUG_TYPE_PORTABILITY:			TypeMessage=TEXT("PORTABILITY");		break;
+		case GL_DEBUG_TYPE_PERFORMANCE:			TypeMessage=TEXT("PERFORMANCE");		break;
+		case GL_DEBUG_TYPE_OTHER:				TypeMessage=TEXT("OTHER");				break;
+		default:								TypeMessage=TEXT("NONE");				break;
 	}
 
 	switch (severity)

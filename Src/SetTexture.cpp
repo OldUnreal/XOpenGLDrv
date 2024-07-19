@@ -7,24 +7,6 @@
 		* Created by Smirftsch
 =============================================================================*/
 
-
-// Defines for legacy names. Use for porting to other UE1 games.
-#if 0
-	#define TEXF_RGBA7          TEXF_BGRA8_LM
-	#define TEXF_DXT1           TEXF_BC1
-	#define TEXF_DXT3           TEXF_BC2
-	#define TEXF_DXT5           TEXF_BC3
-    // #define TEXF_RGBA8          TEXF_BGRA8 //DO NOT USE (anymore)! All TEXF_RGBA8 should be replaced by now, since actually really TEXF_BGRA8
-	#define TEXF_RGTC_R         TEXF_BC4
-	#define TEXF_RGTC_R_SIGNED  TEXF_BC4_S
-	#define TEXF_RGTC_RG        TEXF_BC5
-	#define TEXF_RGTC_RG_SIGNED TEXF_BC5_S
-	#define TEXF_BPTC_RGBA      TEXF_BC7
-	#define TEXF_BPTC_RGB_SF    TEXF_BC6H_S
-	#define TEXF_BPTC_RGB_UF    TEXF_BC6H
-#endif
-
-
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -118,25 +100,17 @@ BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info,
 {
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
 	FCachedTexture* Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
-
-	// We will have to free up a TMU => stop batching
-	if (Result && !IsResidentBindlessTexture && !IsBoundToTMU)
+	
+	// We will have to evict a TMU => stop batching
+	if (!Result || !IsResidentBindlessTexture)
 		return TRUE;
 
 	// We need to re-upload a texture we're currently using
-	if (Result && !UsingBindlessTextures && IsBoundToTMU && IsTextureDataStale)
+	if (IsTextureDataStale)
 		return TRUE;
 
-	// Ditto. We're using the texture and its data is stale => stop batching
-	if (Result && IsResidentBindlessTexture && IsTextureDataStale)
-		return TRUE;
-
-	// We have to upload and will have to bind to a TMU => stop batching
-	if (!Result && !UsingBindlessTextures)
-		return TRUE;
-
-	// The texture number in our drawcall UBO buffer will change => stop batching
-	if (Result && TexInfo[Multi].BindlessTexHandle != Result->BindlessTexHandle && !UsingShaderDrawParameters)
+	// We will have to evict a TMU => stop batching
+	if (!UsingBindlessTextures && !IsBoundToTMU)
 		return TRUE;
 
 	return FALSE;
@@ -188,15 +162,15 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	if (WillTextureStateChange(-1, Info, 0))
 	{
 		// flush buffered data
-		Shaders[ActiveProgram]->Flush(true);
+		Shaders[ActiveProgram]->Flush(false);
 	}
 
-	// Hijack TMU 1 since we're likely updating a lightmap anyway
+	// Use TMU 8 as a temporary storage location
 	if (!IsResidentBindlessTexture)
 	{
-		BindTextureAndSampler(1, Info, Bind, PF_None);
-		TexInfo[1].CurrentCacheID = Info.CacheID;
-		TexInfo[1].BindlessTexHandle = Bind->BindlessTexHandle;
+		BindTextureAndSampler(UploadIndex, Bind);
+		TexInfo[UploadIndex].CurrentCacheID = Info.CacheID;
+		TexInfo[UploadIndex].BindlessTexHandle = Bind->BindlessTexHandle;
 	}
 	
 	Info.bRealtimeChanged = 0;
@@ -233,14 +207,12 @@ void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 		glBindTexture( GL_TEXTURE_2D, 0 );
 		TexInfo[Multi].CurrentCacheID = 0;
 	}
-	CHECK_GL_ERROR();
 	unguard;
 }
 
-void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, DWORD PolyFlags, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, DWORD DrawFlags)
+void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, UBOOL NoSmooth)
 {
 	guard(UOpenGLRenderDevice::SetSampler);
-	CHECK_GL_ERROR();
 
 #if ENGINE_VERSION==227
 	if (Info.UClampMode)
@@ -261,15 +233,13 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, DWORD 
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE );
         glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE );
     }
-	CHECK_GL_ERROR();
 
 	// Set texture sampler state.
-	if ((PolyFlags & PF_NoSmooth) && (DrawFlags & DF_DiffuseTexture))
+	if (NoSmooth)
 	{
 		// "PF_NoSmooth" implies that the worst filter method is used, so have to do this (even if NoFiltering is set) in order to get the expected results.
 		glSamplerParameteri(Sampler, GL_TEXTURE_MIN_FILTER, SkipMipmaps ? GL_NEAREST : GL_NEAREST_MIPMAP_NEAREST);
 		glSamplerParameteri(Sampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-		CHECK_GL_ERROR();
 	}
 	else
 	{
@@ -284,8 +254,6 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, DWORD 
 
 		if (LODBias != 0.f)
 			glSamplerParameteri(Sampler, GL_TEXTURE_LOD_BIAS, appRound(LODBias));
-
-		CHECK_GL_ERROR();
 
 	}
 	unguard;
@@ -479,6 +447,9 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			break;
 		case TEXF_BC5:
 			InternalFormat = GL_COMPRESSED_RG_RGTC2;
+			// TODO: stijn: Fix up the blue channel here!
+			// if (In.TextureFormat == )" << TEXF_BC5 << R"(u) // BC5 (GL_COMPRESSED_RG_RGTC2) compression
+			//	Color.b = sqrt(1.0 - Color.r * Color.r + Color.g * Color.g);
 			break;
 		case TEXF_BC5_S:
 			InternalFormat = GL_COMPRESSED_SIGNED_RG_RGTC2;
@@ -570,33 +541,28 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 				case TEXF_BGRA8_LM:
 					guard(ConvertBGRA7777_RGBA8888);
 					if (OpenGLVersion == GL_Core)
-					  {
-					    ImgSrc = Mip->DataPtr;
-					  }
+					{
+						ImgSrc = Mip->DataPtr;
+					}
 					else // GL ES can't do BGRA so we need to swap the colors here
-					  {
-					    ImgSrc = Compose;
-					    DWORD* Ptr = (DWORD*)Compose;
-					    INT Count = USize * VSize;
-					    for (INT i = 0; i < Count; i++)
-					      {
-						FColor Color = ((FColor*)Mip->DataPtr)[i];
-						Exchange(Color.R, Color.B);
-						*Ptr++ = *(DWORD*)&Color;
-					      }
-					  }
+					{
+						ImgSrc = Compose;
+						DWORD* Ptr = (DWORD*)Compose;
+						INT Count = USize * VSize;
+						for (INT i = 0; i < Count; i++)
+						{
+							FColor Color = ((FColor*)Mip->DataPtr)[i];
+							Exchange(Color.R, Color.B);
+							*Ptr++ = *(DWORD*)&Color;
+						}
+					}
 					unguard;
 					break;
 
 #if ENGINE_VERSION==227
 					// RGB9.
 				case TEXF_RGB10A2_LM:
-
-					guard(TEXF_RGB10A2_LM);
 					ImgSrc = Mip->DataPtr;
-					break;
-
-					unguard;
 					break;
 #endif
 
@@ -634,14 +600,14 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 					break;
 				}
 			}
-			else {
+			else 
+			{
 				if (GIsEditor)
 					appMsgf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName());
 				else
 					GWarn->Logf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName());
 				break;
 			}
-			CHECK_GL_ERROR();
 
 			// Upload texture.
 			if (!IsFirstUpload)
@@ -651,15 +617,12 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 					if (!IsBindlessTexture)
 						glCompressedTexSubImage2D(GL_TEXTURE_2D, ++MaxLevel, 0, 0, USize, VSize, InternalFormat, CompImageSize, ImgSrc);
 					else glCompressedTextureSubImage2D(Bind->Id, ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
-					CHECK_GL_ERROR();
 				}
 				else
 				{
-					CHECK_GL_ERROR();
 					if (!IsBindlessTexture)
 						glTexSubImage2D(GL_TEXTURE_2D, ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
 					else glTextureSubImage2D(Bind->Id, ++MaxLevel, 0, 0, USize, VSize, SourceFormat, SourceType, ImgSrc);
-					CHECK_GL_ERROR();
 				}
 			}
 			else
@@ -671,13 +634,11 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 						glCompressedTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, CompImageSize, ImgSrc);
 						glGenerateMipmap(GL_TEXTURE_2D);
 						MaxLevel = Info.NumMips;
-						CHECK_GL_ERROR();
 						break;
 					}
 					else
 					{
 						glCompressedTexImage2D(GL_TEXTURE_2D, ++MaxLevel, InternalFormat, USize, VSize, 0, CompImageSize, ImgSrc);
-						CHECK_GL_ERROR();
 					}
 				}
 				else
@@ -685,21 +646,16 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 					if (GenerateMipMaps)
 					{
 						glTexImage2D(GL_TEXTURE_2D, 0, InternalFormat, USize, VSize, 0, SourceFormat, SourceType, ImgSrc);
-						CHECK_GL_ERROR();
 						glGenerateMipmap(GL_TEXTURE_2D); // generate a complete set of mipmaps for a texture object
-						CHECK_GL_ERROR();
 						MaxLevel = Info.NumMips;
-						CHECK_GL_ERROR();
 						break;
 					}
 					else
 					{
 						glTexImage2D(GL_TEXTURE_2D, ++MaxLevel, InternalFormat, USize, VSize, 0, SourceFormat, SourceType, ImgSrc);
-						CHECK_GL_ERROR();
 					}
 				}
 			}
-			CHECK_GL_ERROR();
 			if (GenerateMipMaps)
 				break;
 		}
@@ -728,20 +684,15 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 		for (INT i = 0; i < (256 * 256); i++)
 			*Ptr++ = PaletteBM[(i / 16 + i / (256 * 16)) % 16]; //
 
-		guard(glTexImage2D);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, Compose);
-		CHECK_GL_ERROR();
-		unguard;
 	}
 	unguard;
-	CHECK_GL_ERROR();
 
 	// Set max level.
 	if (IsFirstUpload || Bind->MaxLevel != MaxLevel)
 	{
 		Bind->MaxLevel = MaxLevel;
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, MaxLevel);
-		CHECK_GL_ERROR();
 	}
 
 	// Cleanup.
@@ -751,7 +702,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	return !UnsupportedTexture;
 }
 
-void UXOpenGLRenderDevice::GenerateTextureAndSampler(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, DWORD DrawFlags)
+void UXOpenGLRenderDevice::GenerateTextureAndSampler(FCachedTexture* Bind)
 {
 	glGenTextures(1, &Bind->Id);
 
@@ -759,14 +710,14 @@ void UXOpenGLRenderDevice::GenerateTextureAndSampler(FTextureInfo& Info, FCached
 		glGenSamplers(1, &Bind->Sampler);
 }
 
-void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags)
+void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FCachedTexture* Bind)
 {
 	glActiveTexture(GL_TEXTURE0 + Multi);
 	glBindTexture(GL_TEXTURE_2D, Bind->Id);
 	glBindSampler(Multi, Bind->Sampler);
 }
 
-void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias, DWORD DrawFlags)
+void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias)
 {
 	guard(UXOpenGLRenderDevice::SetTexture);
 
@@ -811,13 +762,14 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	{
 		UBOOL SkipMipmaps = (!GenerateMipMaps && Info.NumMips == 1 && !AlwaysMipmap);
 		UBOOL IsLightOrFogMap = Info.Format == TEXF_BGRA8_LM || Info.Format == TEXF_RGB10A2_LM;
-		GenerateTextureAndSampler(Info, Bind, PolyFlags, DrawFlags);
-		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
-		SetSampler(Bind->Sampler, Info, PolyFlags, SkipMipmaps, IsLightOrFogMap, DrawFlags);
+		UBOOL NoSmooth = (PolyFlags & PF_NoSmooth) && (Multi == 0);
+		GenerateTextureAndSampler(Bind);
+		BindTextureAndSampler(Multi, Bind);
+		SetSampler(Bind->Sampler, Info, SkipMipmaps, IsLightOrFogMap, NoSmooth);
 	}
 	else if (Bind->BindlessTexHandle == 0)
 	{
-		BindTextureAndSampler(Multi, Info, Bind, PolyFlags);
+		BindTextureAndSampler(Multi, Bind);
 	}
 
 	STAT(unclockFast(Stats.BindCycles));
@@ -858,22 +810,53 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	unguard;
 }
 
-DWORD UXOpenGLRenderDevice::SetPolyFlags(DWORD PolyFlags)
+DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, BOOL RemoveOccludeIfSolid)
 {
-    guard(UOpenGLRenderDevice::SetFlags);
-
-	if( (PolyFlags & (PF_RenderFog|PF_Translucent))!=PF_RenderFog )
+	if ((PolyFlags & (PF_RenderFog | PF_Translucent)) != PF_RenderFog)
 		PolyFlags &= ~PF_RenderFog;
 
 	if (!(PolyFlags & (PF_Translucent | PF_Modulated | PF_AlphaBlend | PF_Highlighted)))
 		PolyFlags |= PF_Occlude;
+	else if (RemoveOccludeIfSolid)
+		PolyFlags &= ~PF_Occlude;
 	// stijn: The skybox in zp01-umssakuracrashsite has PF_Translucent|PF_Masked. If we strip off PF_Masked here, the skybox renders incorrectly
 	//else if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
 	//	PolyFlags &= ~PF_Masked;
 
-    return PolyFlags;
+	// fast path. If no relevant polyflags have changed since our previous query, then just return the same ShaderOptions as last time
+	const DWORD RelevantPolyFlags = (PF_Modulated | PF_RenderFog | PF_Masked | PF_Straight_AlphaBlend | PF_Premultiplied_AlphaBlend | PF_Unlit | PF_Translucent | PF_Environment);
+	if ((CachedPolyFlags & RelevantPolyFlags) ^ (PolyFlags & RelevantPolyFlags))
+	{
+		Options = ShaderOptions::OPT_None;
 
-    unguard;
+		if (PolyFlags & PF_Modulated)
+			Options |= ShaderOptions::OPT_Modulated;
+
+		if (PolyFlags & PF_RenderFog)
+			Options |= ShaderOptions::OPT_RenderFog;
+
+		if (PolyFlags & PF_Masked)
+			Options |= ShaderOptions::OPT_Masked;
+
+		if (PolyFlags & (PF_Straight_AlphaBlend | PF_Premultiplied_AlphaBlend))
+			Options |= ShaderOptions::OPT_AlphaBlended;
+
+		if (PolyFlags & PF_Translucent)
+			Options |= ShaderOptions::OPT_Translucent;
+
+		if (PolyFlags & PF_Environment)
+			Options |= ShaderOptions::OPT_Environment;
+
+		CachedPolyFlags = PolyFlags;
+		CachedShaderOptions = Options;
+	}
+	else
+	{
+		// nothing changed
+		Options = CachedShaderOptions;
+	}
+
+    return PolyFlags;
 }
 
 void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
@@ -889,7 +872,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 	}
 
 	// Check to disable culling or other frontface if needed (or more other affecting states yet). Perhaps should add own RenderFlags if so.
-	DWORD Xor = CurrentAdditionalPolyFlags^PolyFlags;
+	DWORD Xor = CurrentAdditionalBlendPolyFlags^PolyFlags;
 	if (Xor & (PF_TwoSided | PF_RenderHint))
 	{
 #if ENGINE_VERSION==227
@@ -904,10 +887,10 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			glFrontFace(GL_CW);
 #endif
 
-		CurrentAdditionalPolyFlags=PolyFlags;
+		CurrentAdditionalBlendPolyFlags=PolyFlags;
 	}
 
-	Xor = CurrentPolyFlags^PolyFlags;
+	Xor = CurrentBlendPolyFlags^PolyFlags;
 	// Detect changes in the blending modes.
 	if (Xor & (PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog))
 	{
@@ -966,7 +949,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			else
 				glDepthMask(GL_FALSE);
 		}
-		CurrentPolyFlags = PolyFlags;
+		CurrentBlendPolyFlags = PolyFlags;
 	}
 	STAT(unclockFast(Stats.BlendCycles));
 	unguard;
@@ -975,7 +958,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 BOOL UXOpenGLRenderDevice::WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags)
 {
 	// stijn: returns true if the polyflag switch will cause a change in the blending mode
-	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog)) ? TRUE : FALSE;
+	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog | PF_Selected)) ? TRUE : FALSE;
 }
 
 constexpr GLenum ModeList[] = { GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_NOTEQUAL, GL_ALWAYS };
@@ -1013,7 +996,7 @@ DWORD UXOpenGLRenderDevice::SetDepth(DWORD LineFlags)
 			glDepthMask(GL_TRUE);
 
 			// Sync with SetBlend.
-			CurrentPolyFlags |= PF_Occlude;
+			CurrentBlendPolyFlags |= PF_Occlude;
 		}
 		else
 		{
@@ -1022,7 +1005,7 @@ DWORD UXOpenGLRenderDevice::SetDepth(DWORD LineFlags)
 			glDepthMask(GL_FALSE);
 
 			// Sync with SetBlend.
-			CurrentPolyFlags &= ~PF_Occlude;
+			CurrentBlendPolyFlags &= ~PF_Occlude;
 		}
 		CurrentLineFlags = LineFlags;
 	}
