@@ -80,7 +80,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (Surface.LightMap)
 		Options |= ShaderOptions::OPT_LightMap;
 
-	if (Surface.FogMap)
+	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
 		Options |= ShaderOptions::OPT_FogMap;
 
 	if (Surface.DetailTexture && DetailTextures)
@@ -100,7 +100,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
 		WillTextureStateChange(DiffuseTextureIndex, *Surface.Texture, NextPolyFlags) || // Check if the surface textures will change
 		(Surface.LightMap && WillTextureStateChange(LightMapIndex, *Surface.LightMap, NextPolyFlags)) ||
-		(Surface.FogMap && WillTextureStateChange(FogMapIndex, *Surface.FogMap, NextPolyFlags)) ||
+		((Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr) && WillTextureStateChange(FogMapIndex, *Surface.FogMap, NextPolyFlags)) ||
 		(Surface.DetailTexture && DetailTextures && WillTextureStateChange(DetailTextureIndex, *Surface.DetailTexture, NextPolyFlags)) ||
 		(Surface.MacroTexture && MacroTextures && WillTextureStateChange(MacroTextureIndex, *Surface.MacroTexture, NextPolyFlags)) ||
 #if ENGINE_VERSION==227
@@ -131,7 +131,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (Surface.LightMap)
 		SetTextureHelper(this, LightMapIndex, *Surface.LightMap, PF_None, -0.5, &DrawCallParams->LightMapUV, nullptr, DrawCallParams->TexHandles);
 
-	if (Surface.FogMap)
+	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
 		SetTextureHelper(this, FogMapIndex, *Surface.FogMap, PF_AlphaBlend, -0.5, &DrawCallParams->FogMapUV, nullptr, DrawCallParams->TexHandles);
 
 	if (Surface.DetailTexture && DetailTextures)
