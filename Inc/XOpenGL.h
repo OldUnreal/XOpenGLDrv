@@ -909,13 +909,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		//
 		// Moves data over to the GPU by reinitializing or updating the backing buffer
-		// If we set @Invalidate to true, XOGL will call glInvalidateBufferData on the backing buffer first
-		// If we set @Reinitialize to true, we will use glBufferData to move the data. Otherwise, we use glBufferSubData
 		// @ExpectedUsage is the expected usage pattern for the buffer data. We will ignore this value if @Reinitialize is false
 		//
 		// This function is a no-op if we're using persistent buffers!
 		//
-		void BufferData(bool Invalidate, bool Reinitialize, GLenum ExpectedUsage)
+		void BufferData(GLenum ExpectedUsage)
 		{
 			if (bPersistentBuffer)
 			{
@@ -923,18 +921,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 				return;
 			}
 
-			if (Invalidate)
-				glInvalidateBufferData(BufferObjectName);
-
-			if (Reinitialize
-#if defined(__LINUX_ARM__) || MACOSX
-                               || 1 // These platforms seem to prefer forced reinitialization...
-#endif
-				)
-				glBufferData(BufferType, SizeBytes(), Buffer, ExpectedUsage);
-			else
-				glBufferSubData(BufferType, 0, SizeBytes(), Buffer);
-			CHECK_GL_ERROR();
+			glBufferData(BufferType, SizeBytes(), Buffer, ExpectedUsage);
 		}
 
 		// Unmaps and deallocates the buffer
@@ -1371,12 +1358,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (HavePendingData)
 			{
-				VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, VERTEX_BUFFER_USAGE_PATTERN);
+				VertBuffer.BufferData(VERTEX_BUFFER_USAGE_PATTERN);
 
 				// We might have to rebind the parameters buffer here because things like PushClipPlane and
 				// PopClipPlane can temporarily bind another UBO.
 				ParametersBuffer.Bind();
-				ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
+				ParametersBuffer.BufferData(DRAWCALL_BUFFER_USAGE_PATTERN);
 
 				// Issue the draw call
 				DrawBuffer.Draw(DrawMode, RenDev);

@@ -457,7 +457,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
 
-#if 0
+#if 1
 	UsingPersistentBuffersTile = UsingPersistentBuffers;
 	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
 	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
@@ -1533,7 +1533,7 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 	FrameState->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
 	FrameStateBuffer.Bind();
-	FrameStateBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	FrameStateBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
 	unguard;
 }
 
@@ -1633,7 +1633,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	}
 
 	LightInfoBuffer.Bind();
-	LightInfoBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	LightInfoBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
 	unguard;
 }
 
@@ -1648,7 +1648,7 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 	FrameState->LightColorIntensity = ActorXBlending ? 1.5f : 1.f;
 	FrameState->LightMapIntensity = OneXBlending ? 4.f : 2.f;
 	FrameStateBuffer.Bind();
-	FrameStateBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	FrameStateBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
 }
 
 void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
@@ -1746,7 +1746,7 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	ClipPlaneInfo->ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	GlobalClipPlaneBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	++NumClipPlanes;
@@ -1771,7 +1771,7 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	ClipPlaneInfo->ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	GlobalClipPlaneBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
 	CHECK_GL_ERROR();
 
 	return 1;
@@ -1833,7 +1833,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 		EditorState->HitTesting = HitTesting();
 		EditorState->RendMap = Viewport->Actor->RendMap;
 		EditorStateBuffer.Bind();
-		EditorStateBuffer.BufferData(false, true, UNIFORM_BUFFER_USAGE_PATTERN);
+		EditorStateBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
 	}
 
 	LockHit(InHitData, InHitSize);

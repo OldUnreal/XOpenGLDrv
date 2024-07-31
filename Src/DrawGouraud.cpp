@@ -452,13 +452,13 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 void UXOpenGLRenderDevice::DrawGouraudProgram::BuildCommonSpecializations()
 {
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Environment));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Environment|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Modulated));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_NoNearZ));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Environment));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Environment | ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Modulated));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_NoNearZ));
 }
 
 /*-----------------------------------------------------------------------------

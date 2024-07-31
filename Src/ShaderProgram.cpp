@@ -723,6 +723,18 @@ bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderSpecializatio
 
 	if (!LinkShaderProgram(Specialization->ShaderProgramObject))
 		return false;
+
+	// stijn: We should detach and delete compiled shader objects immediately since they can consume a lot of RAM (especially with the AMD RDNA3 drivers)
+	glDetachShader(Specialization->ShaderProgramObject, Specialization->VertexShaderObject);
+	if (GeoShaderFunc)
+		glDetachShader(Specialization->ShaderProgramObject, Specialization->GeoShaderObject);
+	glDetachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
+	glDeleteShader(Specialization->VertexShaderObject);
+	if (GeoShaderFunc)
+		glDeleteShader(Specialization->GeoShaderObject);
+	glDeleteShader(Specialization->FragmentShaderObject);
+
+	Specialization->VertexShaderObject = Specialization->GeoShaderObject = Specialization->FragmentShaderObject = 0;
 	
 	return true;
 }
@@ -746,6 +758,8 @@ void UXOpenGLRenderDevice::ShaderProgram::DeleteShaders()
 			glDetachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
 
 		glDeleteProgram(Specialization->ShaderProgramObject);
+
+		delete Specialization;
 	}
 
 	Specializations.Empty();
