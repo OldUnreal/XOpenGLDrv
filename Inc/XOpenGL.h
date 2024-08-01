@@ -984,7 +984,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
 		{
 			// stijn: NOTE: nvidia persistent buffers seem to be coherent by default!
-			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT;
 
 			SubBufferSize = BufferSize;
 			BufferType = Target;	
