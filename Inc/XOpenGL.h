@@ -910,6 +910,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glBufferData(BufferType, SizeBytes(), Buffer, ExpectedUsage);
 		}
 
+		void Invalidate(GLenum ExpectedUsage)
+		{
+			if (bPersistentBuffer)
+				return;
+
+			glBufferData(BufferType, SizeBytes(), nullptr, ExpectedUsage);
+		}
+
 		// Unmaps and deallocates the buffer
 		void DeleteBuffer()
 		{
@@ -1357,6 +1365,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 				// Issue the draw call
 				DrawBuffer.Draw(DrawMode, RenDev);
+
+				VertBuffer.Invalidate(VERTEX_BUFFER_USAGE_PATTERN);
+				ParametersBuffer.Invalidate(DRAWCALL_BUFFER_USAGE_PATTERN);
 			}
 
 			if (Rotate)
@@ -1373,11 +1384,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 				VertBuffer.Lock();
 				VertBuffer.Rotate(true);
-
-				// TODO: if we're ever going to use persistent buffers, here would be a good place to
-				// update the VAO (through a call to CreateInputLayout?) because we would have to change
-				// the offset pointer of each vertex attribute.
-				// CreateInputLayout();
 			}
 
 			// Reset the multidraw buffer. Note that the Rotate() calls above might simply switch to an

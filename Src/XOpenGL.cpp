@@ -770,7 +770,7 @@ InitContext:
 			appErrorf(TEXT("XOpenGL: Init failed!"));
 		}
 		else debugf(NAME_Init, TEXT("XOpenGL: Successfully initialized."));
-		CHECK_GL_ERROR();
+
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(tempContext);
 		ReleaseDC(TemphWnd, TemphDC);
@@ -1041,7 +1041,6 @@ void UXOpenGLRenderDevice::SetPermanentState()
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CW);
 	glCullFace(GL_BACK);
-	CHECK_GL_ERROR();
 #endif
 }
 
@@ -1196,7 +1195,6 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 	// Set permanent state... (OpenGL Presets)
 	SetPermanentState();
-	CHECK_GL_ERROR();
 
 	// Verify hardware defaults.
 	CurrentBlendPolyFlags = static_cast<DWORD>(PF_Occlude);
@@ -1349,7 +1347,6 @@ void UXOpenGLRenderDevice::SwapControl()
 void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 {
 	guard(UXOpenGLRenderDevice::Flush);
-	CHECK_GL_ERROR();
 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: Flush"));
 
@@ -1369,7 +1366,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	TArray<GLuint> Binds;
 	for (TOpenGLMap<QWORD, FCachedTexture>::TIterator It(*BindMap); It; ++It)
 	{
-		CHECK_GL_ERROR();
 		glDeleteSamplers(1, &It.Value().Sampler);
 
 		if (UsingBindlessTextures)
@@ -1384,7 +1380,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 			glDeleteTextures(1, &It.Value().Id);
 			Binds.AddItem(It.Value().Id);
 		}
-		CHECK_GL_ERROR();
 	}
 	BindMap->Empty();
 
@@ -1393,15 +1388,12 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		//debugf(TEXT("Binds.Num() %i"),Binds.Num());
 		glDeleteTextures(Binds.Num(), (GLuint*)&Binds(0));
 	}
-	CHECK_GL_ERROR();
 
 	for (INT i = 0; i < 8; i++) // Also reset all multi textures.
 		SetNoTexture(i);
 
 	if (AllowPrecache && UsePrecache && !GIsEditor)
 		PrecacheOnFlip = 1;
-
-	CHECK_GL_ERROR();
 
 	if (Viewport && Viewport->GetOuterUClient())
 		SetGamma(Viewport->GetOuterUClient()->Brightness);
@@ -1423,7 +1415,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
     ResetFog();
 
-	CHECK_GL_ERROR();
 	unguard;
 }
 
@@ -1659,7 +1650,6 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
-	CHECK_GL_ERROR();
 	bIsOrtho = true;
 
 	FrameState->modelviewprojMat = FrameState->projMat * FrameState->viewMat * FrameState->modelMat; //yes, this is right.
@@ -1707,7 +1697,6 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
-	CHECK_GL_ERROR();
 
 	FrameState->modelviewprojMat = FrameState->projMat * FrameState->viewMat * FrameState->modelMat;
 	FrameState->modelviewMat = FrameState->viewMat * FrameState->modelMat;
@@ -1732,7 +1721,6 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 
 	GlobalClipPlaneBuffer.Bind();
 	GlobalClipPlaneBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
-	CHECK_GL_ERROR();
 
 	++NumClipPlanes;
 
@@ -1757,7 +1745,6 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 
 	GlobalClipPlaneBuffer.Bind();
 	GlobalClipPlaneBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
-	CHECK_GL_ERROR();
 
 	return 1;
 	unguard;
@@ -1796,7 +1783,6 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 #else
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags & LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
 #endif
-	CHECK_GL_ERROR();
 
 	LastZMode = ZTEST_LessEqual;
 	glDepthFunc(GL_LEQUAL);
@@ -2260,7 +2246,6 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 	}
 #endif
 	appSprintf(Result,*StatsString);
-	CHECK_GL_ERROR();
 	unguard;
 }
 

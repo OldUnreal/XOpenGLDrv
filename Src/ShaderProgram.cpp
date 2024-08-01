@@ -546,8 +546,6 @@ void UXOpenGLRenderDevice::InitShaders()
 {
 	guard(UXOpenGLRenderDevice::InitShaders);
 
-	CHECK_GL_ERROR();
-
 	memset(Shaders, 0, sizeof(Shaders));
 	Shaders[No_Prog]				= new NoProgram(TEXT("No"), this);
 	Shaders[Simple_Triangle_Prog]	= new DrawSimpleTriangleProgram(TEXT("DrawSimpleTriangle"), this);
