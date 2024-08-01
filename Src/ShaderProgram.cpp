@@ -672,7 +672,7 @@ void UXOpenGLRenderDevice::ShaderProgram::SelectShaderSpecialization(ShaderOptio
 		return;
 
 	// We have to change to a different shader. Make sure we flush all buffered data
-	Flush(true);
+	Flush(false);
 
 	// We have to switch to a different specialization. See if we've already compiled it
 	auto Specialization = Specializations.FindRef(Options);

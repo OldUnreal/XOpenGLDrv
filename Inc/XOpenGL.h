@@ -96,7 +96,7 @@
 
 #define DRAWSIMPLE_SIZE 1024
 #define DRAWTILE_SIZE 1024
-#define DRAWCOMPLEX_SIZE 1024
+#define DRAWCOMPLEX_SIZE 2048
 #define DRAWGOURAUDPOLY_SIZE 1024
 #define NUMBUFFERS 32
 
@@ -980,6 +980,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			}
 		}
 
+		bool   bPersistentBuffer{};     //
 		GLuint BeginOffset{};			// Global index of the first buffer element of the sub-buffer we're currently writing to (relative to the start of the _entire_ buffer)
 		GLuint IndexOffset{};			// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
 
@@ -1030,7 +1031,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint SubBufferSize{};			// Size of each of the sub-buffers that comprise this buffer object (in number of T-sized elements)
 		GLuint SubBufferCount{};		// Number of sub-buffers
 
-		bool   bPersistentBuffer{};     //
 		bool   bBound{};                // True if currently bound
 		bool   bInputLayoutCreated{};   // 
 		GLenum BufferType{};            // GL target
@@ -1344,6 +1344,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (!HavePendingData && !Rotate)
 				return;
+
+			if (!VertBuffer.bPersistentBuffer)
+				Rotate = true;
 
 			if (Rotate)
 			{

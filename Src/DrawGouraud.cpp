@@ -91,7 +91,7 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 
 	Shader->SelectShaderSpecialization(Options);
 
-	const bool CanBuffer = Shader->DrawBuffer.IsFull() || !Shader->ParametersBuffer.CanBuffer(1);
+	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
 	// Check if the global state will change
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
@@ -217,7 +217,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		Shader->Flush(true);
 
 		// just in case...
-		if (sizeof(DrawGouraudVertex) * OutVertexCount >= DRAWGOURAUDPOLY_SIZE)
+		if (OutVertexCount >= Shader->VertexBufferSize)
 		{
 			GWarn->Logf(TEXT("DrawGouraudPolygon poly too big!"));
 			return;
@@ -425,7 +425,7 @@ void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 	: ShaderProgramImpl(Name, RenDev)
 {
-	VertexBufferSize				= DRAWGOURAUDPOLY_SIZE;
+	VertexBufferSize				= DRAWGOURAUDPOLY_SIZE * 12;
 	ParametersBufferSize			= DRAWGOURAUDPOLY_SIZE;
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::GouraudParametersIndex;
 	NumTextureSamplers				= 6;

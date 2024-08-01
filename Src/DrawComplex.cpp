@@ -94,7 +94,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	Shader->SelectShaderSpecialization(ShaderOptions(Options));
 
-	const bool CanBuffer = Shader->DrawBuffer.IsFull() || !Shader->ParametersBuffer.CanBuffer(1);
+	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
 	// Check if this draw call will change any global state. If so, we want to flush any pending draw calls before we make the changes
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
@@ -190,9 +190,9 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 			DrawID = Shader->DrawBuffer.GetDrawID();
 
 			// just in case...
-			if (sizeof(DrawComplexVertex) * (NumPts - 2) * 3 >= DRAWCOMPLEX_SIZE)
+			if ((NumPts - 2) * 3 >= Shader->VertexBufferSize)
 			{
-				debugf(TEXT("DrawComplexSurface facet too big (facet has %d vertices - need to buffer %d points - DRAWCOMPLEX_SIZE is %d)!"), NumPts, (NumPts-2) * 3, DRAWCOMPLEX_SIZE);
+				debugf(TEXT("DrawComplexSurface facet too big (facet has %d vertices - need to buffer %d points - Vertex Buffer Size is %d)!"), NumPts, (NumPts-2) * 3, Shader->VertexBufferSize);
 				continue;
 			}
 
@@ -243,7 +243,7 @@ void UXOpenGLRenderDevice::DrawPass(FSceneNode* Frame, INT Pass) {}
 UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 	: ShaderProgramImpl(Name, RenDev)
 {
-	VertexBufferSize				= DRAWCOMPLEX_SIZE;
+	VertexBufferSize				= DRAWCOMPLEX_SIZE * 12;
 	ParametersBufferSize			= DRAWCOMPLEX_SIZE;
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::ComplexParametersIndex;
 	NumTextureSamplers				= 8;
