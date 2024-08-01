@@ -508,11 +508,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// Not configurable
 	bool	UsingPersistentBuffers;
-	bool	UsingPersistentBuffersGouraud;
-	bool	UsingPersistentBuffersComplex;
-	bool	UsingPersistentBuffersTile;
-	bool	UsingPersistentBuffersSimple;
-	bool	UsingPersistentBuffersDrawcallParams;
 	bool	UsingShaderDrawParameters;
 	bool    UsingGeometryShaders;
 	static INT LogLevel; // Verbosity level of the GL debug logging

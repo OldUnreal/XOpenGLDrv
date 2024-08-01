@@ -406,35 +406,28 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	}
 
 	if (GIsEditor)
-	{
 		ShareLists = 1;
-		UsingBindlessTextures = false;
-		UsingPersistentBuffers = false;
-	}
-	else
-	{
+
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-        // Doing after extensions have been checked.
-		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
-		UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
+    // Doing after extensions have been checked.
+	UsingPersistentBuffers = UsePersistentBuffers ? true : false;
+	UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
 
-		if (OpenGLVersion == GL_ES)
-        {
-			if (SimulateMultiPass)
-                GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
-            SimulateMultiPass = false;
+	if (OpenGLVersion == GL_ES)
+    {
+		if (SimulateMultiPass)
+            GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
+        SimulateMultiPass = false;
+		SupportsGLSLInt64 = SupportsSSBO = false;
+    }
 
-			SupportsGLSLInt64 = SupportsSSBO = false;
-        }
-
-		// Bindless Textures
-		UsingBindlessTextures = UseBindlessTextures ? true : false;
+	// Bindless Textures
+	UsingBindlessTextures = UseBindlessTextures ? true : false;
 #else
-		UsingBindlessTextures = false;
-		UsingPersistentBuffers = false;
-		UsingShaderDrawParameters = false;
+	UsingBindlessTextures = false;
+	UsingPersistentBuffers = false;
+	UsingShaderDrawParameters = false;
 #endif
-	}
 
 	if (OpenGLVersion == GL_Core
 #if MACOSX
@@ -456,14 +449,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFovAngle = 0;
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
-
-#if 1
-	UsingPersistentBuffersTile = UsingPersistentBuffers;
-	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
-	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
-	UsingPersistentBuffersDrawcallParams = UsingPersistentBuffers; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
-	UsingPersistentBuffersSimple = UsingPersistentBuffers;
-#endif
 
 	// Init shaders
 	InitShaders();
