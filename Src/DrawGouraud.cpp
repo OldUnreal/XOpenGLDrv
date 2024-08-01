@@ -288,6 +288,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		{
 			Shader->DrawBuffer.EndDrawCall(PolyListSize);
 			Shader->VertBuffer.Advance(PolyListSize);
+			Shader->ParametersBuffer.Advance(1);
 
 			Shader->Flush(true);
 			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));

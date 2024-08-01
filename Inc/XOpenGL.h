@@ -96,9 +96,9 @@
 
 #define DRAWSIMPLE_SIZE 1024
 #define DRAWTILE_SIZE 1024
-#define DRAWCOMPLEX_SIZE 2048
+#define DRAWCOMPLEX_SIZE 1024
 #define DRAWGOURAUDPOLY_SIZE 1024
-#define NUMBUFFERS 32
+#define NUMBUFFERS 8
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 # define MAX_LIGHTS 256
@@ -903,7 +903,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			if (bPersistentBuffer)
 			{
-				glFlushMappedNamedBufferRange(BufferObjectName, BeginOffsetBytes(), SizeBytes());
+				// stijn: We only need this if we map the buffer with GL_MAP_FLUSH_EXPLICIT_BIT:
+				// glFlushMappedNamedBufferRange(BufferObjectName, BeginOffsetBytes(), SizeBytes());
+				// stijn: And we need this if we allocate/map the buffer without GL_MAP_COHERENT_BIT:
+				// glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
 				return;
 			}
 
@@ -988,7 +991,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
 		{
 			// stijn: NOTE: nvidia persistent buffers seem to be coherent by default!
-			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT;
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 
 			SubBufferSize = BufferSize;
 			BufferType = Target;	
@@ -1003,7 +1006,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 				glBindBuffer(Target, BufferObjectName);
 				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), nullptr, PersistentBufferFlags);
-				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags  | GL_MAP_FLUSH_EXPLICIT_BIT));
+				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags/* | GL_MAP_FLUSH_EXPLICIT_BIT*/));
 				glBindBuffer(Target, 0);
 			}
 			else
@@ -1345,6 +1348,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!HavePendingData && !Rotate)
 				return;
 
+			// stijn: we don't use glBufferSubData so we can't perform partial updates efficiently.
+			// Instead, we just roll over to new buffers whenever there is something to render
 			if (!VertBuffer.bPersistentBuffer)
 				Rotate = true;
 
@@ -1352,7 +1357,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				// Back up the parameters of the last draw call so we can write them into the first
 				// slot of the parameters buffer after rotating
-				auto In = ParametersBuffer.GetCurrentElementPtr();
+				auto In = ParametersBuffer.GetElementPtr((ParametersBuffer.Size() > 0) ? (ParametersBuffer.Size() - 1) : 0);
 				memcpy(&DrawCallParams, In, sizeof(DrawCallParamsType));
 				ParametersBuffer.Advance(1);
 			}
@@ -1427,13 +1432,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (UseSSBOParametersBuffer)
 			{
-				ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams)));
+				ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1)));
 				ParametersBuffer.GenerateSSBOBuffer(RenDev, ParametersBufferBindingIndex);
 				ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
 			}
 			else
 			{
-				ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo));
+				ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1));
 				ParametersBuffer.GenerateUBOBuffer(RenDev, ParametersBufferBindingIndex);
 				ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
 			}

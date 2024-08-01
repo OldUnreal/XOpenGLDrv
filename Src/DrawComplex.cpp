@@ -185,6 +185,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		if (!Shader->VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
 			Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
+			Shader->ParametersBuffer.Advance(1);
 			Shader->Flush(true);
 			Shader->DrawBuffer.StartDrawCall();
 			DrawID = Shader->DrawBuffer.GetDrawID();
