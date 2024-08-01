@@ -186,12 +186,13 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		{
 			Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
 			Shader->Flush(true);
+			Shader->DrawBuffer.StartDrawCall();
 			DrawID = Shader->DrawBuffer.GetDrawID();
 
 			// just in case...
 			if (sizeof(DrawComplexVertex) * (NumPts - 2) * 3 >= DRAWCOMPLEX_SIZE)
 			{
-				debugf(NAME_DevGraphics, TEXT("DrawComplexSurface facet too big!"));
+				debugf(TEXT("DrawComplexSurface facet too big (facet has %d vertices - need to buffer %d points - DRAWCOMPLEX_SIZE is %d)!"), NumPts, (NumPts-2) * 3, DRAWCOMPLEX_SIZE);
 				continue;
 			}
 
@@ -257,9 +258,10 @@ UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, 
 
 void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 {
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(0));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, DrawID)));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, Normal)));
+	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(BeginOffset));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(BeginOffset + offsetof(DrawComplexVertex, DrawID)));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(BeginOffset + offsetof(DrawComplexVertex, Normal)));
 	VertBuffer.SetInputLayoutCreated();
 }
 

@@ -653,9 +653,7 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* 
 	if (GIsEditor)
 		BindUniform(Specialization, EditorStateIndex, "EditorState");
 
-	if (UseSSBOParametersBuffer)
-		BindUniform(Specialization, ParametersBufferBindingIndex, "DrawCallParameters");
-	else
+	if (!UseSSBOParametersBuffer)
 		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%lsShaderDrawParams"), ShaderName)));
 
 	// Bind regular texture samplers to their respective TMUs

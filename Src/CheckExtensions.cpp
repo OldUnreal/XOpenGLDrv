@@ -158,11 +158,6 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
     if (UseShaderDrawParameters)
     {
-        if (SupportsAMDMemoryInfo)
-        {
-            GWarn->Logf(TEXT("XOpenGL: UseShaderDrawParameters doesn't work well on AMD GPUs => option disabled."));
-            UseShaderDrawParameters = false;
-        }
         if (GLExtensionSupported(TEXT("GL_ARB_shader_draw_parameters")) && SupportsSSBO)
         {
             debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_shader_draw_parameters and GL_ARB_shader_storage_buffer_object found. UseShaderDrawParameters enabled."));
