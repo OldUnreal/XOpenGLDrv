@@ -914,6 +914,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 			const auto UnbufferedRegionOffset = Replace ? 0 : UnbufferedRegionOffsetBytes();
 			const auto Size = SizeBytes() - UnbufferedRegionOffset;
 
+			// stijn: the drivers for these platforms can't deal with the way we use glBufferSubData
+#if MACOSX || __LINUX_ARM__ || __LINUX_ARM64__
+			Replace = true;
+#endif
+
 			if (!bPersistentBuffer)
 			{
 				if (Replace)
@@ -1358,6 +1363,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (!HavePendingData && !Rotate)
 				return;
+
+            // stijn: since we always replace the entire buffer (with glBufferData), it is better to just rotate after every flush on these platforms
+#if MACOSX || __LINUX_ARM__ || __LINUX_ARM64__
+			Rotate = true;
+#endif
 
 			if (Rotate)
 			{
