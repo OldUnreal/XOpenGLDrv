@@ -1509,7 +1509,7 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 	FrameState->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
 	FrameStateBuffer.Bind();
-	FrameStateBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
+	FrameStateBuffer.BufferData(true);
 	unguard;
 }
 
@@ -1609,7 +1609,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	}
 
 	LightInfoBuffer.Bind();
-	LightInfoBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
+	LightInfoBuffer.BufferData(true);
 	unguard;
 }
 
@@ -1624,7 +1624,7 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 	FrameState->LightColorIntensity = ActorXBlending ? 1.5f : 1.f;
 	FrameState->LightMapIntensity = OneXBlending ? 4.f : 2.f;
 	FrameStateBuffer.Bind();
-	FrameStateBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
+	FrameStateBuffer.BufferData(true);
 }
 
 void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
@@ -1720,7 +1720,7 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	ClipPlaneInfo->ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
+	GlobalClipPlaneBuffer.BufferData(true);
 
 	++NumClipPlanes;
 
@@ -1744,7 +1744,7 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	ClipPlaneInfo->ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
+	GlobalClipPlaneBuffer.BufferData(true);
 
 	return 1;
 	unguard;
@@ -1804,7 +1804,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 		EditorState->HitTesting = HitTesting();
 		EditorState->RendMap = Viewport->Actor->RendMap;
 		EditorStateBuffer.Bind();
-		EditorStateBuffer.BufferData(UNIFORM_BUFFER_USAGE_PATTERN);
+		EditorStateBuffer.BufferData(true);
 	}
 
 	LockHit(InHitData, InHitSize);

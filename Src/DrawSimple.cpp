@@ -285,9 +285,8 @@ UXOpenGLRenderDevice::DrawSimpleLineProgram::DrawSimpleLineProgram(const TCHAR* 
 
 void UXOpenGLRenderDevice::DrawSimpleLineProgram::CreateInputLayout()
 {
-	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawSimpleVertex), (GLvoid*)(BeginOffset));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawSimpleVertex), (GLvoid*)(BeginOffset + offsetof(DrawSimpleVertex, DrawID)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawSimpleVertex), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawSimpleVertex), (GLvoid*)(offsetof(DrawSimpleVertex, DrawID)));
 	VertBuffer.SetInputLayoutCreated();
 }
 
@@ -334,9 +333,8 @@ UXOpenGLRenderDevice::DrawSimpleTriangleProgram::DrawSimpleTriangleProgram(const
 
 void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::CreateInputLayout()
 {
-	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawSimpleVertex), (GLvoid*)(BeginOffset));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawSimpleVertex), (GLvoid*)(BeginOffset + offsetof(DrawSimpleVertex, DrawID)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawSimpleVertex), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawSimpleVertex), (GLvoid*)(offsetof(DrawSimpleVertex, DrawID)));
 	VertBuffer.SetInputLayoutCreated();
 }
 

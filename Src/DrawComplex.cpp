@@ -185,7 +185,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		if (!Shader->VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
 			Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
-			Shader->ParametersBuffer.Advance(1);
+			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 			Shader->Flush(true);
 			Shader->DrawBuffer.StartDrawCall();
 			DrawID = Shader->DrawBuffer.GetDrawID();
@@ -259,10 +259,9 @@ UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, 
 
 void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 {
-	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(BeginOffset));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(BeginOffset + offsetof(DrawComplexVertex, DrawID)));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(BeginOffset + offsetof(DrawComplexVertex, Normal)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, DrawID)));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, Normal)));
 	VertBuffer.SetInputLayoutCreated();
 }
 

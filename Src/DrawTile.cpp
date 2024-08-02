@@ -239,10 +239,9 @@ UXOpenGLRenderDevice::DrawTileESProgram::DrawTileESProgram(const TCHAR* Name, UX
 
 void UXOpenGLRenderDevice::DrawTileESProgram::CreateInputLayout()
 {
-	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexES), (GLvoid*)(BeginOffset));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawTileVertexES), (GLvoid*)(BeginOffset + offsetof(DrawTileVertexES, DrawID)));
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexES), (GLvoid*)(BeginOffset + offsetof(DrawTileVertexES, TexCoords)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexES), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawTileVertexES), (GLvoid*)(offsetof(DrawTileVertexES, DrawID)));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexES), (GLvoid*)(offsetof(DrawTileVertexES, TexCoords)));
 	VertBuffer.SetInputLayoutCreated();
 }
 
@@ -314,12 +313,11 @@ UXOpenGLRenderDevice::DrawTileCoreProgram::DrawTileCoreProgram(const TCHAR* Name
 
 void UXOpenGLRenderDevice::DrawTileCoreProgram::CreateInputLayout()
 {
-	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(BeginOffset));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawTileVertexCore), (GLvoid*)(BeginOffset + offsetof(DrawTileVertexCore, DrawID)));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(BeginOffset + offsetof(DrawTileVertexCore, TexCoords0)));
-	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(BeginOffset + offsetof(DrawTileVertexCore, TexCoords1)));
-	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(BeginOffset + offsetof(DrawTileVertexCore, TexCoords2)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawTileVertexCore), (GLvoid*)(offsetof(DrawTileVertexCore, DrawID)));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(offsetof(DrawTileVertexCore, TexCoords0)));
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(offsetof(DrawTileVertexCore, TexCoords1)));
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(offsetof(DrawTileVertexCore, TexCoords2)));
 	VertBuffer.SetInputLayoutCreated();
 }
 

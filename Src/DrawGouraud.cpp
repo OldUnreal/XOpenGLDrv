@@ -288,7 +288,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		{
 			Shader->DrawBuffer.EndDrawCall(PolyListSize);
 			Shader->VertBuffer.Advance(PolyListSize);
-			Shader->ParametersBuffer.Advance(1);
+			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 
 			Shader->Flush(true);
 			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
@@ -442,13 +442,12 @@ UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, 
 void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 {
 	using Vert = DrawGouraudVertex;
-	auto BeginOffset = 0;// VertBuffer.BeginOffsetBytes();
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset));
-	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, DrawID)));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, Normals)));
-	glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, TexCoords)));
-	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, LightColor)));
-	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(BeginOffset + offsetof(Vert, FogColor)));
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vert), (GLvoid*)(offsetof(Vert, DrawID)));
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, Normals)));
+	glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, TexCoords)));
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, LightColor)));
+	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, FogColor)));
 	VertBuffer.SetInputLayoutCreated();
 }
 
