@@ -168,7 +168,11 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseHWClipping = 1;
 	UsePrecache = 1;
 	ShareLists = 1;
+#if MACOSX
+	UseAA = 0; // stijn: This is slow AF on modern macs! The game is barely playable if you enable it
+#else
 	UseAA = 1;
+#endif
 	UseAASmoothing = 0;
 	GammaCorrectScreenshots = 1;
 	MacroTextures = 1;
