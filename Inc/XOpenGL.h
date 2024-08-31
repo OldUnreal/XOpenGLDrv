@@ -1824,7 +1824,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  PushHit(const BYTE* Data, INT Count);
 	void  PopHit(INT Count, UBOOL bForce);
 	void  GetStats(TCHAR* Result);
+#if ENGINE_VERSION==227
+	void  ReadPixels(FColor* Pixels, UBOOL bGammaCorrectOutput);
+#else
 	void  ReadPixels(FColor* Pixels);
+#endif
 	void  EndFlash();
 	void  DrawStats(FSceneNode* Frame);
 	void  SetSceneNode(FSceneNode* Frame);

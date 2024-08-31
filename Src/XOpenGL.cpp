@@ -2024,7 +2024,11 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	unguard;
 }
 
+#if ENGINE_VERSION==227
+void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels, UBOOL bGammaCorrectOutput)
+#else
 void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
+#endif
 {
 	guard(UXOpenGLRenderDevice::ReadPixels);
 
@@ -2045,8 +2049,15 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 		}
 	}
 
+	const UBOOL bDoGammaCorrect =
+#if ENGINE_VERSION==227
+		(bGammaCorrectOutput && GammaCorrectScreenshots);
+#else
+		(GammaCorrectScreenshots);
+#endif
+
 	//Gamma correct screenshots
-	if (GammaCorrectScreenshots)
+	if (bDoGammaCorrect)
 	{
 		FByteGammaRamp Ramp;
 		BuildGammaRamp(GammaOffsetScreenshots, Ramp);
