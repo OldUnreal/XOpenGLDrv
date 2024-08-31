@@ -91,7 +91,7 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 
 	Shader->SelectShaderSpecialization(Options);
 
-	const bool CanBuffer = Shader->DrawBuffer.IsFull() || !Shader->ParametersBuffer.CanBuffer(1);
+	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
 	// Check if the global state will change
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
@@ -217,7 +217,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		Shader->Flush(true);
 
 		// just in case...
-		if (sizeof(DrawGouraudVertex) * OutVertexCount >= DRAWGOURAUDPOLY_SIZE)
+		if (OutVertexCount >= Shader->VertexBufferSize)
 		{
 			GWarn->Logf(TEXT("DrawGouraudPolygon poly too big!"));
 			return;
@@ -288,10 +288,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		{
 			Shader->DrawBuffer.EndDrawCall(PolyListSize);
 			Shader->VertBuffer.Advance(PolyListSize);
+			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 
 			Shader->Flush(true);
-			debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
+			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
 
+			Shader->DrawBuffer.StartDrawCall();
 			Out = Shader->VertBuffer.GetCurrentElementPtr();
 			End = Shader->VertBuffer.GetLastElementPtr();
 			DrawID = Shader->DrawBuffer.GetDrawID();
@@ -424,7 +426,7 @@ void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 	: ShaderProgramImpl(Name, RenDev)
 {
-	VertexBufferSize				= DRAWGOURAUDPOLY_SIZE;
+	VertexBufferSize				= DRAWGOURAUDPOLY_SIZE * 12;
 	ParametersBufferSize			= DRAWGOURAUDPOLY_SIZE;
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::GouraudParametersIndex;
 	NumTextureSamplers				= 6;
@@ -452,13 +454,13 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 void UXOpenGLRenderDevice::DrawGouraudProgram::BuildCommonSpecializations()
 {
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Environment));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Environment|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Modulated));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_NoNearZ));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Environment));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Environment | ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Modulated));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_NoNearZ));
 }
 
 /*-----------------------------------------------------------------------------

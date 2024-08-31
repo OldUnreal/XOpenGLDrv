@@ -94,7 +94,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	Shader->SelectShaderSpecialization(ShaderOptions(Options));
 
-	const bool CanBuffer = Shader->DrawBuffer.IsFull() || !Shader->ParametersBuffer.CanBuffer(1);
+	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
 	// Check if this draw call will change any global state. If so, we want to flush any pending draw calls before we make the changes
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
@@ -185,13 +185,15 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		if (!Shader->VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
 			Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
+			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 			Shader->Flush(true);
+			Shader->DrawBuffer.StartDrawCall();
 			DrawID = Shader->DrawBuffer.GetDrawID();
 
 			// just in case...
-			if (sizeof(DrawComplexVertex) * (NumPts - 2) * 3 >= DRAWCOMPLEX_SIZE)
+			if ((NumPts - 2) * 3 >= Shader->VertexBufferSize)
 			{
-				debugf(NAME_DevGraphics, TEXT("DrawComplexSurface facet too big!"));
+				debugf(TEXT("DrawComplexSurface facet too big (facet has %d vertices - need to buffer %d points - Vertex Buffer Size is %d)!"), NumPts, (NumPts-2) * 3, Shader->VertexBufferSize);
 				continue;
 			}
 
@@ -242,7 +244,7 @@ void UXOpenGLRenderDevice::DrawPass(FSceneNode* Frame, INT Pass) {}
 UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
 	: ShaderProgramImpl(Name, RenDev)
 {
-	VertexBufferSize				= DRAWCOMPLEX_SIZE;
+	VertexBufferSize				= DRAWCOMPLEX_SIZE * 12;
 	ParametersBufferSize			= DRAWCOMPLEX_SIZE;
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::ComplexParametersIndex;
 	NumTextureSamplers				= 8;
@@ -266,15 +268,22 @@ void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 void UXOpenGLRenderDevice::DrawComplexProgram::BuildCommonSpecializations()
 {
 	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_DetailTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_FogMap));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_FogMap));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_LightMap|ShaderOptions::OPT_DetailTexture|ShaderOptions::OPT_MacroTexture));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_Masked));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_Translucent));
+	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_FogMap));
+	if (RenDev->DetailTextures)
+	{
+		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_DetailTexture));
+		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture));
+		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture | ShaderOptions::OPT_Translucent));
+		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture | ShaderOptions::OPT_FogMap));
+
+		if (RenDev->MacroTextures)
+		{
+			SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture | ShaderOptions::OPT_MacroTexture));
+		}
+	}
 }
 
 /*-----------------------------------------------------------------------------

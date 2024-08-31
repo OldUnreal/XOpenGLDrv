@@ -88,26 +88,17 @@
 -----------------------------------------------------------------------------*/
 #define MAX_FRAME_RECURSION 4
 
-// maximum number of surfaces in one drawcomplex multi-draw
-#define MAX_DRAWCOMPLEX_BATCH 4 * 256
-// maximum number of polys in one drawgouraud multi-draw
-#define MAX_DRAWGOURAUD_BATCH 64 * 256
-// maximum number of tiles in one drawtile multi-draw
-#define MAX_DRAWTILE_BATCH 64 * 256
-// maximum number of lines/triangles in one drawsimple multi-draw
-#define MAX_DRAWSIMPLE_BATCH 64 * 256
-
 // stijn: per-drawcall data absolutely needs to use GL_STREAM_DRAW or GL_DYNAMIC_DRAW on mac
 #define DRAWCALL_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
 #define VERTEX_BUFFER_USAGE_PATTERN GL_STREAM_DRAW
 // stijn: this still works reasonably well with GL_STATIC_DRAW, but GL_DYNAMIC_DRAW still gives us a minor performance boost
 #define UNIFORM_BUFFER_USAGE_PATTERN GL_DYNAMIC_DRAW
 
-#define DRAWSIMPLE_SIZE 64 * 256
-#define DRAWTILE_SIZE 64 * 256
-#define DRAWCOMPLEX_SIZE 256 * MAX_DRAWCOMPLEX_BATCH
-#define DRAWGOURAUDPOLY_SIZE 256 * 1024
-#define NUMBUFFERS 16
+#define DRAWSIMPLE_SIZE 1024
+#define DRAWTILE_SIZE 1024
+#define DRAWCOMPLEX_SIZE 1024
+#define DRAWGOURAUDPOLY_SIZE 1024
+#define NUMBUFFERS 8
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 # define MAX_LIGHTS 256
@@ -517,11 +508,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	// Not configurable
 	bool	UsingPersistentBuffers;
-	bool	UsingPersistentBuffersGouraud;
-	bool	UsingPersistentBuffersComplex;
-	bool	UsingPersistentBuffersTile;
-	bool	UsingPersistentBuffersSimple;
-	bool	UsingPersistentBuffersDrawcallParams;
 	bool	UsingShaderDrawParameters;
 	bool    UsingGeometryShaders;
 	static INT LogLevel; // Verbosity level of the GL debug logging
@@ -745,70 +731,80 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Current size in number of elements
 		size_t Size()
 		{
-			return IndexOffset;
+			return NextElemIndex;
 		}
 
 		// Current size in bytes
 		size_t SizeBytes()
 		{
-			return IndexOffset * sizeof(T);
+			return NextElemIndex * sizeof(T);
 		}
 
 		// Offset of the first element of the active sub-buffer, in number of bytes
-		GLuint BeginOffsetBytes()
+		GLuint SubBufferOffsetBytes()
 		{
-			return BeginOffset * sizeof(T);
+			return SubBufferOffset * sizeof(T);
 		}
 
-		// Moves the IndexOffset forward after buffering @ElementCount elements
+		// Offset of the to-be-buffered region relative to the start of the current sub-buffer, in number of bytes
+		GLuint UnbufferedRegionOffsetBytes()
+		{
+			return FirstUnbufferedElemIndex * sizeof(T);
+		}
+
+		// Moves the NextElemIndex forward after buffering @ElementCount elements
 		void Advance(GLuint ElementCount)
 		{
-			IndexOffset += ElementCount;
+			NextElemIndex += ElementCount;
 		}
 
 		// Returns true if the currently active sub-buffer still has room for @ElementCount elements
 		bool CanBuffer(GLuint ElementCount)
 		{
-			return SubBufferSize - IndexOffset >= ElementCount;
+			return static_cast<GLint>(SubBufferSize) - static_cast<GLint>(NextElemIndex) >= static_cast<GLint>(ElementCount);
 		}
 
 		// Returns true if we have no buffered data in the currently active sub-buffer
 		bool IsEmpty()
 		{
-			return IndexOffset == 0;
+			return NextElemIndex == 0;
 		}
 
-		// Rotates @Index, @BeginOffset, and @IndexOffset so they point to the start of the next sub-buffer
+		// Rotates @Index, @SubBufferOffset, and @NextElemIndex so they point to the start of the next sub-buffer
 		// if @Wait is true, this function will wait until the GPU has signaled the next sub-buffer
 		// Returns true if Index points to a new sub-buffer after this call
 		bool Rotate(bool Wait)
 		{
-			Index = (Index + 1) % SubBufferCount;
-			IndexOffset = 0;
-			BeginOffset = Index * SubBufferSize;
-			if (Wait)
-				this->Wait();
+			NextElemIndex = 0;
+			FirstUnbufferedElemIndex = 0;
 
-			if (SubBufferCount > 1)
+			if (bPersistentBuffer)
+			{
+				Index = (Index + 1) % SubBufferCount;
+				SubBufferOffset = Index * SubBufferSize;
+				this->Wait();
 				return true;
-			return false;
+			}
+			
+			glBufferData(BufferType, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
+			return true;
 		}
 
-		T* GetElementPtr(GLuint Index)
+		T* GetElementPtr(GLuint ElemIndex)
 		{
-			checkSlow(Index < IndexOffset);
-			return &Buffer[BeginOffset + Index];
+			checkSlow(ElemIndex < NextElemIndex);
+			return &Buffer[SubBufferOffset + ElemIndex];
 		}
 
 		// Returns a pointer to the element we're currently writing
 		T* GetCurrentElementPtr()
 		{
-			return &Buffer[BeginOffset + IndexOffset];
+			return &Buffer[SubBufferOffset + NextElemIndex];
 		}
 
 		T* GetLastElementPtr()
 		{
-			return &Buffer[BeginOffset + SubBufferSize - 1];
+			return &Buffer[SubBufferOffset + SubBufferSize - 1];
 		}
 
 		// Generates a VBO and VAO for this buffer object
@@ -909,32 +905,36 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		//
 		// Moves data over to the GPU by reinitializing or updating the backing buffer
-		// If we set @Invalidate to true, XOGL will call glInvalidateBufferData on the backing buffer first
-		// If we set @Reinitialize to true, we will use glBufferData to move the data. Otherwise, we use glBufferSubData
 		// @ExpectedUsage is the expected usage pattern for the buffer data. We will ignore this value if @Reinitialize is false
 		//
 		// This function is a no-op if we're using persistent buffers!
 		//
-		void BufferData(bool Invalidate, bool Reinitialize, GLenum ExpectedUsage)
+		void BufferData(bool Replace)
 		{
-			if (bPersistentBuffer)
-			{
-				glFlushMappedNamedBufferRange(BufferObjectName, BeginOffsetBytes(), SizeBytes());
-				return;
-			}
+			const auto UnbufferedRegionOffset = Replace ? 0 : UnbufferedRegionOffsetBytes();
+			const auto Size = SizeBytes() - UnbufferedRegionOffset;
 
-			if (Invalidate)
-				glInvalidateBufferData(BufferObjectName);
-
-			if (Reinitialize
-#if defined(__LINUX_ARM__) || MACOSX
-                               || 1 // These platforms seem to prefer forced reinitialization...
+			// stijn: the drivers for these platforms can't deal with the way we use glBufferSubData
+#if MACOSX || __LINUX_ARM__ || __LINUX_ARM64__
+			Replace = true;
 #endif
-				)
-				glBufferData(BufferType, SizeBytes(), Buffer, ExpectedUsage);
+
+			if (!bPersistentBuffer)
+			{
+				if (Replace)
+					glBufferData(BufferType, Size, Buffer, ExpectedUsage);
+				else
+					glBufferSubData(BufferType, UnbufferedRegionOffset, Size, &Buffer[FirstUnbufferedElemIndex]);
+			}
 			else
-				glBufferSubData(BufferType, 0, SizeBytes(), Buffer);
-			CHECK_GL_ERROR();
+			{
+				// stijn: We only need this if we map the buffer with GL_MAP_FLUSH_EXPLICIT_BIT:
+				// glFlushMappedNamedBufferRange(BufferObjectName, SubBufferOffsetBytes() + UnbufferedRegionOffset, Size);
+				// stijn: And we need this if we allocate/map the buffer without GL_MAP_COHERENT_BIT:
+				// glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT);
+			}		
+
+			FirstUnbufferedElemIndex = NextElemIndex;
 		}
 
 		// Unmaps and deallocates the buffer
@@ -963,7 +963,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			Sync = nullptr;
 			bBound = bInputLayoutCreated = false;
 			BindingPoint = nullptr;
-			IndexOffset = Index = BeginOffset = 0;
+			NextElemIndex = Index = SubBufferOffset = 0;
 			BufferObjectName = VaoObjectName = 0;
 		}
 
@@ -974,13 +974,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!bPersistentBuffer)
 				return;
 
+			glDeleteSync(Sync[Index]);
 			Sync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 		}
 
 		// Blocks until the GPU has signaled the active sub-buffer
 		void Wait()
 		{
-			if (!bPersistentBuffer)
+			if (!bPersistentBuffer || !Sync[Index])
 				return;
 
 			while (1)
@@ -998,14 +999,19 @@ class UXOpenGLRenderDevice : public URenderDevice
 			}
 		}
 
+		GLuint FirstUnbufferedElemIndex{};	// Index of the first buffer element we haven't pushed to the GPU yet (relative to the start of the current sub-buffer)
+		GLuint SubBufferOffset{};			// Global index of the first buffer element of the sub-buffer we're currently writing to (relative to the start of the _entire_ buffer)
+		GLuint NextElemIndex{};				// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
+
 	private:
-		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum ExpectedUsage)
+		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum _ExpectedUsage)
 		{
 			// stijn: NOTE: nvidia persistent buffers seem to be coherent by default!
-			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT;
+			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
 
 			SubBufferSize = BufferSize;
-			BufferType = Target;	
+			BufferType = Target;
+			ExpectedUsage = _ExpectedUsage;
 				
 			// Allocate and pin buffers
 			bPersistentBuffer = Persistent;
@@ -1016,8 +1022,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 				memset(Sync, 0, sizeof(GLsync) * SubBufferCount);
 
 				glBindBuffer(Target, BufferObjectName);
-				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), 0, PersistentBufferFlags);
-				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags));
+				glBufferStorage(Target, SubBufferCount * BufferSize * sizeof(T), nullptr, PersistentBufferFlags);
+				Buffer = static_cast<T*>(glMapNamedBufferRange(BufferObjectName, 0, SubBufferCount * BufferSize * sizeof(T), PersistentBufferFlags/* | GL_MAP_FLUSH_EXPLICIT_BIT*/));
 				glBindBuffer(Target, 0);
 			}
 			else
@@ -1026,19 +1032,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 				Buffer = new T[BufferSize];
 				memset(Buffer, 0, BufferSize * sizeof(T));
 				glBindBuffer(Target, BufferObjectName);
-				glBufferData(Target, BufferSize * sizeof(T), Buffer, ExpectedUsage);
+				glBufferData(Target, BufferSize * sizeof(T), nullptr, ExpectedUsage);
 				glBindBuffer(Target, 0);
 			}
 		}
 
-		GLsync* Sync{};					// OpenGL sync object. One for each sub-buffer
-
+		GLsync* Sync{};					// OpenGL sync objects. One for each sub-buffer
 		GLuint Index{};					// Index of the sub-buffer we're currently writing to. This will always be 0 if we're not using persistent buffers
-		GLuint BeginOffset{};			// Global index of the first buffer element of the sub-buffer we're currently writing to (relative to the start of the _entire_ buffer)
-		GLuint IndexOffset{};			// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
-
 		GLuint BufferObjectName{};		// OpenGL name of the buffer object
 		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
+		bool   bPersistentBuffer{};     // true if we persistently map this buffer into system RAM
+		GLenum ExpectedUsage{};			// 
 
 		//
 		// Buffer dimensions
@@ -1046,7 +1050,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint SubBufferSize{};			// Size of each of the sub-buffers that comprise this buffer object (in number of T-sized elements)
 		GLuint SubBufferCount{};		// Number of sub-buffers
 
-		bool   bPersistentBuffer{};     //
 		bool   bBound{};                // True if currently bound
 		bool   bInputLayoutCreated{};   // 
 		GLenum BufferType{};            // GL target
@@ -1097,7 +1100,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		glm::uint GetDrawID() const
 		{
-			return TotalCommands;
+			return TotalCommands + BaseInstanceOffset;
 		}
 
         void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
@@ -1106,7 +1109,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 			// in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
 			// glMultiDrawArraysIndirect(Mode, &CommandBuffer(0), TotalCommands, 0);
 			for (INT i = 0; i < TotalCommands; ++i)
+			{
 				glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
+				//glDrawArrays(Mode, 0, CommandBuffer(i).Count);
+				//glDrawArraysInstancedBaseInstance(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count, CommandBuffer(i).InstanceCount, CommandBuffer(i).BaseInstance);
+			}
         }
 
         struct MultiDrawIndirectCommand
@@ -1354,29 +1361,30 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			const auto HavePendingData = DrawBuffer.TotalCommands > 0;
 
-			// TODO/FIXME: stijn: it would be nice if we could keep using the same vertex buffer until it's full!
-			Rotate = true;
-
 			if (!HavePendingData && !Rotate)
 				return;
+
+            // stijn: since we always replace the entire buffer (with glBufferData), it is better to just rotate after every flush on these platforms
+#if MACOSX || __LINUX_ARM__ || __LINUX_ARM64__
+			Rotate = true;
+#endif
 
 			if (Rotate)
 			{
 				// Back up the parameters of the last draw call so we can write them into the first
 				// slot of the parameters buffer after rotating
-				auto In = ParametersBuffer.GetCurrentElementPtr();
+				auto In = ParametersBuffer.GetElementPtr((ParametersBuffer.Size() > 0) ? (ParametersBuffer.Size() - 1) : 0);
 				memcpy(&DrawCallParams, In, sizeof(DrawCallParamsType));
-				ParametersBuffer.Advance(1);
 			}
 
 			if (HavePendingData)
 			{
-				VertBuffer.BufferData(RenDev->UseBufferInvalidation, true, VERTEX_BUFFER_USAGE_PATTERN);
+				VertBuffer.BufferData(false);
 
 				// We might have to rebind the parameters buffer here because things like PushClipPlane and
 				// PopClipPlane can temporarily bind another UBO.
 				ParametersBuffer.Bind();
-				ParametersBuffer.BufferData(RenDev->UseBufferInvalidation, false, DRAWCALL_BUFFER_USAGE_PATTERN);
+				ParametersBuffer.BufferData(false);
 
 				// Issue the draw call
 				DrawBuffer.Draw(DrawMode, RenDev);
@@ -1386,6 +1394,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				// Now switch to a different parameters and vertex buffers so we don't stomp on 
 				// the data the GPU is using
+				ParametersBuffer.Lock();
 				ParametersBuffer.Rotate(true);
 
 				// Make sure the new parameters buffer starts with the drawcall parameters of the
@@ -1395,18 +1404,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 				VertBuffer.Lock();
 				VertBuffer.Rotate(true);
-
-				// TODO: if we're ever going to use persistent buffers, here would be a good place to
-				// update the VAO (through a call to CreateInputLayout?) because we would have to change
-				// the offset pointer of each vertex attribute.
 			}
 
 			// Reset the multidraw buffer. Note that the Rotate() calls above might simply switch to an
 			// unused part of the same SSBO/VBO we were already using, so we need to make sure the draw
 			// buffer checks which offsets we're going to start from next
 			DrawBuffer.Reset(
-				VertBuffer.BeginOffsetBytes() / sizeof(VertexType),
-				ParametersBuffer.BeginOffsetBytes() / sizeof(DrawCallParamsType));
+				VertBuffer.SubBufferOffset + VertBuffer.NextElemIndex,
+				ParametersBuffer.SubBufferOffset + ParametersBuffer.NextElemIndex);
 		}
 
 		virtual void ActivateShader()
@@ -1417,7 +1422,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			for (INT i = 0; i < NumVertexAttributes; ++i)
 				glEnableVertexAttribArray(i);
 			// TODO: Check if we really need this
-			memset(&DrawCallParams, 0, sizeof(DrawCallParams));
+			// memset(&DrawCallParams, 0, sizeof(DrawCallParams));
 
 			LastOptions = ShaderOptions::OPT_None;
 			LastSpecialization = nullptr;
@@ -1439,13 +1444,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (UseSSBOParametersBuffer)
 			{
-				ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams)));
+				ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1)));
 				ParametersBuffer.GenerateSSBOBuffer(RenDev, ParametersBufferBindingIndex);
 				ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
 			}
 			else
 			{
-				ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo));
+				ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1));
 				ParametersBuffer.GenerateUBOBuffer(RenDev, ParametersBufferBindingIndex);
 				ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
 			}

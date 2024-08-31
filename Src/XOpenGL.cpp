@@ -168,7 +168,11 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseHWClipping = 1;
 	UsePrecache = 1;
 	ShareLists = 1;
+#if MACOSX
+	UseAA = 0; // stijn: This is slow AF on modern macs! The game is barely playable if you enable it
+#else
 	UseAA = 1;
+#endif
 	UseAASmoothing = 0;
 	GammaCorrectScreenshots = 1;
 	MacroTextures = 1;
@@ -406,35 +410,28 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	}
 
 	if (GIsEditor)
-	{
 		ShareLists = 1;
-		UsingBindlessTextures = false;
-		UsingPersistentBuffers = false;
-	}
-	else
-	{
+
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-        // Doing after extensions have been checked.
-		UsingPersistentBuffers = UsePersistentBuffers ? true : false;
-		UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
+    // Doing after extensions have been checked.
+	UsingPersistentBuffers = UsePersistentBuffers ? true : false;
+	UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
 
-		if (OpenGLVersion == GL_ES)
-        {
-			if (SimulateMultiPass)
-                GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
-            SimulateMultiPass = false;
+	if (OpenGLVersion == GL_ES)
+    {
+		if (SimulateMultiPass)
+            GWarn->Logf(TEXT("OpenGL ES does not support SimulateMultiPass at this time, disabling SimulateMultiPass"));
+        SimulateMultiPass = false;
+		SupportsGLSLInt64 = SupportsSSBO = false;
+    }
 
-			SupportsGLSLInt64 = SupportsSSBO = false;
-        }
-
-		// Bindless Textures
-		UsingBindlessTextures = UseBindlessTextures ? true : false;
+	// Bindless Textures
+	UsingBindlessTextures = UseBindlessTextures ? true : false;
 #else
-		UsingBindlessTextures = false;
-		UsingPersistentBuffers = false;
-		UsingShaderDrawParameters = false;
+	UsingBindlessTextures = false;
+	UsingPersistentBuffers = false;
+	UsingShaderDrawParameters = false;
 #endif
-	}
 
 	if (OpenGLVersion == GL_Core
 #if MACOSX
@@ -456,14 +453,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	StoredOrthoFovAngle = 0;
 	StoredOrthoFX = 0;
 	StoredOrthoFY = 0;
-
-#if 0
-	UsingPersistentBuffersTile = UsingPersistentBuffers;
-	UsingPersistentBuffersComplex = UsingPersistentBuffers;//unless being able to batch bigger amount of draw calls this is significantly slower. Unfortunately can't handle enough textures right now. With LightMaps it easily reaches 12k and more.
-	UsingPersistentBuffersGouraud = UsingPersistentBuffers;
-	UsingPersistentBuffersDrawcallParams = UsingPersistentBuffers; // setting this to true fixes shaderdrawparameters on AMD GPUs, but drastically reduces performance
-	UsingPersistentBuffersSimple = UsingPersistentBuffers;
-#endif
 
 	// Init shaders
 	InitShaders();
@@ -785,7 +774,7 @@ InitContext:
 			appErrorf(TEXT("XOpenGL: Init failed!"));
 		}
 		else debugf(NAME_Init, TEXT("XOpenGL: Successfully initialized."));
-		CHECK_GL_ERROR();
+
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(tempContext);
 		ReleaseDC(TemphWnd, TemphDC);
@@ -1056,7 +1045,6 @@ void UXOpenGLRenderDevice::SetPermanentState()
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CW);
 	glCullFace(GL_BACK);
-	CHECK_GL_ERROR();
 #endif
 }
 
@@ -1211,7 +1199,6 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 	// Set permanent state... (OpenGL Presets)
 	SetPermanentState();
-	CHECK_GL_ERROR();
 
 	// Verify hardware defaults.
 	CurrentBlendPolyFlags = static_cast<DWORD>(PF_Occlude);
@@ -1364,7 +1351,6 @@ void UXOpenGLRenderDevice::SwapControl()
 void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 {
 	guard(UXOpenGLRenderDevice::Flush);
-	CHECK_GL_ERROR();
 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: Flush"));
 
@@ -1384,7 +1370,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	TArray<GLuint> Binds;
 	for (TOpenGLMap<QWORD, FCachedTexture>::TIterator It(*BindMap); It; ++It)
 	{
-		CHECK_GL_ERROR();
 		glDeleteSamplers(1, &It.Value().Sampler);
 
 		if (UsingBindlessTextures)
@@ -1399,7 +1384,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 			glDeleteTextures(1, &It.Value().Id);
 			Binds.AddItem(It.Value().Id);
 		}
-		CHECK_GL_ERROR();
 	}
 	BindMap->Empty();
 
@@ -1408,15 +1392,12 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		//debugf(TEXT("Binds.Num() %i"),Binds.Num());
 		glDeleteTextures(Binds.Num(), (GLuint*)&Binds(0));
 	}
-	CHECK_GL_ERROR();
 
 	for (INT i = 0; i < 8; i++) // Also reset all multi textures.
 		SetNoTexture(i);
 
 	if (AllowPrecache && UsePrecache && !GIsEditor)
 		PrecacheOnFlip = 1;
-
-	CHECK_GL_ERROR();
 
 	if (Viewport && Viewport->GetOuterUClient())
 		SetGamma(Viewport->GetOuterUClient()->Brightness);
@@ -1438,7 +1419,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
     ResetFog();
 
-	CHECK_GL_ERROR();
 	unguard;
 }
 
@@ -1533,7 +1513,7 @@ void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 	FrameState->FrameUncoords[3] = glm::vec4(Frame->Uncoords.ZAxis.X, Frame->Uncoords.ZAxis.Y, Frame->Uncoords.ZAxis.Z, 0.0f);
 
 	FrameStateBuffer.Bind();
-	FrameStateBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	FrameStateBuffer.BufferData(true);
 	unguard;
 }
 
@@ -1633,7 +1613,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	}
 
 	LightInfoBuffer.Bind();
-	LightInfoBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	LightInfoBuffer.BufferData(true);
 	unguard;
 }
 
@@ -1648,7 +1628,7 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 	FrameState->LightColorIntensity = ActorXBlending ? 1.5f : 1.f;
 	FrameState->LightMapIntensity = OneXBlending ? 4.f : 2.f;
 	FrameStateBuffer.Bind();
-	FrameStateBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
+	FrameStateBuffer.BufferData(true);
 }
 
 void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
@@ -1674,7 +1654,6 @@ void UXOpenGLRenderDevice::SetOrthoProjection(FSceneNode* Frame)
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
-	CHECK_GL_ERROR();
 	bIsOrtho = true;
 
 	FrameState->modelviewprojMat = FrameState->projMat * FrameState->viewMat * FrameState->modelMat; //yes, this is right.
@@ -1722,7 +1701,6 @@ void UXOpenGLRenderDevice::SetProjection(FSceneNode* Frame, UBOOL bNearZ)
 
 	// Set viewport and projection.
 	glViewport(Frame->XB, Viewport->SizeY - Frame->Y - Frame->YB, Frame->X, Frame->Y);
-	CHECK_GL_ERROR();
 
 	FrameState->modelviewprojMat = FrameState->projMat * FrameState->viewMat * FrameState->modelMat;
 	FrameState->modelviewMat = FrameState->viewMat * FrameState->modelMat;
@@ -1746,8 +1724,7 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	ClipPlaneInfo->ClipPlane = glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
-	CHECK_GL_ERROR();
+	GlobalClipPlaneBuffer.BufferData(true);
 
 	++NumClipPlanes;
 
@@ -1771,8 +1748,7 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	ClipPlaneInfo->ClipPlane = glm::vec4(0.f, 0.f, 0.f, 0.f);
 
 	GlobalClipPlaneBuffer.Bind();
-	GlobalClipPlaneBuffer.BufferData(false, false, UNIFORM_BUFFER_USAGE_PATTERN);
-	CHECK_GL_ERROR();
+	GlobalClipPlaneBuffer.BufferData(true);
 
 	return 1;
 	unguard;
@@ -1811,7 +1787,6 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 #else
 	glClear(GL_DEPTH_BUFFER_BIT | ((RenderLockFlags & LOCKR_ClearScreen) ? GL_COLOR_BUFFER_BIT : 0));
 #endif
-	CHECK_GL_ERROR();
 
 	LastZMode = ZTEST_LessEqual;
 	glDepthFunc(GL_LEQUAL);
@@ -1833,7 +1808,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 		EditorState->HitTesting = HitTesting();
 		EditorState->RendMap = Viewport->Actor->RendMap;
 		EditorStateBuffer.Bind();
-		EditorStateBuffer.BufferData(false, true, UNIFORM_BUFFER_USAGE_PATTERN);
+		EditorStateBuffer.BufferData(true);
 	}
 
 	LockHit(InHitData, InHitSize);
@@ -2286,7 +2261,6 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 	}
 #endif
 	appSprintf(Result,*StatsString);
-	CHECK_GL_ERROR();
 	unguard;
 }
 

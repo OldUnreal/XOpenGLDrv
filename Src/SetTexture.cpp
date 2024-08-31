@@ -99,11 +99,7 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
 {
 	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
-	FCachedTexture* Result = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
-	
-	// We will have to evict a TMU => stop batching
-	if (!Result || !IsResidentBindlessTexture)
-		return TRUE;
+	GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
 
 	// We need to re-upload a texture we're currently using
 	if (IsTextureDataStale)
@@ -216,15 +212,10 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL 
 
 #if ENGINE_VERSION==227
 	if (Info.UClampMode)
-	{
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-		CHECK_GL_ERROR();
-	}
+	
 	if (Info.VClampMode)
-	{
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		CHECK_GL_ERROR();
-	}
 #endif // ENGINE_VERSION
 
 	// Also set for light and fogmaps.
@@ -783,7 +774,6 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
     {
         guard(MakeTextureHandleResident);
 		Bind->BindlessTexHandle = glGetTextureSamplerHandleARB(Bind->Id, Bind->Sampler);
-        CHECK_GL_ERROR();
 
         if (!Bind->BindlessTexHandle)
         {
@@ -792,8 +782,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
         }
         else
         {
-            glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
-            CHECK_GL_ERROR();			
+            glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);	
         }
 		
         unguard;

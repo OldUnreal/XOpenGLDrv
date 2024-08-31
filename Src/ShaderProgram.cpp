@@ -546,8 +546,6 @@ void UXOpenGLRenderDevice::InitShaders()
 {
 	guard(UXOpenGLRenderDevice::InitShaders);
 
-	CHECK_GL_ERROR();
-
 	memset(Shaders, 0, sizeof(Shaders));
 	Shaders[No_Prog]				= new NoProgram(TEXT("No"), this);
 	Shaders[Simple_Triangle_Prog]	= new DrawSimpleTriangleProgram(TEXT("DrawSimpleTriangle"), this);
@@ -653,9 +651,7 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* 
 	if (GIsEditor)
 		BindUniform(Specialization, EditorStateIndex, "EditorState");
 
-	if (UseSSBOParametersBuffer)
-		BindUniform(Specialization, ParametersBufferBindingIndex, "DrawCallParameters");
-	else
+	if (!UseSSBOParametersBuffer)
 		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%lsShaderDrawParams"), ShaderName)));
 
 	// Bind regular texture samplers to their respective TMUs
@@ -676,7 +672,7 @@ void UXOpenGLRenderDevice::ShaderProgram::SelectShaderSpecialization(ShaderOptio
 		return;
 
 	// We have to change to a different shader. Make sure we flush all buffered data
-	Flush(true);
+	Flush(false);
 
 	// We have to switch to a different specialization. See if we've already compiled it
 	auto Specialization = Specializations.FindRef(Options);
@@ -723,6 +719,18 @@ bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderSpecializatio
 
 	if (!LinkShaderProgram(Specialization->ShaderProgramObject))
 		return false;
+
+	// stijn: We should detach and delete compiled shader objects immediately since they can consume a lot of RAM (especially with the AMD RDNA3 drivers)
+	glDetachShader(Specialization->ShaderProgramObject, Specialization->VertexShaderObject);
+	if (GeoShaderFunc)
+		glDetachShader(Specialization->ShaderProgramObject, Specialization->GeoShaderObject);
+	glDetachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
+	glDeleteShader(Specialization->VertexShaderObject);
+	if (GeoShaderFunc)
+		glDeleteShader(Specialization->GeoShaderObject);
+	glDeleteShader(Specialization->FragmentShaderObject);
+
+	Specialization->VertexShaderObject = Specialization->GeoShaderObject = Specialization->FragmentShaderObject = 0;
 	
 	return true;
 }
@@ -746,6 +754,8 @@ void UXOpenGLRenderDevice::ShaderProgram::DeleteShaders()
 			glDetachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
 
 		glDeleteProgram(Specialization->ShaderProgramObject);
+
+		delete Specialization;
 	}
 
 	Specializations.Empty();
