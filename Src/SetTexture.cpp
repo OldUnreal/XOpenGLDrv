@@ -338,7 +338,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			  SourceFormat = GL_BGRA; // Was GL_RGBA;
 			else
 			  SourceFormat = GL_RGBA; // ES prefers RGBA...
-			break;
+			break;			
 #if ENGINE_VERSION==227
 			// RGB10A2_LM. Used for HDLightmaps.
 		case TEXF_RGB10A2_LM:
@@ -347,12 +347,12 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			SourceFormat = GL_RGBA;
 			SourceType = GL_UNSIGNED_INT_2_10_10_10_REV; // This seems to make alpha to be placed in the right spot.
 			break;
-#endif
+#endif			
 			// TEXF_R5G6B5 (Just to make 0x02 supported).
-		case TEXF_R5G6B5:
-			InternalFormat = GL_RGB;
-			SourceFormat = GL_RGB;
-			SourceType = GL_UNSIGNED_SHORT_5_6_5_REV;
+		case TEXF_RGB16_:
+			InternalFormat = GL_RGBA16;
+			SourceFormat = GL_RGBA;
+			SourceType = GL_UNSIGNED_SHORT;
 			break;
 
 			// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
@@ -563,6 +563,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 				case TEXF_BGRA8:
 #if ENGINE_VERSION==227
 				case TEXF_RGBA16:
+				case TEXF_RGB16_:
 #endif
 					ImgSrc = Mip->DataPtr;
 					break;
