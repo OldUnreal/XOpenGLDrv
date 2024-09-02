@@ -150,8 +150,11 @@ void main(void)
   vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;
 #endif
 
-#if OPT_BumpMap || OPT_HWLighting
+#if OPT_BumpMap || OPT_HWLighting || OPT_DistanceFog
   vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);
+#endif
+
+#if OPT_BumpMap || OPT_HWLighting
   vec3 EyeSpacePos = normalize(FrameCoords[0].xyz); // despite pretty perfect results (so far) this still seems somewhat wrong to me.
   vec3 T = normalize(vec3(MapCoordsXAxis.x, MapCoordsXAxis.y, MapCoordsXAxis.z));
   vec3 B = normalize(vec3(MapCoordsYAxis.x, MapCoordsYAxis.y, MapCoordsYAxis.z));
