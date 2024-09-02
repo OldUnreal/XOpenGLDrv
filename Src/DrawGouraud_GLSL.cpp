@@ -278,6 +278,10 @@ void main(void)
   Color *= GetDiffuseInfo(DrawID).z; // Diffuse factor.
   Color.a *= GetDiffuseInfo(DrawID).w; // Alpha.
 
+#if OPT_AlphaBlended
+  Color.a *= In.LightColor.a;
+#endif
+
   Color = ApplyPolyFlags(Color);
   vec4 LightColor;
 
