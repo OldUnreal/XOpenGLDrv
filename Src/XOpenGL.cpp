@@ -1534,6 +1534,10 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		SetOrthoProjection(Frame);
 	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || GIsEditor || StoredbNearZ)
 		SetProjection(Frame, 0);
+#if ENGINE_VERSION==227
+	else if (BumpMaps) // stijn: TODO: We need this to prevent lights from jumping around. This indicates there's some problem in Render!
+		UpdateCoords(Frame);
+#endif
 	if (StoredGamma != GetViewportGamma(Viewport) || StoredOneXBlending != OneXBlending || StoredActorXBlending != ActorXBlending)
 		SetFrameStateUniforms();
 
