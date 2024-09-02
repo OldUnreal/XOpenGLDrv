@@ -129,11 +129,11 @@ layout(std140) uniform FrameState
 // Light information.
 layout(std140) uniform LightInfo
 {  
-  vec4 LightData1[MAX_LIGHTS]; // LightBrightness, LightHue, LightSaturation, LightCone
+  vec4 LightData1[MAX_LIGHTS]; // LightColor.R, LightColor.G, LightColor.B, LightCone
   vec4 LightData2[MAX_LIGHTS]; // LightEffect, LightPeriod, LightPhase, LightRadius
   vec4 LightData3[MAX_LIGHTS]; // LightType, VolumeBrightness, VolumeFog, VolumeRadius
   vec4 LightData4[MAX_LIGHTS]; // WorldLightRadius, NumLights, ZoneNumber, CameraRegion->ZoneNumber
-  vec4 LightData5[MAX_LIGHTS]; // NormalLightRadius, bZoneNormalLight, unused, unused
+  vec4 LightData5[MAX_LIGHTS]; // NormalLightRadius, bZoneNormalLight, LightBrightness, unused
   vec4 LightPos[MAX_LIGHTS];
 };
 

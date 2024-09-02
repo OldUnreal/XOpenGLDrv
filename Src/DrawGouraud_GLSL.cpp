@@ -28,7 +28,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
     {"int", "Padding0", 0},
     {"int", "Padding1", 0},
     {"int", "Padding2", 0},
-    {"uvec4", "TexHandles", 2},
+    {"uvec4", "TexHandles", 4},
     { nullptr, nullptr, 0}
 };
 
@@ -95,7 +95,7 @@ void main(void)
   Out.MacroTexCoords = TexCoords * GetDetailMacroInfo(DrawID).zw;
 #endif
 
-#if OPT_BumpMap || OPT_SupportsClipDistance
+#if OPT_DistanceFog || OPT_SupportsClipDistance
   Out.EyeSpacePos = modelviewMat * vec4(Coords, 1.0);
 #endif
   
@@ -180,6 +180,8 @@ void main(void)
 #if OPT_BumpMap
   vec3 Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
   vec3 Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
+  vec3 T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));
+  vec3 B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));
 #endif
 	
 #if OPT_SupportsClipDistance
@@ -191,8 +193,6 @@ void main(void)
   for (int i = 0; i < 3; ++i)
   {
 #if OPT_BumpMap
-    vec3 T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));
-    vec3 B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));
     vec3 N = normalize(vec3(modelMat * In[i].Normals));
 
     // TBN must have right handed coord system.
@@ -385,7 +385,7 @@ void main(void)
     float MinLight = 0.05f;
     vec3 TangentViewDir = normalize(In.TangentViewPos - In.TangentFragPos);
     //normal from normal map
-    vec3 TextureNormal = GetTexel(GetTexHandles(DrawID, 1).xy, Texture5, In.TexCoords).rgb * 2.0 - 1.0;
+    vec3 TextureNormal = GetTexel(GetTexHandles(DrawID, 2).xy, Texture5, In.TexCoords).rgb * 2.0 - 1.0;
     vec3 BumpColor;
     vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 
@@ -399,7 +399,7 @@ void main(void)
       if (NormalLightRadius == 0.0)
         NormalLightRadius = LightData2[i].w * 64.0;
 
-      bool bSunlight = bool(uint(LightData2[i].x == LE_Sunlight));
+      bool bSunlight = bool(uint(LightData2[i].x) == LE_Sunlight);
       vec3 InLightPos = ((LightPos[i].xyz - FrameCoords[0].xyz) * InFrameCoords); // Frame->Coords.
       float dist = distance(In.Coords, InLightPos);
       float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * MinLight);

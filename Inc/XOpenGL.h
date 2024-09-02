@@ -1617,7 +1617,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::int32 Padding0;
 		glm::int32 Padding1;
 		glm::int32 Padding2;
-		glm::uvec4 TexHandles[2];       // Holds up to 4 glm::uint64 texture handles
+		glm::uvec4 TexHandles[4];       // Holds up to 4 glm::uint64 texture handles
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawGouraudParametersInfo[];
 
