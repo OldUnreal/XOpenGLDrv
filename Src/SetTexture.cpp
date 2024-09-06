@@ -168,7 +168,7 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 		TexInfo[UploadIndex].CurrentCacheID = Info.CacheID;
 		TexInfo[UploadIndex].BindlessTexHandle = Bind->BindlessTexHandle;
 	}
-	
+
 	Info.bRealtimeChanged = 0;
 
 	FMemMark Mark(GMem);
@@ -213,7 +213,7 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL 
 #if ENGINE_VERSION==227
 	if (Info.UClampMode)
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	
+
 	if (Info.VClampMode)
 		glSamplerParameteri(Sampler, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 #endif // ENGINE_VERSION
@@ -257,7 +257,7 @@ static FName UserInterface = FName(TEXT("UserInterface"), FNAME_Intrinsic);
 BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture, BOOL PartialUpload, INT U, INT V, INT UL, INT VL, BYTE* TextureData)
 {
 	bool UnsupportedTexture = false;
-	
+
 	if (Info.NumMips && !Info.Mips[0])
 	{
 		GWarn->Logf(TEXT("Encountered texture %ls with invalid MipMaps!"), Info.Texture->GetPathName());
@@ -338,7 +338,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			  SourceFormat = GL_BGRA; // Was GL_RGBA;
 			else
 			  SourceFormat = GL_RGBA; // ES prefers RGBA...
-			break;			
+			break;
 #if ENGINE_VERSION==227
 			// RGB10A2_LM. Used for HDLightmaps.
 		case TEXF_RGB10A2_LM:
@@ -347,13 +347,12 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			SourceFormat = GL_RGBA;
 			SourceType = GL_UNSIGNED_INT_2_10_10_10_REV; // This seems to make alpha to be placed in the right spot.
 			break;
-#endif			
+#endif
 			// TEXF_R5G6B5 (Just to make 0x02 supported).
-		case TEXF_RGB16_:
-			InternalFormat = GL_RGBA16;
-			SourceFormat = GL_RGBA;
-			SourceType = GL_UNSIGNED_SHORT;
-			break;
+		case TEXF_R5G6B5:
+			InternalFormat = GL_RGB;
+			SourceFormat = GL_RGB;
+			SourceType = GL_UNSIGNED_SHORT_5_6_5_REV;
 
 			// RGB8/RGBA8 -- (used f.e. for DefPreview), also used by Brother Bear.
 		case TEXF_RGB8:
@@ -377,6 +376,11 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			SourceType = GL_UNSIGNED_SHORT;
 			break;
 #endif
+		case TEXF_RGB16_:
+			InternalFormat = GL_RGBA16;
+			SourceFormat = GL_RGBA;
+			SourceType = GL_UNSIGNED_SHORT;
+			break;
 			// S3TC -- Ubiquitous Extension.
 		case TEXF_BC1:
 			if (OpenGLVersion == GL_Core)
@@ -592,7 +596,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 					break;
 				}
 			}
-			else 
+			else
 			{
 				if (GIsEditor)
 					appMsgf(TEXT("Unpacking %ls on %ls failed due to invalid data."), *FTextureFormatString(Info.Format), Info.Texture->GetFullName());
@@ -783,9 +787,9 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
         }
         else
         {
-            glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);	
+            glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
         }
-		
+
         unguard;
     }
     else if (IsNewBind)
