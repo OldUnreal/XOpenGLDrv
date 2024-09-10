@@ -356,7 +356,7 @@ void main(void)
       bNear = clamp(0.65 - NearZ, 0.0, 1.0);
       if (bNear > 0.0)
       {
-        DetailTexColor = GetTexel(GetTexHandles(DrawID, 0).zw, Texture3, In.DetailTexCoords * DetailScale);
+        DetailTexColor = GetTexel(GetTexHandles(DrawID, 1).zw, Texture3, In.DetailTexCoords * DetailScale);
 
 		vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
         hsvDetailTex.b += (DetailTexColor.r - 0.1);
@@ -371,7 +371,7 @@ void main(void)
 
 #if OPT_MacroTexture && !OPT_BumpMap
   {
-    vec4 MacroTexColor = GetTexel(GetTexHandles(DrawID, 1).zw, Texture4, In.MacroTexCoords);
+    vec4 MacroTexColor = GetTexel(GetTexHandles(DrawID, 2).xy, Texture4, In.MacroTexCoords);
     vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);
     hsvMacroTex.b += (MacroTexColor.r - 0.1);
     hsvMacroTex = hsv2rgb(hsvMacroTex);
@@ -385,7 +385,7 @@ void main(void)
     float MinLight = 0.05f;
     vec3 TangentViewDir = normalize(In.TangentViewPos - In.TangentFragPos);
     //normal from normal map
-    vec3 TextureNormal = GetTexel(GetTexHandles(DrawID, 2).xy, Texture5, In.TexCoords).rgb * 2.0 - 1.0;
+    vec3 TextureNormal = GetTexel(GetTexHandles(DrawID, 2).zw, Texture5, In.TexCoords).rgb * 2.0 - 1.0;
     vec3 BumpColor;
     vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 
