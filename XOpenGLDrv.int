@@ -4,8 +4,8 @@ Preferences=(Caption="XOpenGL Support",Parent="Rendering",Class=XOpenGLDrv.XOpen
 Preferences=(Caption="Debug Options",Parent="XOpenGL Support",Class=XOpenGLDrv.XOpenGLRenderDevice,Immediate=True, Category="DebugOptions")
 
 [Errors]
-NoFindGL="Can't find OpenGL driver %ls"
-MissingFunc="Missing OpenGL function %ls (%i)"
+NoFindGL="Can't find OpenGL driver %s"
+MissingFunc="Missing OpenGL function %s (%i)"
 ResFailed="Failed to set resolution"
 
 [XOpenGLRenderDevice]

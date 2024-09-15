@@ -320,7 +320,7 @@ inline int	CheckGLError(const char* file, int line)
             case GL_STACK_UNDERFLOW:    Msg = TEXT("GL_STACK_UNDERFLOW");   break;
             case GL_OUT_OF_MEMORY:      Msg = TEXT("GL_OUT_OF_MEMORY");     break;
 		};
-		GWarn->Logf(TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
+		GWarn->Logf(TEXT("XOpenGL Error: %s (%i) file %s at line %i"), Msg, glErr, appFromAnsi(file), line);
 	}
 	return 1;
 }
