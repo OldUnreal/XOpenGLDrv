@@ -93,7 +93,7 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 
 	if (HitTesting())
 	{
-		SetBlend(-1, false);
+		SetBlend(~0u, false);
 
 		// Disabled dithering.
 		glDisable(GL_DITHER);
