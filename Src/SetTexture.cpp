@@ -866,7 +866,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 	}
 
 	// Check to disable culling or other frontface if needed (or more other affecting states yet). Perhaps should add own RenderFlags if so.
-	DWORD Xor = CurrentAdditionalBlendPolyFlags^PolyFlags;
+	DWORD Xor = CurrentBlendPolyFlags ^ PolyFlags;
 	if (Xor & (PF_TwoSided | PF_RenderHint))
 	{
 #if ENGINE_VERSION==227
@@ -880,11 +880,9 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 		else
 			glFrontFace(GL_CW);
 #endif
-
-		CurrentAdditionalBlendPolyFlags=PolyFlags;
+		CurrentBlendPolyFlags = PolyFlags;
 	}
 
-	Xor = CurrentBlendPolyFlags^PolyFlags;
 	// Detect changes in the blending modes.
 	if (Xor & (PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog))
 	{
