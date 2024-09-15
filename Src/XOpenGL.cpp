@@ -967,14 +967,11 @@ void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
 #ifdef SDL2BUILD
-	if (!CurrentGLContext || CurrentGLContext != glContext)
-	{
-		//debugf(TEXT("XOpenGL: MakeCurrent"));
-		INT Result = SDL_GL_MakeCurrent(Window, glContext);
-		if (Result != 0)
-			debugf(TEXT("XOpenGL: MakeCurrent failed with: %s\n"), appFromAnsi(SDL_GetError()));
-		CurrentGLContext = glContext;
-	}
+	//debugf(TEXT("XOpenGL: MakeCurrent"));
+	INT Result = SDL_GL_MakeCurrent(Window, glContext);
+	if (Result != 0)
+		debugf(TEXT("XOpenGL: MakeCurrent failed with: %s\n"), appFromAnsi(SDL_GetError()));
+	CurrentGLContext = glContext;
 #else
 	if (!hRC && !CurrentGLContext)
 		appErrorf(TEXT("No valid GL Context!"));
