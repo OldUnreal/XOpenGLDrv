@@ -44,10 +44,10 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	INT Multi,
 	FTextureInfo& Info,
 	DWORD PolyFlags,
-	BOOL& IsResidentBindlessTexture,
-	BOOL& IsBoundToTMU,
-	BOOL& IsTextureDataStale,
-	BOOL ShouldResetStaleState
+	UBOOL& IsResidentBindlessTexture,
+	UBOOL& IsBoundToTMU,
+	UBOOL& IsTextureDataStale,
+	UBOOL ShouldResetStaleState
 )
 {
 	FixCacheID(Info, PolyFlags);
@@ -96,9 +96,9 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	return Result;
 }
 
-BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
+UBOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
 {
-	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
+	UBOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
 	GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
 
 	// We need to re-upload a texture we're currently using
@@ -254,7 +254,7 @@ void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL 
 static FName UserInterface = FName(TEXT("UserInterface"), FNAME_Intrinsic);
 #endif
 
-BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture, BOOL PartialUpload, INT U, INT V, INT UL, INT VL, BYTE* TextureData)
+UBOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, UBOOL IsFirstUpload, UBOOL IsBindlessTexture, UBOOL PartialUpload, INT U, INT V, INT UL, INT VL, BYTE* TextureData)
 {
 	bool UnsupportedTexture = false;
 
@@ -732,7 +732,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	STAT(clockFast(Stats.BindCycles));
 
 	// Check if the texture is already bound to the correct TMU
-	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
+	UBOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
 	FCachedTexture* Bind = GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, TRUE);
 
 	// Bail out early if the texture is fully up-to-date
@@ -804,7 +804,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	unguard;
 }
 
-DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, BOOL RemoveOccludeIfSolid)
+DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, UBOOL RemoveOccludeIfSolid)
 {
 	if ((PolyFlags & (PF_RenderFog | PF_Translucent)) != PF_RenderFog)
 		PolyFlags &= ~PF_RenderFog;
@@ -949,7 +949,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 	unguard;
 }
 
-BOOL UXOpenGLRenderDevice::WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags)
+UBOOL UXOpenGLRenderDevice::WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags)
 {
 	// stijn: returns true if the polyflag switch will cause a change in the blending mode
 	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog | PF_Selected)) ? TRUE : FALSE;
