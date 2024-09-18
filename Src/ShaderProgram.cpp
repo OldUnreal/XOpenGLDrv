@@ -289,7 +289,7 @@ static void GetTypeInfo(const char* TypeName, INT& SizeBytes, INT& Components)
 		Components = 1;
 	}
 	else
-		appErrorf(TEXT("Unknown GLSL type: %ls"), appFromAnsi(TypeName));
+		appErrorf(TEXT("Unknown GLSL type: %s"), appFromAnsi(TypeName));
 }
 
 INT UXOpenGLRenderDevice::ShaderProgram::GetMaximumUniformBufferSize(const DrawCallParameterInfo* Info) const
@@ -403,9 +403,9 @@ void UXOpenGLRenderDevice::ShaderProgram::BindUniform(ShaderSpecialization* Spec
 	const GLuint BlockIndex = glGetUniformBlockIndex(Specialization->ShaderProgramObject, Name);
 	if (BlockIndex == GL_INVALID_INDEX)
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), ShaderName);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %s in %s"), appFromAnsi(Name), ShaderName);
 		if (RenDev->UseOpenGLDebug && LogLevel >= 2)
-			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %ls in %ls"), appFromAnsi(Name), ShaderName);
+			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformBlockIndex) %s in %s"), appFromAnsi(Name), ShaderName);
 	}
 	glUniformBlockBinding(Specialization->ShaderProgramObject, BlockIndex, BindingIndex);
 }
@@ -415,9 +415,9 @@ void UXOpenGLRenderDevice::ShaderProgram::GetUniformLocation(ShaderSpecializatio
 	Uniform = glGetUniformLocation(Specialization->ShaderProgramObject, Name);
 	if (Uniform == GL_INVALID_INDEX)
 	{
-		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), ShaderName);
+		debugf(NAME_DevGraphics, TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %s in %s"), appFromAnsi(Name), ShaderName);
 		if (RenDev->UseOpenGLDebug && LogLevel >= 2)
-			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %ls in %ls"), appFromAnsi(Name), ShaderName);
+			debugf(TEXT("XOpenGL: invalid or unused shader var (UniformLocation) %s in %s"), appFromAnsi(Name), ShaderName);
 	}
 }
 
@@ -446,7 +446,7 @@ static void DumpShader(const char* Source, bool AddLineNumbers)
 		if (Line.InStr(TEXT("#line 1")) == 0)
 			LineNum = 0;
 		if (AddLineNumbers)
-			Lines.AddItem(FString::Printf(TEXT("%03d:\t%ls"), LineNum++, *Line));
+			Lines.AddItem(FString::Printf(TEXT("%03d:\t%s"), LineNum++, *Line));
 		else
 			Lines.AddItem(*Line);
 		if (NewLine == -1)
@@ -455,7 +455,7 @@ static void DumpShader(const char* Source, bool AddLineNumbers)
 	}
 	debugf(TEXT("XOpenGL: Shader Source:"));
 	for (INT i = 0; i < Lines.Num(); ++i)
-		debugf(TEXT("%ls"), *Lines(i));
+		debugf(TEXT("%s"), *Lines(i));
 }
 
 bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFunctionObject, GLuint FunctionType, ShaderOptions Options, ShaderWriterFunc Func, bool HaveGeoShader)
@@ -481,13 +481,13 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFun
 	glGetShaderiv(ShaderFunctionObject, GL_COMPILE_STATUS, &IsCompiled);
 	if (!IsCompiled)
 	{		
-		GWarn->Logf(TEXT("XOpenGL: Failed compiling %ls %ls Shader (Options %ls)"), ShaderName, ShaderTypeString(FunctionType), *Options.GetShortString());
+		GWarn->Logf(TEXT("XOpenGL: Failed compiling %s %s Shader (Options %s)"), ShaderName, ShaderTypeString(FunctionType), *Options.GetShortString());
 		glGetShaderiv(ShaderFunctionObject, GL_INFO_LOG_LENGTH, &blen);
 		if (blen > 1)
 		{
 			GLchar* compiler_log = new GLchar[blen + 1];
 			glGetShaderInfoLog(ShaderFunctionObject, blen, &slen, compiler_log);
-			debugf(TEXT("XOpenGL: ErrorLog compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
+			debugf(TEXT("XOpenGL: ErrorLog compiling %s %s"), ShaderName, appFromAnsi(compiler_log));
 			delete[] compiler_log;
 		}
 
@@ -501,10 +501,10 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFun
 		{
 			GLchar* compiler_log = new GLchar[blen + 1];
 			glGetShaderInfoLog(ShaderFunctionObject, blen, &slen, compiler_log);
-			debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %ls %ls"), ShaderName, appFromAnsi(compiler_log));
+			debugf(NAME_DevGraphics, TEXT("XOpenGL: Log compiling %s %s"), ShaderName, appFromAnsi(compiler_log));
 			delete[] compiler_log;
 		}
-		else debugf(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %ls %ls Shader (Options %ls)"), ShaderName, ShaderTypeString(FunctionType), *Options.GetShortString());
+		else debugf(NAME_DevGraphics, TEXT("XOpenGL: No compiler messages for %s %s Shader (Options %s)"), ShaderName, ShaderTypeString(FunctionType), *Options.GetShortString());
 	}
 
 	return Result;
@@ -523,7 +523,7 @@ bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram(GLuint ShaderProgram
 
 	if (!IsLinked)
 	{
-		GWarn->Logf(TEXT("XOpenGL: Failed linking %ls"), ShaderName);
+		GWarn->Logf(TEXT("XOpenGL: Failed linking %s"), ShaderName);
 		Result = false;
 	}
 
@@ -532,10 +532,10 @@ bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram(GLuint ShaderProgram
 	{
 		GLchar* linker_log = new GLchar[blen + 1];
 		glGetProgramInfoLog(ShaderProgramObject, blen, &slen, linker_log);
-		debugf(TEXT("XOpenGL: Log linking %ls %ls"), ShaderName, appFromAnsi(linker_log));
+		debugf(TEXT("XOpenGL: Log linking %s %s"), ShaderName, appFromAnsi(linker_log));
 		delete[] linker_log;
 	}
-	else debugf(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %ls"), ShaderName);
+	else debugf(NAME_DevGraphics, TEXT("XOpenGL: No linker messages for %s"), ShaderName);
 
 	CHECK_GL_ERROR();
 	return Result;
@@ -652,7 +652,7 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* 
 		BindUniform(Specialization, EditorStateIndex, "EditorState");
 
 	if (!UseSSBOParametersBuffer)
-		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%lsShaderDrawParams"), ShaderName)));
+		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%sShaderDrawParams"), ShaderName)));
 
 	// Bind regular texture samplers to their respective TMUs
 	check(NumTextureSamplers >= 0 && NumTextureSamplers < 9);
@@ -689,7 +689,7 @@ void UXOpenGLRenderDevice::ShaderProgram::SelectShaderSpecialization(ShaderOptio
 	Specializations.Set(Options, Specialization);
 
 	Specialization->Options = Options;
-	Specialization->SpecializationName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
+	Specialization->SpecializationName = FString::Printf(TEXT("%s%s"), ShaderName, *Options.GetShortString());
 
 	check(BuildShaderProgram(Specialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
 
@@ -771,7 +771,7 @@ FString UXOpenGLRenderDevice::ShaderOptions::GetStringHelper(void (*AddOptionFun
 {
     FString Result;
 #define ADD_OPTION(x) \
-AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
+AddOptionFunc(Result, TEXT(#x), (OptionsMask & x) ? true : false);
     
     ADD_OPTION(OPT_DiffuseTexture)
     ADD_OPTION(OPT_LightMap)
@@ -812,7 +812,7 @@ FString UXOpenGLRenderDevice::ShaderOptions::GetShortString() const
 FString UXOpenGLRenderDevice::ShaderOptions::GetPreprocessorString() const
 {
     return GetStringHelper([](FString& Result, const TCHAR* OptionName, bool IsSet) {
-        Result += FString::Printf(TEXT("#define %ls %d\n"), OptionName, IsSet ? 1 : 0);
+        Result += FString::Printf(TEXT("#define %s %d\n"), OptionName, IsSet ? 1 : 0);
     });
 }
 
