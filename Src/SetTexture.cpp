@@ -853,7 +853,7 @@ DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD&
     return PolyFlags;
 }
 
-void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
+void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 {
 	guard(UOpenGLRenderDevice::SetBlend);
 	STAT(clockFast(Stats.BlendCycles));
@@ -874,11 +874,6 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			glDisable(GL_CULL_FACE);
 		else
 			glEnable(GL_CULL_FACE);
-
-		if (InverseOrder) // check for bInverseOrder order.
-			glFrontFace(GL_CCW); //rather expensive switch better try to avoid!
-		else
-			glFrontFace(GL_CW);
 #endif
 		CurrentBlendPolyFlags = PolyFlags;
 	}

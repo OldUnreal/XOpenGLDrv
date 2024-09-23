@@ -96,14 +96,14 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 	// Check if the global state will change
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
 		WillTextureStateChange(0, Info, NextPolyFlags) || // Check if the texture will change
-		Shader->LastOptions.HasOption(ShaderOptions::OPT_NoNearZ) != ((Options & ShaderOptions::OPT_NoNearZ) ? true : false) ||  // Force a flush if we're switching between NearZ and NoNearZ
+		StoredbNearZ != NoNearZ ||  // Force a flush if we're switching between NearZ and NoNearZ
 		!CanBuffer // Check if we have room left in the multi-draw array
 	)
 	{
 		// Dispatch buffered data
 		Shader->Flush(!CanBuffer);
 
-		SetBlend(NextPolyFlags, false);
+		SetBlend(NextPolyFlags);
 
 		if (NoNearZ &&
 			(StoredFovAngle != Frame->Viewport->Actor->FovAngle ||

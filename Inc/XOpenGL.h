@@ -1917,7 +1917,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias);
 	void  SetNoTexture(INT Multi);
 	DWORD GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, BOOL RemoveOccludeIfSolid);
-	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
+	void  SetBlend(DWORD PolyFlags);
 	DWORD SetDepth(DWORD LineFlags);
 	void  SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, UBOOL NoSmooth);
 	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture, BOOL PartialUpload=FALSE, INT U=0, INT V=0, INT UL=0, INT VL=0, BYTE* TextureData=nullptr);

@@ -1786,7 +1786,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 #endif
 
 	glPolygonOffset(-1.f, -1.f);
-    SetBlend(PF_Occlude, false);
+    SetBlend(PF_Occlude);
 #if MACOSX // stijn: on macOS, it's much faster to just clear everything
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 #else
@@ -1998,7 +1998,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 #if !MACOSX
 	SetSceneNode(Frame);
 #endif
-	SetBlend(PF_Occlude, false);
+	SetBlend(PF_Occlude);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
 	unguard;
