@@ -174,7 +174,7 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	FMemMark Mark(GMem);
 	INT DataBlock = FTextureBlockBytes(Info.Format);
 	INT DataSize = FTextureBytes(Info.Format, UL, VL);
-	auto Data = new(GMem, DataSize, DataBlock) BYTE;
+	auto Data = new(GMem, DataSize) BYTE;
 
 	INT USize = Info.Mips[0]->USize;
 	BYTE* Input = Info.Mips[0]->DataPtr + (USize * V + U) * DataBlock;
