@@ -108,7 +108,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		}
 
 		// Set new GL state
-		SetBlend(PolyFlags, false); // yes, we use the original polyflags here!
+		SetBlend(PolyFlags); // yes, we use the original polyflags here!
 
 #if UNREAL_TOURNAMENT_OLDUNREAL
 		if (DepthTesting != ShouldDepthTest)

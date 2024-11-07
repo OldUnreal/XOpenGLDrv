@@ -114,7 +114,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Shader->Flush(!CanBuffer);
 
 		// Update global GL state
-		SetBlend(NextPolyFlags, false);
+		SetBlend(NextPolyFlags);
 	}
 
 	DrawComplexParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();

@@ -174,7 +174,7 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	FMemMark Mark(GMem);
 	INT DataBlock = FTextureBlockBytes(Info.Format);
 	INT DataSize = FTextureBytes(Info.Format, UL, VL);
-	auto Data = new(GMem, DataSize, DataBlock) BYTE;
+	auto Data = new(GMem, DataSize) BYTE;
 
 	INT USize = Info.Mips[0]->USize;
 	BYTE* Input = Info.Mips[0]->DataPtr + (USize * V + U) * DataBlock;
@@ -853,7 +853,7 @@ DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD&
     return PolyFlags;
 }
 
-void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
+void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 {
 	guard(UOpenGLRenderDevice::SetBlend);
 	STAT(clockFast(Stats.BlendCycles));
@@ -866,7 +866,7 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 	}
 
 	// Check to disable culling or other frontface if needed (or more other affecting states yet). Perhaps should add own RenderFlags if so.
-	DWORD Xor = CurrentAdditionalBlendPolyFlags^PolyFlags;
+	DWORD Xor = CurrentBlendPolyFlags ^ PolyFlags;
 	if (Xor & (PF_TwoSided | PF_RenderHint))
 	{
 #if ENGINE_VERSION==227
@@ -874,17 +874,10 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags, bool InverseOrder)
 			glDisable(GL_CULL_FACE);
 		else
 			glEnable(GL_CULL_FACE);
-
-		if (InverseOrder) // check for bInverseOrder order.
-			glFrontFace(GL_CCW); //rather expensive switch better try to avoid!
-		else
-			glFrontFace(GL_CW);
 #endif
-
-		CurrentAdditionalBlendPolyFlags=PolyFlags;
+		CurrentBlendPolyFlags = PolyFlags;
 	}
 
-	Xor = CurrentBlendPolyFlags^PolyFlags;
 	// Detect changes in the blending modes.
 	if (Xor & (PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog))
 	{

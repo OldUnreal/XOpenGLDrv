@@ -41,7 +41,7 @@ void UXOpenGLRenderDevice::PrepareSimpleCall
 
 		// Set GL state
 		SetDepth(OldLineFlags);
-		SetBlend(OldBlendMode, false);
+		SetBlend(OldBlendMode);
 	}
 }
 
@@ -303,7 +303,7 @@ void UXOpenGLRenderDevice::DrawSimpleLineProgram::DeactivateShader()
 	if (RenDev->CurrentLineFlags != OldLineFlags)
 		RenDev->SetDepth(OldLineFlags);
 	if (RenDev->CurrentBlendPolyFlags != OldBlendMode)
-		RenDev->SetBlend(OldBlendMode, false);
+		RenDev->SetBlend(OldBlendMode);
 }
 
 void UXOpenGLRenderDevice::DrawSimpleLineProgram::BuildCommonSpecializations()
@@ -351,7 +351,7 @@ void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::DeactivateShader()
 	if (RenDev->CurrentLineFlags != OldLineFlags)
 		RenDev->SetDepth(OldLineFlags);
 	if (RenDev->CurrentBlendPolyFlags != OldBlendMode)
-		RenDev->SetBlend(OldBlendMode, false);
+		RenDev->SetBlend(OldBlendMode);
 }
 
 void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::BuildCommonSpecializations()

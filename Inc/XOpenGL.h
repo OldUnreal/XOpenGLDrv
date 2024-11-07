@@ -601,7 +601,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FPlane FlashScale, FlashFog;
 	FLOAT RProjZ, Aspect;
 	DWORD CurrentBlendPolyFlags;
-	DWORD CurrentAdditionalBlendPolyFlags;
 	DWORD CurrentLineFlags;
 	FLOAT RFX2, RFY2;
 
@@ -1179,7 +1178,7 @@ class UXOpenGLRenderDevice : public URenderDevice
             // Miscellaneous
             OPT_DistanceFog			= 0x010000, // 227 distance fogging code. Seems rather slow
 			OPT_NoNearZ				= 0x020000, // Not actually used in the shader code, but forces a flush when we're switching between NoNearZ and NearZ
-			OPT_Selected			= 0x040000			
+			OPT_Selected			= 0x040000
         };
 
 		ShaderOptions(DWORD ShaderOptions)
@@ -1920,7 +1919,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias);
 	void  SetNoTexture(INT Multi);
 	DWORD GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, UBOOL RemoveOccludeIfSolid);
-	void  SetBlend(DWORD PolyFlags, bool InverseOrder);
+	void  SetBlend(DWORD PolyFlags);
 	DWORD SetDepth(DWORD LineFlags);
 	void  SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, UBOOL NoSmooth);
 	UBOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, UBOOL IsFirstUpload, UBOOL IsBindlessTexture, UBOOL PartialUpload=0, INT U=0, INT V=0, INT UL=0, INT VL=0, BYTE* TextureData=nullptr);

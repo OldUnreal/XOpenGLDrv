@@ -209,8 +209,13 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	OpenGLVersion = GL_Core;
     UseEnhancedLightmaps = 1;
 #endif
-	UseVSync = VS_Adaptive;
 
+#if MACOSX
+	UseVSync = VS_Off;
+#else
+	UseVSync = VS_Adaptive;
+#endif
+	
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	DetailMax = 2;
 #endif
@@ -1039,6 +1044,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
 	Can't keep this for other UEngine games despite the performance gain. Most noticeable is that decals are wrong faced in UT and probably in other games as well.
 	However, most gain is when using static meshes anyway, so this shouldn't be much of a problem for the other UEngine games.
 	*/
+	CurrentBlendPolyFlags = 0;
 	glEnable(GL_CULL_FACE);
 	glFrontFace(GL_CW);
 	glCullFace(GL_BACK);
@@ -1400,7 +1406,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		SetGamma(Viewport->GetOuterUClient()->Brightness);
 
 	CurrentBlendPolyFlags = 0;
-	CurrentAdditionalBlendPolyFlags = 0;
 
     SetProgram(No_Prog);
 
@@ -1602,6 +1607,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 #endif
 		LightData->LightData2[i] = glm::vec4(Actor->LightEffect, Actor->LightPeriod, Actor->LightPhase, Actor->LightRadius);
 		LightData->LightData3[i] = glm::vec4(Actor->LightType, Actor->VolumeBrightness, Actor->VolumeFog, Actor->VolumeRadius);
+		
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 		LightData->LightData4[i] = glm::vec4(Actor->WorldLightRadius(), NumLights, (GLfloat)Actor->Region.ZoneNumber, (GLfloat)(Frame->Viewport->Actor ? Frame->Viewport->Actor->Region.ZoneNumber : 0.f));
 		LightData->LightData5[i] = glm::vec4(Actor->LightRadius * 10, 1.0, 0.0, 0.0);
@@ -1782,7 +1788,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 #endif
 
 	glPolygonOffset(-1.f, -1.f);
-    SetBlend(PF_Occlude, false);
+    SetBlend(PF_Occlude);
 #if MACOSX // stijn: on macOS, it's much faster to just clear everything
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
 #else
@@ -1994,7 +2000,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 #if !MACOSX
 	SetSceneNode(Frame);
 #endif
-	SetBlend(PF_Occlude, false);
+	SetBlend(PF_Occlude);
 	glClear(GL_DEPTH_BUFFER_BIT);
 
 	unguard;

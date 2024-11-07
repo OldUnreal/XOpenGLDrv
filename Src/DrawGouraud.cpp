@@ -96,28 +96,25 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 	// Check if the global state will change
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
 		WillTextureStateChange(0, Info, NextPolyFlags) || // Check if the texture will change
-		Shader->LastOptions.HasOption(ShaderOptions::OPT_NoNearZ) != ((Options & ShaderOptions::OPT_NoNearZ) ? true : false) ||  // Force a flush if we're switching between NearZ and NoNearZ
+		StoredbNearZ != NoNearZ ||  // Force a flush if we're switching between NearZ and NoNearZ
 		!CanBuffer // Check if we have room left in the multi-draw array
-		// stijn: TODO: Do we still need this?
-		// force flush the buffer if we're rendering a mesh that is in zone 0 but shouldn't be...
-		// ((DrawCallParams.PolyFlags ^ PolyFlags) & PF_ForceViewZone)
 	)
 	{
 		// Dispatch buffered data
 		Shader->Flush(!CanBuffer);
 
-		SetBlend(NextPolyFlags, false);
+		SetBlend(NextPolyFlags);
 
 		if (NoNearZ &&
 			(StoredFovAngle != Frame->Viewport->Actor->FovAngle ||
-			 StoredFX != Frame->FX ||
-			 StoredFY != Frame->FY ||
-			 !StoredbNearZ))
+				StoredFX != Frame->FX ||
+				StoredFY != Frame->FY ||
+				!StoredbNearZ))
 		{
 			SetProjection(Frame, 1);
 		}
-	}
-
+	}	
+	
 	DrawGouraudParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();
 
 	const FLOAT TextureAlpha =
