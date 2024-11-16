@@ -210,7 +210,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
     UseEnhancedLightmaps = 1;
 #endif
 
-#if MACOSX
+#if MACOSX || UNREAL_TOURNAMENT_OLDUNREAL
 	UseVSync = VS_Off;
 #else
 	UseVSync = VS_Adaptive;
