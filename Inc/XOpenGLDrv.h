@@ -18,8 +18,10 @@
 #include <windows.h>
 #endif
 #include <cmath>
+#ifndef WIN32
 using std::isnan;
 using std::isfinite;
+#endif
 #include "Engine.h"
 #if ENGINE_VERSION==227
 #include "Render.h"
