@@ -21,7 +21,7 @@ UBOOL UXOpenGLRenderDevice::GLExtensionSupported(FString ExtensionName)
 #if SDL2BUILD
     return SDL_GL_ExtensionSupported(appToAnsi(*ExtensionName));
 #else
-    return AllExtensions.InStr(*FString::Printf(TEXT("%ls "), *ExtensionName)) != -1;
+    return AllExtensions.InStr(*FString::Printf(TEXT("%s "), *ExtensionName)) != -1;
 #endif
 }
 

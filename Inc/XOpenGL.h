@@ -41,6 +41,8 @@
 	#endif
 #else
     #define SDL2BUILD 1
+	#define FALSE 0
+	#define TRUE 1
 	extern "C"
 	{
 		#include "glad.h"
@@ -320,7 +322,7 @@ inline int	CheckGLError(const char* file, int line)
             case GL_STACK_UNDERFLOW:    Msg = TEXT("GL_STACK_UNDERFLOW");   break;
             case GL_OUT_OF_MEMORY:      Msg = TEXT("GL_OUT_OF_MEMORY");     break;
 		};
-		GWarn->Logf(TEXT("XOpenGL Error: %ls (%i) file %ls at line %i"), Msg, glErr, appFromAnsi(file), line);
+		GWarn->Logf(TEXT("XOpenGL Error: %s (%i) file %s at line %i"), Msg, glErr, appFromAnsi(file), line);
 	}
 	return 1;
 }
@@ -1263,7 +1265,7 @@ class UXOpenGLRenderDevice : public URenderDevice
         INT                                         NumTextureSamplers;
         GLenum                                      DrawMode;
 		INT											NumVertexAttributes;
-		BOOL										UseSSBOParametersBuffer;
+		UBOOL										UseSSBOParametersBuffer;
 		const DrawCallParameterInfo*				ParametersInfo;		
 		ShaderWriterFunc*							VertexShaderFunc;
 		ShaderWriterFunc*							GeoShaderFunc;
@@ -1694,7 +1696,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 
-		BOOL DepthTesting;		
+		UBOOL DepthTesting;		
 	};
 
 	// Used for ES _and_ for Core (w/ geo shaders disabled)!
@@ -1710,7 +1712,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 
-		BOOL DepthTesting;		
+		UBOOL DepthTesting;		
 	};
 
 	//
@@ -1911,16 +1913,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Textures/Sampler Management
 	//
-	static BOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
-	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
+	static UBOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
+	UBOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
+	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, UBOOL& IsResidentBindlessTexture, UBOOL& IsBoundToTMU, UBOOL& IsTextureDataStale, UBOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias);
 	void  SetNoTexture(INT Multi);
-	DWORD GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, BOOL RemoveOccludeIfSolid);
+	DWORD GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, UBOOL RemoveOccludeIfSolid);
 	void  SetBlend(DWORD PolyFlags);
 	DWORD SetDepth(DWORD LineFlags);
 	void  SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, UBOOL NoSmooth);
-	BOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture, BOOL PartialUpload=FALSE, INT U=0, INT V=0, INT UL=0, INT VL=0, BYTE* TextureData=nullptr);
+	UBOOL  UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, UBOOL IsFirstUpload, UBOOL IsBindlessTexture, UBOOL PartialUpload=0, INT U=0, INT V=0, INT UL=0, INT VL=0, BYTE* TextureData=nullptr);
 	void  GenerateTextureAndSampler(FCachedTexture* Bind);
 	void  BindTextureAndSampler(INT Multi, FCachedTexture* Bind);
 
