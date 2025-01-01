@@ -274,6 +274,20 @@ in GeometryData
 	Out << R"(
 } In;
 
+#if OPT_MSDFTile
+float median(float r, float g, float b)
+{
+  return max(min(r, g), min(max(r, g), b));
+}
+float screenPxRange()
+{
+  //vec2 unitRange = vec2(pxRange)/vec2(textureSize(msdf, 0));
+  //vec2 screenTexSize = vec2(1.0)/fwidth(texCoord);
+  //return max(0.5*dot(unitRange, screenTexSize), 1.0);
+  return 2.0;
+}
+#endif
+
 void main(void)
 {
 #if OPT_GeometryShaders
@@ -285,7 +299,14 @@ void main(void)
   vec4 TotalColor;
   vec4 Color = GetTexel(GetTexHandles(DrawID).xy, Texture0, In.TexCoords.xy);
 
+#if OPT_MSDFTile // taken from https://github.com/Chlumsky/msdfgen
+  float sd = median(Color.r, Color.g, Color.b);
+  float screenPxDistance = screenPxRange() * (sd - 0.5);
+  float opacity = clamp(screenPxDistance + 0.5, 0.0, 1.0);
+  TotalColor = mix(vec4(0.0, 0.0, 0.0, 0.0), GetDrawColor(DrawID), opacity);
+#else
   TotalColor = ApplyPolyFlags(Color) * GetDrawColor(DrawID);
+#endif
 
 #if !OPT_Modulated
   TotalColor = GammaCorrect(Gamma, TotalColor);

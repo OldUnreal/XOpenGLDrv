@@ -369,6 +369,13 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 			SourceFormat = GL_BGRA; // Was GL_RGBA;
 			break;
 
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		case TEXF_MSDF:
+			InternalFormat = GL_RGBA8;
+			SourceFormat = GL_RGBA;
+			break;
+#endif
+
 #if ENGINE_VERSION==227 && !defined(__LINUX_ARM__)
 		case TEXF_RGBA16:
 			InternalFormat = GL_RGBA16;
@@ -569,6 +576,9 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 				case TEXF_RGBA16:
 				case TEXF_RGB16_:
 #endif
+#if UNREAL_TOURNAMENT_OLDUNREAL
+				case TEXF_MSDF:
+#endif
 					ImgSrc = Mip->DataPtr;
 					break;
 
@@ -758,10 +768,10 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	{
 		UBOOL SkipMipmaps = (!GenerateMipMaps && Info.NumMips == 1 && !AlwaysMipmap);
 		UBOOL IsLightOrFogMap = Info.Format == TEXF_BGRA8_LM || Info.Format == TEXF_RGB10A2_LM;
-		UBOOL NoSmooth = (PolyFlags & PF_NoSmooth) && (Multi == 0);
+		UBOOL NoSmooth = (PolyFlags & PF_NoSmooth) && (Multi == 0) && Info.Format != TEXF_MSDF;
 		GenerateTextureAndSampler(Bind);
 		BindTextureAndSampler(Multi, Bind);
-		SetSampler(Bind->Sampler, Info, SkipMipmaps, IsLightOrFogMap, NoSmooth);
+		SetSampler(Bind->Sampler, Info, SkipMipmaps || Info.Format == TEXF_MSDF, IsLightOrFogMap || Info.Format == TEXF_MSDF, NoSmooth);
 	}
 	else if (Bind->BindlessTexHandle == 0)
 	{

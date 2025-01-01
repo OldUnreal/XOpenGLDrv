@@ -1176,7 +1176,8 @@ class UXOpenGLRenderDevice : public URenderDevice
             // Miscellaneous
             OPT_DistanceFog			= 0x010000, // 227 distance fogging code. Seems rather slow
 			OPT_NoNearZ				= 0x020000, // Not actually used in the shader code, but forces a flush when we're switching between NoNearZ and NearZ
-			OPT_Selected			= 0x040000
+			OPT_Selected			= 0x040000,
+			OPT_MSDFTile			= 0x080000   
         };
 
 		ShaderOptions(DWORD ShaderOptions)

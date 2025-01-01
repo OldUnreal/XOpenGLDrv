@@ -791,6 +791,7 @@ AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
     ADD_OPTION(OPT_DistanceFog)
 	ADD_OPTION(OPT_NoNearZ)
 	ADD_OPTION(OPT_Selected)
+	ADD_OPTION(OPT_MSDFTile)
     
     if (Result.Len() == 0)
         AddOptionFunc(Result, TEXT("OPT_None"), true);

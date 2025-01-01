@@ -44,6 +44,9 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 #if UNREAL_TOURNAMENT_OLDUNREAL
 	BOOL ShouldDepthTest = ((GUglyHackFlags & HACKFLAGS_PostRender) == 0) || Abs(1.f - Z) > SMALL_NUMBER;
 	BOOL& DepthTesting = ShaderCore ? ShaderCore->DepthTesting : ShaderES->DepthTesting;
+
+	if (Info.Format == TEXF_MSDF)
+		Options |= ShaderOptions::OPT_MSDFTile;
 #endif
 
 	// Color
