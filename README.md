@@ -98,7 +98,7 @@ section in the game ini. The following settings are currently available:
   reduce the LightMap intensity for level geometry by 50%. This matches the
   behavior of the original Direct3D 7 Renderer.
 
-* ActorXBlending [Default: False, Type: Boolean]: If set to true, XOpenGL will
+* ActorXBlending [Default: True, Type: Boolean]: If set to false, XOpenGL will
   increase the light intensity for meshes by 50%. This makes meshes appear much
   brighter.
 

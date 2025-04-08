@@ -30,15 +30,6 @@
 #include <sys/time.h>
 #endif
 
-#ifdef __LINUX__
-#define SDL2BUILD 1
-#elif MACOSX
-#define SDL2BUILD 1
-#elif defined(__EMSCRIPTEN__)
-#define SDL2BUILD 1
-#endif
-
-
 /*-----------------------------------------------------------------------------
 	UXOpenGLDrv.
 -----------------------------------------------------------------------------*/
@@ -195,8 +186,8 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	GenerateMipMaps = 0;
 	//EnableShadows = 0;
 
-	OneXBlending = 0;
-	ActorXBlending = 0;
+	OneXBlending = 1;
+	ActorXBlending = 1;
 
 	MaxTextureSize = 4096;
 #ifdef __EMSCRIPTEN__
@@ -385,7 +376,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
 
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	Window =  (SDL_Window*) Viewport->GetWindow();
 #else
 	INT i = 0;
@@ -534,7 +525,7 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 	unguard;
 }
 
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
@@ -614,12 +605,16 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	iPixelFormat = 0;
 
 
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 InitContext:
 
     if (glContext)
-        SDL_GL_DeleteContext(glContext);
-
+# if SDL2BUILD
+		SDL_GL_DeleteContext(glContext);
+# elif SDL3BUILD
+        SDL_GL_DestroyContext(glContext);
+# endif
+	
     INT SDLError = 0;
 	// Tell SDL what kind of context we want
     SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
@@ -682,9 +677,9 @@ InitContext:
 	MakeCurrent();
 
 	if (OpenGLVersion == GL_ES)
-		gladLoadGLES2Loader(SDL_GL_GetProcAddress);
+		gladLoadGLES2Loader((GLADloadproc)SDL_GL_GetProcAddress);
 	else
-		gladLoadGLLoader(SDL_GL_GetProcAddress);
+		gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
 
 	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
 	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
@@ -971,7 +966,7 @@ InitContext:
 void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
 		//debugf(TEXT("XOpenGL: MakeCurrent"));
@@ -1070,7 +1065,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "), DesiredColorBits, DesiredStencilBits, DesiredDepthBits);
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	if (glContext && CurrentGLContext && glContext == CurrentGLContext)
 #else
 	if (hRC && CurrentGLContext && hRC == CurrentGLContext)
@@ -1097,7 +1092,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 	}
 
-#ifndef SDL2BUILD
+#ifndef SDLBUILD
 	// Change display settings.
 	if (Fullscreen)
 	{
@@ -1228,7 +1223,7 @@ void UXOpenGLRenderDevice::UnsetRes()
 
 void UXOpenGLRenderDevice::SwapControl()
 {
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	guard(SwapControl);
 	switch (UseVSync)
 	{
@@ -1351,7 +1346,7 @@ void UXOpenGLRenderDevice::SwapControl()
 	else
 		debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control is not supported."));
 	unguard;
-#endif // SDL2BUILD
+#endif // SDLBUILD
 }
 
 void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
@@ -1453,37 +1448,8 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 		return 1;
 	}
 #else
-		FString Str = TEXT("");
-		// Available fullscreen video modes
-		INT display_count = 0, display_index = 0, i = 0;
-		SDL_DisplayMode mode = { SDL_PIXELFORMAT_UNKNOWN, 0, 0, 0, 0 };
-
-		if ((display_count = SDL_GetNumDisplayModes(0)) < 1)
-		{
-			debugf(NAME_Init, TEXT("No available fullscreen video modes"));
-		}
-		//debugf(TEXT("SDL_GetNumVideoDisplays returned: %i"), display_count);
-
-		INT PrevW = 0, PrevH = 0;
-		for (i = 0; i < display_count; i++)
-		{
-			mode.format = 0;
-			mode.w = 0;
-			mode.h = 0;
-			mode.refresh_rate = 0;
-			mode.driverdata = 0;
-			if (SDL_GetDisplayMode(display_index, i, &mode) != 0)
-				debugf(TEXT("SDL_GetDisplayMode failed: %ls"), SDL_GetError());
-			//debugf(TEXT("SDL_GetDisplayMode(0, 0, &mode):\t\t%i bpp\t%i x %i"), SDL_BITSPERPIXEL(mode.format), mode.w, mode.h);
-			if (mode.w != PrevW || mode.h != PrevH)
-				Str += FString::Printf(TEXT("%ix%i "), mode.w, mode.h);
-			PrevW = mode.w;
-			PrevH = mode.h;
-		}
-		// Send the resolution string to the engine.
-		Ar.Log(*Str.LeftChop(1));
-		return 1;
-}
+	return 0; // let SDLDrv handle this
+    }
 #endif
 	else if (ParseCommand(&Cmd, TEXT("CrashGL")))
 	{
@@ -1635,8 +1601,8 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 
 	auto FrameState = FrameStateBuffer.GetElementPtr(0);
 	FrameState->Gamma = StoredGamma;
-	FrameState->LightColorIntensity = ActorXBlending ? 1.5f : 1.f;
-	FrameState->LightMapIntensity = OneXBlending ? 4.f : 2.f;
+	FrameState->LightColorIntensity = ActorXBlending ? 1.f : 1.5f;
+	FrameState->LightMapIntensity = OneXBlending ? 2.f : 4.f;
 	FrameStateBuffer.Bind();
 	FrameStateBuffer.BufferData(true);
 }
@@ -1832,7 +1798,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	// Unlock and render.
 	check(LockCount == 1);
 
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	if (Blit)
 	{
 		SetProgram(No_Prog);
@@ -2080,14 +2046,18 @@ void UXOpenGLRenderDevice::Exit()
 	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);
 
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	ResetShaders();
 	delete SharedBindMap;
 	SharedBindMap = NULL;
 	CurrentGLContext = NULL;
 
 # if !UNREAL_TOURNAMENT_OLDUNREAL
+#  if SDL3BUILD
 	SDL_GL_DeleteContext(glContext);
+#  elif SDL2BUILD
+	SDL_GL_DestroyContext(glContext);
+#  endif
 # endif
 
 	AllContexts.RemoveItem(glContext);
@@ -2196,7 +2166,7 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	}
 #endif
 
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 	CurrentGLContext = NULL;
 # if !UNREAL_TOURNAMENT_OLDUNREAL
 	SDL_GL_DeleteContext(glContext);
@@ -2362,7 +2332,7 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 }
 
 // Static variables.
-#ifdef SDL2BUILD
+#ifdef SDLBUILD
 SDL_GLContext		UXOpenGLRenderDevice::CurrentGLContext = NULL;
 TArray<SDL_GLContext> UXOpenGLRenderDevice::AllContexts;
 #else

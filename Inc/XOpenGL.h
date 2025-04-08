@@ -36,18 +36,20 @@
 	#define WGL_WGLEXT_PROTOTYPES
 	#include "wglext.h"
 
-	#ifdef SDL2BUILD
-		#include <SDL2/SDL.h>
-	#endif
 #else
-    #define SDL2BUILD 1
 	extern "C"
 	{
 		#include "glad.h"
 	}
     #include <unistd.h>
-    #include <SDL.h>
 #endif
+
+#ifdef SDL2BUILD
+    #include <SDL2/SDL.h>
+#elif SDL3BUILD
+    #include <SDL3/SDL.h>
+#endif
+
 
 #include "XOpenGLTemplate.h" //thanks han!
 

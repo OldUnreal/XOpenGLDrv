@@ -34,6 +34,22 @@ using std::isfinite;
 #endif
 #include "UnRender.h"
 
+#if !defined(SDL2BUILD) && !defined(SDL3BUILD)
+# ifdef __LINUX__
+#  define SDLBUILD  1
+#  define SDL2BUILD 1
+#  define SDL3BUILD 0
+# elif MACOSX
+#  define SDLBUILD  1
+#  define SDL2BUILD 0
+#  define SDL3BUILD 1
+# elif defined(__EMSCRIPTEN__)
+#  define SDLBUILD  1
+#  define SDL2BUILD 0
+#  define SDL3BUILD 1
+# endif
+#endif
+
 //#define AUTO_INITIALIZE_REGISTRANTS_OPENGLDRV UXOpenGLRenderDevice::StaticClass();
 extern "C" { void autoInitializeRegistrantsXOpenGLDrv(void); }
 #define AUTO_INITIALIZE_REGISTRANTS_XOPENGLDRV autoInitializeRegistrantsXOpenGLDrv();
