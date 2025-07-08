@@ -1030,8 +1030,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 			else
 			{
 				SubBufferCount = 1;
-				Buffer = new T[BufferSize];
-				memset(Buffer, 0, BufferSize * sizeof(T));
+				const GLuint RealBufferSize = Max(1u, BufferSize);
+				Buffer = new T[RealBufferSize];
+				memset(Buffer, 0, RealBufferSize * sizeof(T));
 				glBindBuffer(Target, BufferObjectName);
 				glBufferData(Target, BufferSize * sizeof(T), nullptr, ExpectedUsage);
 				glBindBuffer(Target, 0);
