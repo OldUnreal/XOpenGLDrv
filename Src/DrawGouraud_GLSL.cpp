@@ -457,7 +457,7 @@ void main(void)
 
 #if OPT_Editor
   vec4 DrawColor = GetDrawColor(DrawID);
-  if (RendMap == REN_Zones || RendMap == REN_PolyCuts || RendMap == REN_Polys)
+  if (RendMap == REN_Zones || RendMap == REN_PolyCuts || RendMap == REN_Polys || RendMap == REN_WalkableSurfs)
   {
     TotalColor += 0.5;
     TotalColor *= DrawColor;

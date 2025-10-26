@@ -91,6 +91,7 @@ precision lowp int;
 		Out << "#define REN_Zones " << REN_Zones << "u" << END_LINE;
 		Out << "#define REN_Polys " << REN_Polys << "u" << END_LINE;
 		Out << "#define REN_PolyCuts " << REN_PolyCuts << "u" << END_LINE;
+		Out << "#define REN_WalkableSurfs " << REN_WalkableSurfs << "u" << END_LINE;
 		Out << "#define REN_DynLight " << REN_DynLight << "u" << END_LINE;
 		Out << "#define REN_PlainTex " << REN_PlainTex << "u" << END_LINE;
 		Out << "#define REN_OrthXY " << REN_OrthXY << "u" << END_LINE;
