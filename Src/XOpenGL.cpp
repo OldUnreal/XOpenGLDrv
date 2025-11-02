@@ -117,7 +117,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #endif
 
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
-	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
@@ -178,7 +177,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	//UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards // stijn: disabled by default because many AMD drivers choke on it
 #endif
+#if ENGINE_VERSION==227
 	UseHWLighting = 0;
+#endif
 	AlwaysMipmap = 0;
 	NoFiltering = 0;
 	UseSRGBTextures = 0;
@@ -295,10 +296,13 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
 
+#if ENGINE_VERSION==227
+	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
+#endif
+
 #if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseShaderDrawParameters %i"), UseShaderDrawParameters);
-	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
 #endif
 	debugf(NAME_DevLoad, TEXT("UseTrilinear %i"), UseTrilinear);
@@ -465,8 +469,10 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Identity
 	FrameState->modelMat = glm::mat4(1.0f);
 
+#if ENGINE_VERSION==227
 	if (UseHWLighting)
 		InViewport->GetOuterUClient()->NoLighting = 1; // Disable (Engine) lighting.
+#endif
 
 	// stijn: This ResetFog call was missing and caused the black screen bug in UT469
 	ResetFog();
@@ -1529,9 +1535,15 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	// If we enable BumpMaps but not HW Lighting, then we only need to push data on
 	// static light-emitting actors. If we're in-game, we only need to do this once!
 	auto Level = Frame->Level;
+	bool HWLighting =
+#if ENGINE_VERSION==227
+		UseHWLighting;
+#else
+        false;
+#endif
 	if (!Level || 
-		(!UseHWLighting && !BumpMaps) || // These are the only features that use light data
-		(!UseHWLighting && !GIsEditor && NumLights > 0)) // If we're in-game, we only push light data once
+		(!HWLighting && !BumpMaps) || // These are the only features that use light data
+		(!HWLighting && !GIsEditor && NumLights > 0)) // If we're in-game, we only push light data once
 		return;
 
 	// Gather actors
@@ -1549,7 +1561,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 			continue;
 
 		// Filter out non-static lights if we're not using HW Lighting
-		if (!Actor->bStatic && Actor->bMovable && !UseHWLighting)
+		if (!Actor->bStatic && Actor->bMovable && !HWLighting)
 			continue;
 
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
@@ -2102,7 +2114,9 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoDrawComplexSurface"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoDrawComplexSurface)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseOpenGLDebug"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseOpenGLDebug)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
+#if ENGINE_VERSION==227
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
+#endif
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));

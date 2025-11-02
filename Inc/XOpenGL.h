@@ -170,6 +170,10 @@ enum ERenderZTest
 };
 #endif
 
+#ifndef REN_WalkableSurfs
+#define REN_WalkableSurfs 7
+#endif
+
 #ifdef DEBUGGL
 #define CHECK_GL_ERROR() CheckGLError(__FILE__, __LINE__)
 #define CLEAR_GL_ERROR() glGetError()

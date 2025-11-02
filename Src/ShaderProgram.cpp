@@ -70,7 +70,11 @@ precision lowp int;
 	Out << "#define OPT_GeometryShaders " << (GL->UsingGeometryShaders ? 1 : 0) << END_LINE;
 	Out << "#define OPT_DetailMax " << GL->DetailMax << END_LINE;
 	Out << "#define OPT_SimulateMultiPass " << (GL->SimulateMultiPass ? 1 : 0) << END_LINE;
+#if ENGINE_VERSION==227
 	Out << "#define OPT_HWLighting " << (GL->UseHWLighting ? 1 : 0) << END_LINE;
+#else
+	Out << "#define OPT_HWLighting 0" << END_LINE;
+#endif
 	Out << "#define OPT_SupportsClipDistance " << (GL->SupportsClipDistance ? 1 : 0) << END_LINE;
 	Out << "#define OPT_MaxClippingPlanes " << GL->MaxClippingPlanes << END_LINE;
 	Out << "#define OPT_Editor " << (GIsEditor ? 1 : 0) << END_LINE;
