@@ -18,7 +18,7 @@
 
 UBOOL UXOpenGLRenderDevice::GLExtensionSupported(FString ExtensionName)
 {
-#if SDL2BUILD
+#if !_WIN32
     return SDL_GL_ExtensionSupported(appToAnsi(*ExtensionName));
 #else
     return AllExtensions.InStr(*FString::Printf(TEXT("%ls "), *ExtensionName)) != -1;
@@ -171,7 +171,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         glGetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &MaxSSBOBlockSize);
     }
 
-# ifndef SDL2BUILD // not worth the hassle with GLX, let SDL check if it works for now.
+# if _WIN32 // not worth the hassle with GLX, let SDL check if it works for now.
     if (GLExtensionSupported(TEXT("WGL_EXT_swap_control")))
     {
         debugf(NAME_DevGraphics, TEXT("XOpenGL: WGL_EXT_swap_control found."));
@@ -313,7 +313,7 @@ void UXOpenGLRenderDevice::CheckExtensions()
         }
 
 		INT NumberOfAASamples = 0;
-#ifdef SDL2BUILD
+#if !_WIN32
         INT AABuffers = 0;
         SDL_GL_GetAttribute( SDL_GL_MULTISAMPLEBUFFERS, &AABuffers );
         SDL_GL_GetAttribute( SDL_GL_MULTISAMPLESAMPLES, &NumberOfAASamples );

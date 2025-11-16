@@ -11,12 +11,6 @@
 // Enables CHECK_GL_ERROR(). Deprecated, should use UseOpenGLDebug=True instead, but still may be handy to track something specific down.
 // #define DEBUGGL 1
 
-// Windows only.
-// #define WINBUILD 1
-
-// Linux/OSX mostly, needs to be set in Windows for SDL2Launch.
-// #define SDL2BUILD 1
-
 #pragma once
 
 #ifdef _MSC_VER
@@ -56,7 +50,7 @@
 #if ENGINE_VERSION==436 || ENGINE_VERSION==430
 #define clockFast(Timer)   {Timer -= appCycles();}
 #define unclockFast(Timer) {Timer += appCycles()-34;}
-#elif ENGINE_VERSION==227
+#elif UNREAL_OLDUNREAL
 // stijn: Do we want to release resources (e.g., bound textures) if the game crashes?
 // None of the original renderer or audio devices did this because you can easily trigger
 // another crash during cleanup. This would change your crash message and hide the original
@@ -271,7 +265,7 @@ inline FString GetPolyFlagString(DWORD PolyFlags)
         String+=TEXT("PF_BrightCorners ");
     if (PolyFlags & PF_SpecialLit)
         String+=TEXT("PF_SpecialLit ");
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
     if (PolyFlags & PF_Gouraud)
         String+=TEXT("PF_Gouraud ");
 #endif
@@ -446,7 +440,7 @@ class UXOpenGLRenderDevice : public URenderDeviceOldUnreal469
 class UXOpenGLRenderDevice : public URenderDevice
 #endif
 {
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
 #elif ENGINE_VERSION==430
 	DECLARE_CLASS(UXOpenGLRenderDevice, URenderDevice, CLASS_Config, XOpenGLDrv)
@@ -557,11 +551,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FGammaRamp OriginalRamp; // to restore original value at exit or crash.
 	FLOAT Gamma;
 
-#ifdef SDL2BUILD
+#if !_WIN32
 	SDL_GLContext glContext;
 	static SDL_GLContext CurrentGLContext;
 	static TArray<SDL_GLContext> AllContexts;
-#elif _WIN32
+#else
 	static TArray<HGLRC> AllContexts;
 	static HGLRC   CurrentGLContext;
 	static HMODULE hModuleGlMain;
@@ -588,7 +582,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Framerate Limiter
 	//
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	FTime prevFrameTimestamp;
 	INT FrameRateLimit;
 #endif
@@ -1835,7 +1829,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  PushHit(const BYTE* Data, INT Count);
 	void  PopHit(INT Count, UBOOL bForce);
 	void  GetStats(TCHAR* Result);
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	void  ReadPixels(FColor* Pixels, UBOOL bGammaCorrectOutput);
 #else
 	void  ReadPixels(FColor* Pixels);
@@ -1848,12 +1842,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Unreal 227 URenderDevice interface
 	//
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	void  PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf);
 	void  PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf);
 	void  DrawPass(FSceneNode* Frame, INT Pass);
 #endif
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	void  DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& Info, FTransTexture* Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span = NULL);
 #endif
 	BYTE  PushClipPlane(const FPlane& Plane);
@@ -1893,9 +1887,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  UnsetRes();
 	void  SwapControl();
 
-#ifdef SDL2BUILD
+#if !_WIN32
     UBOOL SetSDLAttributes();
-#elif _WIN32
+#else
 	void  PrintFormat(HDC hDC, INT nPixelFormat);
 #endif
 

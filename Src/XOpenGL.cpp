@@ -36,7 +36,7 @@
 
 IMPLEMENT_CLASS(UXOpenGLRenderDevice);
 
-#if ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
+#if !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
 # ifdef _WIN32
 #  pragma comment(lib,"Winmm")
 void TimerBegin()
@@ -109,14 +109,14 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UseSRGBTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseSRGBTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("SimulateMultiPass"), RF_Public)UBoolProperty(CPP_PROPERTY(SimulateMultiPass), TEXT("Options"), CPF_Config);
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	new(GetClass(), TEXT("UseHWLighting"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWLighting), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseHWClipping"), RF_Public)UBoolProperty(CPP_PROPERTY(UseHWClipping), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseEnhancedLightmaps"), RF_Public)UBoolProperty(CPP_PROPERTY(UseEnhancedLightmaps), TEXT("Options"), CPF_Config);
 	//new(GetClass(),TEXT("UseMeshBuffering"),		RF_Public)UBoolProperty	( CPP_PROPERTY(UseMeshBuffering			), TEXT("Options"), CPF_Config);
 #endif
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	// OpenGL 4
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
@@ -174,10 +174,10 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	NoAATiles = 1;
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 	UseBindlessTextures = 1;
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	//UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards // stijn: disabled by default because many AMD drivers choke on it
 #endif
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	UseHWLighting = 0;
 #endif
 	AlwaysMipmap = 0;
@@ -256,9 +256,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 #if _WIN32
     hRC = NULL;
-    #if ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
+# if !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerBegin();
-	#endif // ENGINE_VERSION
+# endif
 #endif
 
 	// Driver flags.
@@ -269,7 +269,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SupportsDistanceFog = 1;
 	SupportsLazyTextures = 0;
 	PrefersDeferredLoad = 0;
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	SupportsHDLightmaps = UseEnhancedLightmaps;
 	UnsupportHDLightFlags = 0;
 	SupportsAlphaBlend = 1;
@@ -296,11 +296,11 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Verbose Logging
 	debugf(NAME_DevLoad, TEXT("XOpenGL: Current settings"));
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	debugf(NAME_DevLoad, TEXT("UseHWLighting %i"), UseHWLighting);
 #endif
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	debugf(NAME_DevLoad, TEXT("UseBindlessTextures %i"), UseBindlessTextures);
 	debugf(NAME_DevLoad, TEXT("UseShaderDrawParameters %i"), UseShaderDrawParameters);
 	debugf(NAME_DevLoad, TEXT("UseHWClipping %i"), UseHWClipping);
@@ -361,7 +361,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	debugf(NAME_DevLoad, TEXT("NoDrawTile %i"), NoDrawTile);
 	debugf(NAME_DevLoad, TEXT("NoDrawSimple %i"), NoDrawSimple);
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	// new in 227j. This will tell render to use the abilities a new rendev provides instead of using internal (CPU intense) functions.
 	//In use so far for DetailTextures on meshes.
 	LegacyRenderingOnly = 0;
@@ -380,7 +380,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
 
-#ifdef SDLBUILD
+#if !_WIN32
 	Window =  (SDL_Window*) Viewport->GetWindow();
 #else
 	INT i = 0;
@@ -412,7 +412,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	if (GIsEditor)
 		ShareLists = 1;
 
-#if ENGINE_VERSION==227 || UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
     // Doing after extensions have been checked.
 	UsingPersistentBuffers = UsePersistentBuffers ? true : false;
 	UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
@@ -469,7 +469,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Identity
 	FrameState->modelMat = glm::mat4(1.0f);
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	if (UseHWLighting)
 		InViewport->GetOuterUClient()->NoLighting = 1; // Disable (Engine) lighting.
 #endif
@@ -501,7 +501,7 @@ void UXOpenGLRenderDevice::PostEditChange()
 	unguard;
 }
 
-#ifdef WINBUILD
+#if _WIN32
 LRESULT CALLBACK WndProc(HWND hWnd, UINT uiMsg, WPARAM wParam, LPARAM lParam)
 {
 	if (uiMsg == WM_CLOSE)
@@ -516,7 +516,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uiMsg, WPARAM wParam, LPARAM lParam)
 UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 {
 	guard(UXOpenGLRenderDevice::SetWindowPixelFormat);
-#ifdef _WIN32
+#if _WIN32
 	if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
 	{
 		GWarn->Logf(TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
@@ -531,7 +531,7 @@ UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
 	unguard;
 }
 
-#ifdef SDLBUILD
+#if !_WIN32
 UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
@@ -565,7 +565,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 {
 	guard(UXOpenGLRenderDevice::CreateOpenGLContext);
 
-#ifdef _WIN32
+#if _WIN32
 	if (hRC)// || CurrentGLContext)
 	{
 		MakeCurrent();
@@ -611,7 +611,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColo
 	iPixelFormat = 0;
 
 
-#ifdef SDLBUILD
+#if !_WIN32
 InitContext:
 
     if (glContext)
@@ -972,7 +972,7 @@ InitContext:
 void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
-#ifdef SDLBUILD
+#if !_WIN32
 	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
 		//debugf(TEXT("XOpenGL: MakeCurrent"));
@@ -1042,7 +1042,7 @@ void UXOpenGLRenderDevice::SetPermanentState()
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 16); // set maximum to...? Most common is 8 I think. However if really want to benefit from it maybe using some more here.
     }
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	// Culling
 	/*
 	Can't keep this for other UEngine games despite the performance gain. Most noticeable is that decals are wrong faced in UT and probably in other games as well.
@@ -1071,7 +1071,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "), DesiredColorBits, DesiredStencilBits, DesiredDepthBits);
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
-#ifdef SDLBUILD
+#if !_WIN32
 	if (glContext && CurrentGLContext && glContext == CurrentGLContext)
 #else
 	if (hRC && CurrentGLContext && hRC == CurrentGLContext)
@@ -1086,7 +1086,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 			}
 
 			// stijn: force a switch to our context if we're in the editor
-#if WIN32
+#if _WIN32
 			if (GIsEditor)
 			{
 				wglMakeCurrent(NULL, NULL);
@@ -1098,7 +1098,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 	}
 
-#ifndef SDLBUILD
+#if _WIN32
 	// Change display settings.
 	if (Fullscreen)
 	{
@@ -1220,7 +1220,7 @@ void UXOpenGLRenderDevice::UnsetRes()
 {
 	guard(UXOpenGLRenderDevice::UnsetRes);
 
-#ifdef WINBUILD
+#if _WIN32
 	if (WasFullscreen)
 		ChangeDisplaySettingsW(NULL, 0);
 #endif
@@ -1229,7 +1229,7 @@ void UXOpenGLRenderDevice::UnsetRes()
 
 void UXOpenGLRenderDevice::SwapControl()
 {
-#ifdef SDLBUILD
+#if !_WIN32
 	guard(SwapControl);
 	switch (UseVSync)
 	{
@@ -1352,7 +1352,7 @@ void UXOpenGLRenderDevice::SwapControl()
 	else
 		debugf(NAME_Init, TEXT("XOpenGL: WGL_EXT_swap_control is not supported."));
 	unguard;
-#endif // SDLBUILD
+#endif
 }
 
 void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
@@ -1361,7 +1361,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: Flush"));
 
-#if WIN32
+#if _WIN32
 	if (GIsEditor)
 	{
 		wglMakeCurrent(NULL, NULL);
@@ -1437,7 +1437,7 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 	}
 	if (ParseCommand(&Cmd, TEXT("GetRes")))
 	{
-#ifdef WINBUILD
+#if _WIN32
 		TArray<FPlane> Relevant;
 		INT i;
 		for (i = 0; i< SupportedDisplayModes.Num(); i++)
@@ -1501,17 +1501,17 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	//Flush Buffers.
 	SetProgram(No_Prog);
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	if (bFogEnabled)
 		ResetFog();
-#endif // ENGINE_VERSION
+#endif
 
 	//avoid some overhead, only calculate and set again if something was really changed.
 	if (Frame->Viewport->IsOrtho() && (!bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || GIsEditor || StoredOrthoFY != Frame->FY))
 		SetOrthoProjection(Frame);
 	else if (StoredFovAngle != Viewport->Actor->FovAngle || StoredFX != Frame->FX || StoredFY != Frame->FY || GIsEditor || StoredbNearZ)
 		SetProjection(Frame, 0);
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	else if (BumpMaps) // stijn: TODO: We need this to prevent lights from jumping around. This indicates there's some problem in Render!
 		UpdateCoords(Frame);
 #endif
@@ -1522,7 +1522,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	SetSceneNodeHit(Frame);
 
 	// Disable clipping
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	while (NumClipPlanes > 0)
 		PopClipPlane();
 #endif
@@ -1536,7 +1536,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	// static light-emitting actors. If we're in-game, we only need to do this once!
 	auto Level = Frame->Level;
 	bool HWLighting =
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 		UseHWLighting;
 #else
         false;
@@ -1810,7 +1810,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	// Unlock and render.
 	check(LockCount == 1);
 
-#ifdef SDLBUILD
+#if !_WIN32
 	if (Blit)
 	{
 		SetProgram(No_Prog);
@@ -1987,7 +1987,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	unguard;
 }
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels, UBOOL bGammaCorrectOutput)
 #else
 void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
@@ -2013,7 +2013,7 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 	}
 
 	const UBOOL bDoGammaCorrect =
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 		(bGammaCorrectOutput && GammaCorrectScreenshots);
 #else
 		(GammaCorrectScreenshots);
@@ -2058,16 +2058,16 @@ void UXOpenGLRenderDevice::Exit()
 	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);
 
-#ifdef SDLBUILD
+#if !_WIN32
 	ResetShaders();
 	delete SharedBindMap;
 	SharedBindMap = NULL;
 	CurrentGLContext = NULL;
 
 # if !UNREAL_TOURNAMENT_OLDUNREAL
-#  if SDL3BUILD
+#  if SDL2BUILD
 	SDL_GL_DeleteContext(glContext);
-#  elif SDL2BUILD
+#  elif SDL3BUILD
 	SDL_GL_DestroyContext(glContext);
 #  endif
 # endif
@@ -2101,7 +2101,7 @@ void UXOpenGLRenderDevice::Exit()
 		AllContexts.~TArray<HGLRC>();
 #endif
 
-#if _WIN32 && ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
+#if _WIN32 && !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerEnd();
 #endif
 
@@ -2114,7 +2114,7 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("NoDrawComplexSurface"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(NoDrawComplexSurface)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseOpenGLDebug"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseOpenGLDebug)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWClipping"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWClipping)));
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseHWLighting"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseHWLighting)));
 #endif
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
@@ -2180,10 +2180,14 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	}
 #endif
 
-#ifdef SDLBUILD
+#if !_WIN32
 	CurrentGLContext = NULL;
 # if !UNREAL_TOURNAMENT_OLDUNREAL
+#  if SDL2BUILD
 	SDL_GL_DeleteContext(glContext);
+#  else
+	SDL_GL_DestroyContext(glContext);
+#  endif
 # endif
 #else
 # if XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP
@@ -2203,7 +2207,7 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 
 #endif
 
-#if _WIN32 && ENGINE_VERSION!=227 && !UNREAL_TOURNAMENT_OLDUNREAL
+#if _WIN32 && !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerEnd();
 #endif
 
@@ -2227,7 +2231,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		Stats.StallCount
 	);
 
-#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
     StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumLights);
 #endif
 
@@ -2306,11 +2310,11 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 24);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Other:"));
-	#if ENGINE_VERSION==227
+#if UNREAL_OLDUNREAL
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Number of static Lights: %i"), NumLights);
-    #endif
+#endif
     Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Persistent buffer stalls = %i"), Stats.StallCount);
@@ -2346,7 +2350,7 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 }
 
 // Static variables.
-#ifdef SDLBUILD
+#if !_WIN32
 SDL_GLContext		UXOpenGLRenderDevice::CurrentGLContext = NULL;
 TArray<SDL_GLContext> UXOpenGLRenderDevice::AllContexts;
 #else
