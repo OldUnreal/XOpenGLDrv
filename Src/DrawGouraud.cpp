@@ -153,14 +153,6 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 		DrawCallParams->DetailMacroInfo.z = TexInfo[MacroTextureIndex].UMult;
 		DrawCallParams->DetailMacroInfo.w = TexInfo[MacroTextureIndex].VMult;
 	}
-
-#if ENGINE_VERSION==227
-	DrawCallParams->DistanceFogColor = DistanceFogColor;
-	DrawCallParams->DistanceFogInfo  = DistanceFogValues;
-	DrawCallParams->DistanceFogMode = DistanceFogMode;
-#else
-	DrawCallParams->DistanceFogMode = -1;
-#endif	
 }
 
 void UXOpenGLRenderDevice::FinishGouraudCall(FTextureInfo& Info)
@@ -395,15 +387,9 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 	guard(UOpenGLRenderDevice::PreDrawGouraud);
 
 	if (FogSurf.IsValid())
-	{
-		DistanceFogColor = glm::vec4(FogSurf.FogColor.X, FogSurf.FogColor.Y, FogSurf.FogColor.Z, FogSurf.FogColor.W);
-		DistanceFogValues = glm::vec4(FogSurf.FogDistanceStart, FogSurf.FogDistanceEnd, FogSurf.FogDensity, 0);
-		DistanceFogMode = FogSurf.FogMode;
-
-		bFogEnabled = true;
-	}
-	else if (bFogEnabled)
-		ResetFog();
+		SetDistanceFog(FogSurf);
+	else
+		ResetDistanceFog();
 
 	unguard;
 }
@@ -411,7 +397,7 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 {
 	guard(UOpenGLRenderDevice::PostDrawGouraud);
-	ResetFog();
+	ResetDistanceFog();
 	unguard;
 }
 #endif // ENGINE_VERSION

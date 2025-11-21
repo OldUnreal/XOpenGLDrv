@@ -475,7 +475,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 #endif
 
 	// stijn: This ResetFog call was missing and caused the black screen bug in UT469
-	ResetFog();
+	ResetDistanceFog();
 
 	SetFrameStateUniforms();
 
@@ -1423,8 +1423,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	StoredFY = 0;
 	appMemzero(&Stats, sizeof(Stats));
 
-    ResetFog();
-
 	unguard;
 }
 
@@ -1501,10 +1499,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	//Flush Buffers.
 	SetProgram(No_Prog);
 
-#if UNREAL_OLDUNREAL
-	if (bFogEnabled)
-		ResetFog();
-#endif
+	ResetDistanceFog();
 
 	//avoid some overhead, only calculate and set again if something was really changed.
 	if (Frame->Viewport->IsOrtho() && (!bIsOrtho || StoredOrthoFovAngle != Viewport->Actor->FovAngle || StoredOrthoFX != Frame->FX || GIsEditor || StoredOrthoFY != Frame->FY))
@@ -1954,18 +1949,31 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 	unguard;
 }
 
-void UXOpenGLRenderDevice::ResetFog()
+void UXOpenGLRenderDevice::SetDistanceFog(FFogSurf& Surf)
 {
-	guard(UOpenGLRenderDevice::ResetFog);
-		
-	//Reset Fog
-	DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
-	DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, -1.f);
-	DistanceFogMode = -1;
+#if ENGINE_VERSION==227
+	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
+	DistanceFogInfo->FogColor = glm::vec4(Surf.FogColor.X, Surf.FogColor.Y, Surf.FogColor.Z, Surf.FogColor.W);
+	DistanceFogInfo->FogStart = Surf.FogDistanceStart;
+	DistanceFogInfo->FogEnd = Surf.FogDistanceEnd;
+	DistanceFogInfo->FogDensity = Surf.FogDensity;
+	DistanceFogInfo->FogMode = Surf.FogMode;
+	DistanceFogBuffer.Bind();
+	DistanceFogBuffer.BufferData(true);
+#endif
+}
 
-	bFogEnabled = false;
-
-	unguard;
+void UXOpenGLRenderDevice::ResetDistanceFog()
+{
+#if ENGINE_VERSION==227
+	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
+	if (DistanceFogInfo->FogMode != -1)
+	{
+		DistanceFogInfo->FogMode = -1;
+		DistanceFogBuffer.Bind();
+		DistanceFogBuffer.BufferData(true);
+	}
+#endif
 }
 
 void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)

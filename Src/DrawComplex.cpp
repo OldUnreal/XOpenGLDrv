@@ -168,9 +168,6 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	DrawCallParams->XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
 	DrawCallParams->YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
 	DrawCallParams->ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, 0.0);
-	DrawCallParams->DistanceFogColor = DistanceFogColor;
-	DrawCallParams->DistanceFogInfo = DistanceFogValues;
-	DrawCallParams->DistanceFogMode = DistanceFogMode;	
 
 	Shader->DrawBuffer.StartDrawCall();
 	auto DrawID = Shader->DrawBuffer.GetDrawID();

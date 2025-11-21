@@ -157,31 +157,24 @@ layout(std140) uniform EditorState
 #endif
 
 #if OPT_DistanceFog
-struct FogParameters
+layout(std140) uniform DistanceFogParams
 {
-  vec4  FogColor;   // Fog color
-  float FogStart;   // Only for linear fog
-  float FogEnd;     // Only for linear fog
-  float FogDensity; // For exp and exp2 equation
-  float FogCoord;
-  int FogMode;      // 0 = linear, 1 = exp, 2 = exp2
+	vec4 DistanceFogColor;
+	float DistanceFogStart;			// Only for linear fog
+	float DistanceFogEnd;			// Only for linear fog
+	float DistanceFogDensity;		// For exp and exp2 equation
+	int DistanceFogMode;			// -1 = disabled, 0 = linear, 1 = exp, 2 = exp2
 };
 
-float getFogFactor(FogParameters DistanceFog)
+float getFogFactor(float FogCoord)
 {
-  // DistanceFogValues.x = FogStart
-  // DistanceFogValues.y = FogEnd
-  // DistanceFogValues.z = FogDensity
-  // DistanceFogValues.w = FogMode
-  // FogResult = (Values.y-FogCoord)/(Values.y-Values.x);
-
   float FogResult = 1.0;
-  if (DistanceFog.FogMode == 0)
-    FogResult = ((DistanceFog.FogEnd - DistanceFog.FogCoord) / (DistanceFog.FogEnd - DistanceFog.FogStart));
-  else if (DistanceFog.FogMode == 1)
-    FogResult = exp(-DistanceFog.FogDensity * DistanceFog.FogCoord);
-  else if (DistanceFog.FogMode == 2)
-    FogResult = exp(-pow(DistanceFog.FogDensity * DistanceFog.FogCoord, 2.0));
+  if (DistanceFogMode == 0)
+    FogResult = ((DistanceFogEnd - FogCoord) / (DistanceFogEnd - DistanceFogStart));
+  else if (DistanceFogMode == 1)
+    FogResult = exp(-DistanceFogDensity * FogCoord);
+  else if (DistanceFogMode == 2)
+    FogResult = exp(-pow(DistanceFogDensity * FogCoord, 2.0));
   FogResult = 1.0 - clamp(FogResult, 0.0, 1.0);
   return FogResult;
 }
@@ -608,6 +601,19 @@ void UXOpenGLRenderDevice::InitShaders()
 			EditorStateBuffer.RebindBufferBase(GlobalShaderBindingIndices::EditorStateIndex);
 		}
 	}
+
+#if ENGINE_VERSION==227
+	if (!DistanceFogBuffer.Buffer)
+	{
+		DistanceFogBuffer.GenerateUBOBuffer(this, GlobalShaderBindingIndices::DistanceFogInfoIndex);
+		DistanceFogBuffer.MapUBOBuffer(false, 1);
+		DistanceFogBuffer.Advance(1);
+	}
+	else
+	{
+		DistanceFogBuffer.RebindBufferBase(GlobalShaderBindingIndices::DistanceFogInfoIndex);
+	}
+#endif
 	
 	for (const auto Shader : Shaders)
 	{
@@ -655,6 +661,10 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* 
 	BindUniform(Specialization, ClipPlaneIndex, "ClipPlaneParams");
 	if (GIsEditor)
 		BindUniform(Specialization, EditorStateIndex, "EditorState");
+
+#if ENGINE_VERSION==227
+	BindUniform(Specialization, DistanceFogInfoIndex, "DistanceFogParams");
+#endif
 
 	if (!UseSSBOParametersBuffer)
 		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%lsShaderDrawParams"), ShaderName)));

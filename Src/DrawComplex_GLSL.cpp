@@ -32,12 +32,6 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
 	{"vec4", "YAxis", 0},
 	{"vec4", "ZAxis", 0},
 	{"vec4", "DrawColor", 0},
-	{"vec4", "DistanceFogColor", 0},
-	{"vec4", "DistanceFogInfo", 0},
-	{"int", "DistanceFogMode", 0},
-	{"uint", "Padding0", 0},
-	{"uint", "Padding1", 0},
-    {"uint", "Padding2", 0},
     {"uvec4", "TexHandles", 4},
 	{ nullptr, nullptr, 0}
 };
@@ -575,29 +569,19 @@ void main(void)
   TotalColor += FogColor;
 
 #if OPT_DistanceFog
-  // Add DistanceFog, needs to be added after Light has been applied.  
-  int vDistanceFogMode = GetDistanceFogMode(vDrawID);
-  if (vDistanceFogMode >= 0)
+  // Add DistanceFog, needs to be added after Light has been applied. 
+  if (DistanceFogMode >= 0)
   {
-    vec4 vDistanceFogInfo = GetDistanceFogInfo(vDrawID);
-    vec4 vDistanceFogColor = GetDistanceFogColor(vDrawID);
-
-    FogParameters DistanceFogParams;
-    DistanceFogParams.FogStart = vDistanceFogInfo.x;
-    DistanceFogParams.FogEnd = vDistanceFogInfo.y;
-    DistanceFogParams.FogDensity = vDistanceFogInfo.z;
-    DistanceFogParams.FogMode = vDistanceFogMode;
-
 # if OPT_Modulated
-    DistanceFogParams.FogColor = vec4(0.5, 0.5, 0.5, 0.0);
+    vec4 MixColor = vec4(0.5, 0.5, 0.5, 0.0);
 # elif OPT_Translucent && !OPT_EnvironmentMap
-    DistanceFogParams.FogColor = vec4(0.0, 0.0, 0.0, 0.0);
+    vec4 MixColor = vec4(0.0, 0.0, 0.0, 0.0);
 # else
-    DistanceFogParams.FogColor = vDistanceFogColor;
+    vec4 MixColor = DistanceFogColor;
 # endif
 
-    DistanceFogParams.FogCoord = abs(vEyeSpacePos.z / vEyeSpacePos.w);
-    TotalColor = mix(TotalColor, DistanceFogParams.FogColor, getFogFactor(DistanceFogParams));
+    float FogCoord = abs(vEyeSpacePos.z / vEyeSpacePos.w);
+    TotalColor = mix(TotalColor, MixColor, getFogFactor(FogCoord));
   }
 #endif
 	

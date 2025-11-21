@@ -1373,7 +1373,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				// Back up the parameters of the last draw call so we can write them into the first
 				// slot of the parameters buffer after rotating
-				auto In = ParametersBuffer.GetElementPtr((ParametersBuffer.Size() > 0) ? (ParametersBuffer.Size() - 1) : 0);
+				auto In = ParametersBuffer.GetElementPtr(static_cast<GLuint>((ParametersBuffer.Size() > 0) ? (ParametersBuffer.Size() - 1) : 0));
 				memcpy(&DrawCallParams, In, sizeof(DrawCallParamsType));
 			}
 
@@ -1490,7 +1490,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		ComplexParametersIndex			= 6,
 		GouraudParametersIndex			= 7,
 		SimpleLineParametersIndex		= 8,
-		SimpleTriangleParametersIndex	= 9
+		SimpleTriangleParametersIndex	= 9,
+		DistanceFogInfoIndex			= 10
 	};
 
 	enum TextureIndices
@@ -1554,10 +1555,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BufferObject<EditorState> EditorStateBuffer;
 
 	// Fog
-	glm::vec4 DistanceFogColor = glm::vec4(1.f, 1.f, 1.f, 1.f);
-	glm::vec4 DistanceFogValues = glm::vec4(0.f, 0.f, 0.f, 0.f);
-	glm::int32 DistanceFogMode = -1;
-	bool bFogEnabled = false;
+	struct DistanceFogInfo
+	{
+		glm::vec4 FogColor;
+		glm::float32 FogStart;
+		glm::float32 FogEnd;
+		glm::float32 FogDensity;
+		glm::int32 FogMode;
+	};
+	BufferObject<DistanceFogInfo> DistanceFogBuffer;
 
 	//
 	// Shader Data Structures
@@ -1610,13 +1616,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 DiffuseInfo;			// UMult, VMult, Diffuse, Alpha
 		glm::vec4 DetailMacroInfo;		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
 		glm::vec4 MiscInfo;				// BumpMap Specular, Gamma
-		glm::vec4 DistanceFogColor;
-		glm::vec4 DistanceFogInfo;
 		glm::vec4 DrawColor;
-		glm::int32 DistanceFogMode;
-		glm::int32 Padding0;
-		glm::int32 Padding1;
-		glm::int32 Padding2;
 		glm::uvec4 TexHandles[4];       // Holds up to 4 glm::uint64 texture handles
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawGouraudParametersInfo[];
@@ -1649,16 +1649,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 YAxis;
 		glm::vec4 ZAxis;
 		glm::vec4 DrawColor;
-		glm::vec4 DistanceFogColor;
-		glm::vec4 DistanceFogInfo;
-		glm::int32 DistanceFogMode;
-		glm::uint Padding0; // This manually inserted padding ensures this struct layout is identical in C++, GLSL std140, and GLSL std430
-		glm::uint Padding1;
-		glm::uint Padding2;
 		glm::uvec4 TexHandles[4];  // Holds up to 8 glm::uint64 texture handles
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawComplexParametersInfo[];
-	static_assert(sizeof(DrawComplexParameters) == 0x150, "Invalid complex drawcall parameters size");
+	static_assert(sizeof(DrawComplexParameters) == 288, "Invalid complex drawcall parameters size");
 
 	struct DrawComplexVertex
 	{
@@ -1906,7 +1900,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetProjection(FSceneNode* Frame, UBOOL bNearZ);
 	void  SetPermanentState();
 	void  SetProgram(INT CurrentProgram);
-	void  ResetFog();
+	void  SetDistanceFog(FFogSurf& Surf);
+	void  ResetDistanceFog();
 	void  SetFrameStateUniforms();
 
 	//
