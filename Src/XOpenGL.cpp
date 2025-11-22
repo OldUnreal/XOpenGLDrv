@@ -1949,9 +1949,9 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 	unguard;
 }
 
+#if ENGINE_VERSION==227
 void UXOpenGLRenderDevice::SetDistanceFog(FFogSurf& Surf)
 {
-#if ENGINE_VERSION==227
 	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
 	DistanceFogInfo->FogColor = glm::vec4(Surf.FogColor.X, Surf.FogColor.Y, Surf.FogColor.Z, Surf.FogColor.W);
 	DistanceFogInfo->FogStart = Surf.FogDistanceStart;
@@ -1960,8 +1960,8 @@ void UXOpenGLRenderDevice::SetDistanceFog(FFogSurf& Surf)
 	DistanceFogInfo->FogMode = Surf.FogMode;
 	DistanceFogBuffer.Bind();
 	DistanceFogBuffer.BufferData(true);
-#endif
 }
+#endif // ENGINE_VERSION
 
 void UXOpenGLRenderDevice::ResetDistanceFog()
 {
