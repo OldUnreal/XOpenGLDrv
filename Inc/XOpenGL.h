@@ -1900,7 +1900,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetProjection(FSceneNode* Frame, UBOOL bNearZ);
 	void  SetPermanentState();
 	void  SetProgram(INT CurrentProgram);
+#if UNREAL_OLDUNREAL
 	void  SetDistanceFog(FFogSurf& Surf);
+#endif
 	void  ResetDistanceFog();
 	void  SetFrameStateUniforms();
 
