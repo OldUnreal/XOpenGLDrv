@@ -156,7 +156,6 @@ layout(std140) uniform EditorState
 };
 #endif
 
-#if OPT_DistanceFog
 layout(std140) uniform DistanceFogParams
 {
 	vec4 DistanceFogColor;
@@ -166,6 +165,7 @@ layout(std140) uniform DistanceFogParams
 	int DistanceFogMode;			// -1 = disabled, 0 = linear, 1 = exp, 2 = exp2
 };
 
+#if OPT_DistanceFog
 float getFogFactor(float FogCoord)
 {
   float FogResult = 1.0;

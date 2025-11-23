@@ -516,16 +516,22 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Window, OS, and global GL context state
 	//
 #ifdef _WIN32
-	HGLRC hRC;
+	HGLRC glContext;
 	HWND hWnd;
 	HDC hDC;
     PIXELFORMATDESCRIPTOR pfd;
     static PFNWGLCHOOSEPIXELFORMATARBPROC wglChoosePixelFormatARB;
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
+	static PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB;
 	TArray<FPlane> SupportedDisplayModes;
 #else
+	SDL_GLContext glContext;
 	SDL_Window* Window;
 #endif
+	static INT NumDevices;
+	static BOOL SelectedGLVersion;
+	static INT SelectedMajorVersion;
+	static INT SelectedMinorVersion;
 
 	UBOOL WasFullscreen;
 
@@ -552,14 +558,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FLOAT Gamma;
 
 #if !_WIN32
-	SDL_GLContext glContext;
 	static SDL_GLContext CurrentGLContext;
 	static TArray<SDL_GLContext> AllContexts;
 #else
 	static TArray<HGLRC> AllContexts;
 	static HGLRC   CurrentGLContext;
-	static HMODULE hModuleGlMain;
-	static HMODULE hModuleGlGdi;
 #endif
 
 	//
@@ -590,8 +593,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Current GL Context and Renderer State
 	//
-	bool bContextInitialized;
-
 	GLuint NumClipPlanes;
 	BYTE LastZMode;
 
@@ -720,13 +721,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	public:		
 		T* Buffer{};                // CPU-accessible mapping of the _entire_ buffer object
-
+		
 		BufferObject() = default;
 		~BufferObject()
 		{
 			DeleteBuffer();
 		}
-
+		
 		// Current size in number of elements
 		size_t Size()
 		{
@@ -860,11 +861,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (*BindingPoint)
 				(*BindingPoint)->Unbind();
-
 			if (BufferType == GL_ARRAY_BUFFER)
 				glBindVertexArray(VaoObjectName);
 			glBindBuffer(BufferType, BufferObjectName);
-
 			bBound = true;
 			*BindingPoint = this;
 		}
@@ -873,10 +872,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			if (!bBound)
 				return;
-
 			glBindBuffer(BufferType, 0);
 			bBound = false;
-
 			*BindingPoint = nullptr;
 		}
 
@@ -1876,15 +1873,22 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Window/Context Creation
 	//
-	UBOOL CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes);
-	UBOOL SetWindowPixelFormat();
+	UBOOL CreateOpenGLContext(void* Window, INT NewColorBytes, UBOOL QueryOnly=FALSE);
 	void  UnsetRes();
 	void  SwapControl();
 
+	UBOOL IsSupportedGLVersion(INT MajorVersion, INT MinorVersion);
+	void SelectGLVersion();
+
 #if !_WIN32
-    UBOOL SetSDLAttributes();
+    UBOOL SetSDLAttributes() const;
+	SDL_Window* CreateTemporaryWindow() const;
+	void DestroyTemporaryWindow(SDL_Window* Window) const;
 #else
+	UBOOL SetWindowPixelFormat(HDC DC);
 	void  PrintFormat(HDC hDC, INT nPixelFormat);
+	HWND CreateTemporaryWindow(HDC& OutDC) const;
+	void DestroyTemporaryWindow(HWND TmphWnd, DC TmphDC) const;
 #endif
 
 	static QSORT_RETURN CDECL CompareRes(const FPlane* A, const FPlane* B) {

@@ -240,13 +240,75 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	unguard;
 }
 
+#if _WIN32
+HWND UXOpenGLRenderDevice::CreateTemporaryWindow(HDC& OutDC) const
+{
+	// Create a temporary context so we can load the wgl functions
+	PIXELFORMATDESCRIPTOR temppfd{};
+	temppfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+	temppfd.nVersion = 1;
+	temppfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
+	temppfd.iPixelType = PFD_TYPE_RGBA;
+	temppfd.cColorBits = DesiredColorBits;
+	temppfd.cDepthBits = DesiredDepthBits;
+	//temppfd.cStencilBits = DesiredStencilBits;
+	temppfd.cAlphaBits = 0;
+	temppfd.iLayerType = PFD_MAIN_PLANE;
+
+	HWND TemphWnd = CreateWindowExW(0, 
+									TEXT("STATIC"), 
+									TEXT("OpenGLQueryWindow"), 
+									WS_OVERLAPPEDWINDOW, 
+									CW_USEDEFAULT, 
+									CW_USEDEFAULT, 
+									CW_USEDEFAULT, 
+									CW_USEDEFAULT,
+									NULL, 
+									NULL, 
+									GetModuleHandle(NULL), 
+									NULL);
+		
+	HDC TemphDC = GetDC(TemphWnd);
+	INT nPixelFormat = ChoosePixelFormat(TemphDC, &temppfd);
+	if (!nPixelFormat)
+	{
+		pfd.cDepthBits = 24;
+		nPixelFormat = ChoosePixelFormat(TemphDC, &pfd);
+	}
+	if (!nPixelFormat)
+	{
+		pfd.cDepthBits = 16;
+		nPixelFormat = ChoosePixelFormat(TemphDC, &pfd);
+	}
+	check(nPixelFormat);
+	verify(SetPixelFormat(TemphDC, nPixelFormat, &temppfd));
+
+	OutDC = TemphDC;
+	return TemphWnd;
+}
+void UXOpenGLRenderDevice::DestroyTemporaryWindow(HWND TemphWnd, HDC TemphDC) const
+{
+	ReleaseDC(TemphWnd, TemphDC);
+	DestroyWindow(TemphWnd);
+}
+#else
+SDL_Window* UXOpenGLRenderDevice::CreateTemporaryWindow() const
+{
+	return SDL_CreateWindow("OpenGLQueryWindow", 2, 2, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+}
+void UXOpenGLRenderDevice::DestroyTemporaryWindow(SDL_Window* Window) const
+{
+	SDL_DestroyWindow(Window);
+}
+#endif
+
 UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UXOpenGLRenderDevice::Init);
 	//it is really a bad habit of the UEngine1 games to call init again each time a fullscreen change is needed.
 
 	Viewport = InViewport;
-	bContextInitialized = false;
+	glContext = NULL;
 	iPixelFormat = 0;
 
 	DetailMax = Clamp(DetailMax,0,3);
@@ -254,11 +316,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	LastZMode = 255;
 	NumClipPlanes = 0;
 
-#if _WIN32
-    hRC = NULL;
-# if !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
+#if _WIN32 && !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
 	TimerBegin();
-# endif
 #endif
 
 	// Driver flags.
@@ -380,27 +439,58 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
 
-#if !_WIN32
-	Window =  (SDL_Window*) Viewport->GetWindow();
-#else
-	INT i = 0;
+	// Initialize process-wide GL state
+#if _WIN32
 	// Get list of device modes.
-	for (i = 0;; i++)
+	for (INT i = 0;; i++)
 	{
 		DEVMODEW Tmp;
 		appMemzero(&Tmp, sizeof(Tmp));
 		Tmp.dmSize = sizeof(Tmp);
-		if (!EnumDisplaySettingsW(NULL, i, &Tmp)) {
+		if (!EnumDisplaySettingsW(NULL, i, &Tmp))
 			break;
-		}
 		SupportedDisplayModes.AddUniqueItem(FPlane(Tmp.dmPelsWidth, Tmp.dmPelsHeight, Tmp.dmBitsPerPel, Tmp.dmDisplayFrequency));
-		//debugf(NAME_Init, TEXT("Found resolution mode: Width %i, Height %i, BitsPerPixel %i, Frequency %i"),Tmp.dmPelsWidth, Tmp.dmPelsHeight, Tmp.dmBitsPerPel, Tmp.dmDisplayFrequency);
 	}
 
-	hWnd = (HWND)Viewport->GetWindow();
-	hDC = GetDC(hWnd);
+	if (NumDevices == 0)
+	{
+		HDC TemphDC;
+		HWND TemphWnd = CreateTemporaryWindow(TemphDC);
+		HGLRC tempContext = wglCreateContext(TemphDC);
+		wglMakeCurrent(TemphDC, tempContext);
 
+		wglChoosePixelFormatARB = reinterpret_cast<PFNWGLCHOOSEPIXELFORMATARBPROC>(wglGetProcAddress("wglChoosePixelFormatARB"));
+		if (wglChoosePixelFormatARB == nullptr)
+		{
+			appErrorf(TEXT("wglGetProcAddress() for wglChoosePixelFormatARB failed."));
+			return 0;
+		}
+
+		wglCreateContextAttribsARB = reinterpret_cast<PFNWGLCREATECONTEXTATTRIBSARBPROC>(wglGetProcAddress("wglCreateContextAttribsARB"));
+		if (wglCreateContextAttribsARB == nullptr)
+		{
+			appErrorf(TEXT("wglGetProcAddress() for wglCreateContextAttribsARB failed."));
+			return 0;
+		}
+
+		wglGetExtensionsStringARB = reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(wglGetProcAddress("wglGetExtensionsStringARB"));
+		if (wglGetExtensionsStringARB == nullptr)
+		{
+			appErrorf(TEXT("wglGetProcAddress() for wglGetExtensionsStringARB failed."));
+			return 0;
+		}
+
+		wglMakeCurrent(NULL, NULL);
+		wglDeleteContext(tempContext);
+		DestroyTemporaryWindow(TmphWnd, TmphDC);
+	}
 #endif
+
+	// Figure out which OpenGL version we should use based on our settings.
+	SelectGLVersion();
+
+	if (GIsEditor)
+		ShareLists = 1;
 
 	// Set resolution, also creates context and checks extensions.
 	if (!SetRes(NewX, NewY, NewColorBytes, Fullscreen))
@@ -408,9 +498,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 		GWarn->Logf(TEXT("XOpenGL: SetRes failed!"));
 		return 0;
 	}
-
-	if (GIsEditor)
-		ShareLists = 1;
 
 #if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
     // Doing after extensions have been checked.
@@ -482,6 +569,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	if (UseAA)
 		glEnable(GL_MULTISAMPLE);
 
+	NumDevices++;
 	return 1;
 	unguard;
 }
@@ -513,304 +601,190 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT uiMsg, WPARAM wParam, LPARAM lParam)
 }
 #endif
 
-UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat()
+#if _WIN32
+UBOOL UXOpenGLRenderDevice::SetWindowPixelFormat(HDC DC)
 {
 	guard(UXOpenGLRenderDevice::SetWindowPixelFormat);
-#if _WIN32
-	if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
+
+	if (!SetPixelFormat(DC, iPixelFormat, &pfd))
 	{
 		GWarn->Logf(TEXT("XOpenGL: Setting PixelFormat %i failed!"), iPixelFormat);
-		iPixelFormat = ChoosePixelFormat(hDC, &pfd);
-		if (!SetPixelFormat(hDC, iPixelFormat, &pfd))
+		iPixelFormat = ChoosePixelFormat(DC, &pfd);
+		if (!SetPixelFormat(DC, iPixelFormat, &pfd))
 			GWarn->Logf(TEXT("XOpenGL: SetPixelFormat %i failed. Restart may required."), iPixelFormat);
 		return 0;
 	}
 	else debugf(NAME_DevGraphics, TEXT("XOpenGL: Setting PixelFormat: %i"), iPixelFormat);
-#endif
 	return 1;
 	unguard;
 }
+#endif
+
+UBOOL UXOpenGLRenderDevice::IsSupportedGLVersion(INT MajorVersion, INT MinorVersion)
+{
+	// If we've already verified compatibility with a higher or equal version,
+	// then return TRUE immediately
+	if (SelectedMajorVersion > MajorVersion ||
+		SelectedMinorVersion >= MinorVersion)
+		return TRUE;
+
+	INT TmpMajorVersion = SelectedMajorVersion;
+	INT TmpMinorVersion = SelectedMinorVersion;
+	SelectedMajorVersion = MajorVersion;
+	SelectedMinorVersion = MinorVersion;
+
+#if _WIN32
+	HDC TemphDC;
+	HWND TempWindow = CreateTemporaryWindow(TemphDC);
+#else
+	SetSDLAttributes();
+	SDL_Window* TempWindow = CreateTemporaryWindow();
+#endif
+
+	UBOOL Result = CreateOpenGLContext(TempWindow, 4, TRUE);
+
+	SelectedMajorVersion = TmpMajorVersion;
+	SelectedMinorVersion = TmpMinorVersion;
+
+#if _WIN32
+	DestroyTemporaryWindow(TempWindow, TemphDC);
+#else
+	DestroyTemporaryWindow(TempWindow);
+#endif
+
+	return Result;
+}
+
+//
+// Try to create a dummy opengl context that supports all features we've enabled
+// in our settings. If the context creation fails, we gradually disable features
+// and lower the requested GL context version until it succeeds
+//
+void UXOpenGLRenderDevice::SelectGLVersion()
+{
+	if (OpenGLVersion == GL_ES)
+	{
+		SelectedMajorVersion = 3;
+		SelectedMinorVersion = 1;
+	}
+	else
+    {
+#if MACOSX
+		SelectedMajorVersion = 4;
+		SelectedMinorVersion = 1;
+#else
+		MajorVersion = 3;
+		MinorVersion = 3;
+		if (UseShaderDrawParameters)
+		{
+			if (!IsSupportedGLVersion(4, 6))
+			{
+				debugf(TEXT("XOpenGL: UseShaderDrawParameters is enabled, but this device does not support OpenGL 4.6. We will disable this option"));
+				UseShaderDrawParameters = false;
+			}
+			else
+			{
+				SelectedMajorVersion = Max<INT>(4, SelectedMajorVersion);
+				SelectedMinorVersion = Max<INT>(6, SelectedMinorVersion);
+			}
+		}
+        if (UseBindlessTextures || UsePersistentBuffers)
+        {
+			if (!IsSupportedGLVersion(4, 5))
+			{
+				debugf(TEXT("XOpenGL: UseBindlessTextures or UsePersistentBuffers is enabled, but this device does not support OpenGL 4.5. We will disable these options"));
+				UseBindlessTextures = UsePersistentBuffers = false;
+			}
+			else
+			{
+				SelectedMajorVersion = Max<INT>(4, SelectedMajorVersion);
+				SelectedMinorVersion = Max<INT>(5, SelectedMinorVersion);
+			}
+        }
+		if (UseOpenGLDebug)
+        {
+			if (!IsSupportedGLVersion(4, 3))
+			{
+				debugf(TEXT("XOpenGL: UseOpenGLDebug is enabled, but this device does not support OpenGL 4.3. We will disable this option"));
+				UseOpenGLDebug = false;
+			}
+			else
+			{
+				SelectedMajorVersion = Max<INT>(4, SelectedMajorVersion);
+				SelectedMinorVersion = Max<INT>(3, SelectedMinorVersion);
+			}
+        }
+#endif
+    }
+
+	SelectedGLVersion = true;
+}
 
 #if !_WIN32
-UBOOL UXOpenGLRenderDevice::SetSDLAttributes()
+UBOOL UXOpenGLRenderDevice::SetSDLAttributes() const
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
-    INT SDLError = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
+    bool SDLSuccess = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
     
 	if (UseAA)
     {
-        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
-        SDLError = SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
+        SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
+        SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
     }
 	
-	SDLError = SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
-    SDLError = SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
+	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
+    SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
 	
 	if (UseOpenGLDebug)
-		SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+		SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 	
-	SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, (OpenGLVersion == GL_ES) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
+	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, (OpenGLVersion == GL_ES) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
+	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, SelectedMajorVersion);
+	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, SelectedMinorVersion);
     
-	if (SDLError != 0)
+	if (!SDLSuccess)
         debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in SetSDLAttributes (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
     
-	return !SDLError;
+	return SDLSuccess;
     unguard;
 }
 #endif
 
-
-UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(UViewport* Viewport, INT NewColorBytes)
+UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes, UBOOL QueryOnly)
 {
 	guard(UXOpenGLRenderDevice::CreateOpenGLContext);
 
-#if _WIN32
-	if (hRC)// || CurrentGLContext)
-	{
-		MakeCurrent();
-		return 1;
-	}
-#endif
-
 	debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: Creating new OpenGL context."));
 
-	INT MajorVersion = 4;
-	INT MinorVersion = 5;
-
-	if (OpenGLVersion == GL_ES)
-	{
-		MajorVersion = 3;
-		MinorVersion = 1;
-	}
-	else
-    {
-        if (UseOpenGLDebug)
-        {
-            MajorVersion = 4;
-            MinorVersion = 3;
-        }
-#if MACOSX
-		MajorVersion = 4;
-		MinorVersion = 1;
-#else
-
-        if (UseBindlessTextures || UsePersistentBuffers)
-        {
-            MajorVersion = 4;
-            MinorVersion = 5;
-        }
-        if (UseShaderDrawParameters)
-		{
-			MajorVersion = 4;
-			MinorVersion = 6;
-		}
-#endif
-    }
-
-	iPixelFormat = 0;
-
+	if (!Window)
+		appErrorf(TEXT("XOpenGL: No Window found!"));
 
 #if !_WIN32
-InitContext:
-
-    if (glContext)
-# if SDL2BUILD
-		SDL_GL_DeleteContext(glContext);
-# elif SDL3BUILD
-        SDL_GL_DestroyContext(glContext);
-# endif
-	
-    INT SDLError = 0;
-	// Tell SDL what kind of context we want
-    SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, MajorVersion);
-	SDLError = SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, MinorVersion);
-
-    if (SDLError != 0)
-        debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in CreateOpenGLContext (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
-
-	// not checking for any existing SDL context, create a new one, since using
-	// SDL for splash already and it's getting confused.
-	//
-
-	// Init global GL.
-	// no need to do SDL_Init here, done in SDL2Drv (USDL2Viewport::ResizeViewport).
-
-	Window = (SDL_Window*)Viewport->GetWindow();
-
-	if (!Window)
-		appErrorf(TEXT("XOpenGL: No SDL Window found!"));
-
-	glContext = SDL_GL_GetCurrentContext();
-	if (glContext == NULL)
-		glContext = SDL_GL_CreateContext(Window);
-
-	if (glContext == NULL)
-	{
-	    appErrorf(TEXT("XOpenGL: SDL Error in CreateOpenGLContext: %ls"), appFromAnsi(SDL_GetError()));
-        if (OpenGLVersion == GL_Core)
-        {
-            if (UseBindlessTextures || UsePersistentBuffers || UseShaderDrawParameters)
-            {
-                if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
-                {
-                    appErrorf(TEXT("XOpenGL: Failed to init minimum OpenGL (%i.%i context). SDL_GL_CreateContext: %ls"), MajorVersion, MinorVersion, appFromAnsi(SDL_GetError()));
-                    return 0;
-                }
-                else
-                {
-                    //Safemode, try with lowest supported context, disable >3.3 features.
-                    MajorVersion = 3;
-                    MinorVersion = 3;
-
-                    UsingBindlessTextures = false;
-                    UsingPersistentBuffers = false;
-					UsingShaderDrawParameters = false;
-					UseOpenGLDebug = false;
-
-                    debugf(NAME_Init, TEXT("XOpenGL: %i.%i context failed to initialize. Disabling UseShaderDrawParameters,UseBindlessTextures,UsePersistentBuffers and UseOpenGLDebug, switching to 3.3 context (min. version)."), MajorVersion, MinorVersion);
-
-                    goto InitContext;
-                }
-            }
-            return 0;
-        }
-        else
-        {
-            appErrorf(TEXT("XOpenGL: No OpenGL ES %i.%i context support."), MajorVersion, MinorVersion);
-            return 0;
-        }
-	}
-
-	MakeCurrent();
-
-	if (OpenGLVersion == GL_ES)
-		gladLoadGLES2Loader((GLADloadproc)SDL_GL_GetProcAddress);
-	else
-		gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
-
-	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
-	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
-	debugf(NAME_Init, TEXT("GL_RENDERER   : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER)));
-	debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
-	debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
-
-	glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
-	for (INT i = 0; i<NumberOfExtensions; i++)
-	{
-		FString ExtensionString = appFromAnsi((const ANSICHAR *)glGetStringi(GL_EXTENSIONS, i));
-		debugf(NAME_DevLoad, TEXT("GL_EXTENSIONS(%i) : %ls"), i, *ExtensionString);
-	}
-	if (OpenGLVersion == GL_ES)
-		debugf(NAME_Init, TEXT("XOpenGL: OpenGL ES %i.%i context initialized!"), MajorVersion, MinorVersion);
-	else
-		debugf(NAME_Init, TEXT("XOpenGL: OpenGL %i.%i core context initialized!"), MajorVersion, MinorVersion);
-
-	if (UseOpenGLDebug)
-	{
-		glEnable(GL_DEBUG_OUTPUT);
-		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-		glDebugMessageCallback(UXOpenGLRenderDevice::DebugCallback, NULL);
-		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-		GWarn->Logf(TEXT("XOpenGL: OpenGL debugging enabled, this can cause severe performance drain!"));
-	}
-
-	AllContexts.AddItem(glContext);
+    // On non-Windows targets, we need to specify the requested GL version
+    // before creating the window
+	glContext = SDL_GL_CreateContext((SDL_Window*)Window);
 #else
-	if (!bContextInitialized)
+	HWND TmpWnd = (HWND)Window;
+	HDC TmpDC = GetDC(TmpWnd);
+	
+	iPixelFormat = 0;
+
+	memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
+	pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
+	pfd.nVersion = 1;
+	pfd.dwFlags = PFD_DOUBLEBUFFER | PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW;
+	pfd.iPixelType = PFD_TYPE_RGBA;
+	pfd.cColorBits = DesiredColorBits;
+	pfd.cDepthBits = DesiredDepthBits;
+	pfd.iLayerType = PFD_MAIN_PLANE;
+
+	if (UseAA && !GIsEditor)
 	{
-		PIXELFORMATDESCRIPTOR temppfd{};
-		temppfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-		temppfd.nVersion = 1;
-		temppfd.dwFlags = PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER;
-		temppfd.iPixelType = PFD_TYPE_RGBA;
-		temppfd.cColorBits = DesiredColorBits;
-		temppfd.cDepthBits = DesiredDepthBits;
-		//temppfd.cStencilBits = DesiredStencilBits;
-		temppfd.cAlphaBits = 0;
-		temppfd.iLayerType = PFD_MAIN_PLANE;
-		DWORD Style = WS_OVERLAPPEDWINDOW | WS_CLIPSIBLINGS | WS_CLIPCHILDREN;
-		WNDCLASSEX WndClassEx;
-		memset(&WndClassEx, 0, sizeof(WNDCLASSEX));
-
-		WndClassEx.cbSize = sizeof(WNDCLASSEX);
-		WndClassEx.style = CS_OWNDC | CS_HREDRAW | CS_VREDRAW;
-		WndClassEx.lpfnWndProc = WndProc;
-		WndClassEx.hInstance = hInstance;
-		WndClassEx.hIcon = LoadIcon(NULL, IDI_APPLICATION);
-		WndClassEx.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
-		WndClassEx.hCursor = LoadCursor(NULL, IDC_ARROW);
-		WndClassEx.lpszClassName = L"Win32OpenGLWindow";
-
-		if (RegisterClassEx(&WndClassEx) == 0)
+		while (NumAASamples > 0)
 		{
-			GWarn->Logf(TEXT("XOpenGL: RegisterClassEx failed!"));
-		}
-		HWND TemphWnd = CreateWindowEx(WS_EX_APPWINDOW, WndClassEx.lpszClassName, L"InitWIndow", Style, 0, 0, Viewport->SizeX, Viewport->SizeY, NULL, NULL, hInstance, NULL);
-		HDC TemphDC = GetDC(TemphWnd);
-		INT nPixelFormat = ChoosePixelFormat(TemphDC, &temppfd);
-		if (!nPixelFormat) {
-			pfd.cDepthBits = 24;
-			nPixelFormat = ChoosePixelFormat(TemphDC, &pfd);
-		}
-		if (!nPixelFormat) {
-			pfd.cDepthBits = 16;
-			nPixelFormat = ChoosePixelFormat(TemphDC, &pfd);
-		}
-		check(nPixelFormat);
-		verify(SetPixelFormat(TemphDC, nPixelFormat, &temppfd));
-
-		// oldstyle context init
-		HGLRC tempContext = wglCreateContext(TemphDC);
-		wglMakeCurrent(TemphDC, tempContext);
-
-		wglChoosePixelFormatARB = reinterpret_cast<PFNWGLCHOOSEPIXELFORMATARBPROC>(wglGetProcAddress("wglChoosePixelFormatARB"));
-		if (wglChoosePixelFormatARB == nullptr) {
-			appErrorf(TEXT("wglGetProcAddress() for wglChoosePixelFormatARB failed."));
-			return 0;
-		}
-
-		wglCreateContextAttribsARB = reinterpret_cast<PFNWGLCREATECONTEXTATTRIBSARBPROC>(wglGetProcAddress("wglCreateContextAttribsARB"));
-		if (wglCreateContextAttribsARB == nullptr) {
-			appErrorf(TEXT("wglGetProcAddress() for wglCreateContextAttribsARB failed."));
-			return 0;
-		}
-
-		//init
-		if (!gladLoadGL())
-		{
-			appErrorf(TEXT("XOpenGL: Init failed!"));
-		}
-		else debugf(NAME_Init, TEXT("XOpenGL: Successfully initialized."));
-
-		wglMakeCurrent(NULL, NULL);
-		wglDeleteContext(tempContext);
-		ReleaseDC(TemphWnd, TemphDC);
-		DestroyWindow(TemphWnd);
-		bContextInitialized = true;
-
-	}
-	//Now init pure OpenGL >= 3.3 context.
-InitContext:
-	{
-		memset(&pfd, 0, sizeof(PIXELFORMATDESCRIPTOR));
-		pfd.nSize = sizeof(PIXELFORMATDESCRIPTOR);
-		pfd.nVersion = 1;
-		pfd.dwFlags = PFD_DOUBLEBUFFER | PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW;
-		pfd.iPixelType = PFD_TYPE_RGBA;
-		pfd.cColorBits = DesiredColorBits;
-		pfd.cDepthBits = DesiredDepthBits;
-		pfd.iLayerType = PFD_MAIN_PLANE;
-
-		debugf(NAME_Init, TEXT("XOpenGL: DesiredColorBits: %i"), DesiredColorBits);
-		debugf(NAME_Init, TEXT("XOpenGL: DesiredDepthBits: %i"), DesiredDepthBits);
-
-		if (UseAA && !GIsEditor)
-		{
-			while (NumAASamples > 0)
-			{
-				UINT NumFormats = 0;
-				INT iPixelFormatAttribList[] =
+			UINT NumFormats = 0;
+			INT iPixelFormatAttribList[] =
 				{
 					WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
 					WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
@@ -823,16 +797,16 @@ InitContext:
 					WGL_SAMPLES_ARB, NumAASamples,
 					0 // End of attributes list
 				};
-
-				if (wglChoosePixelFormatARB(hDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats) == TRUE && NumFormats > 0)
-					break;
-				NumAASamples--;
-			}
+			
+			if (wglChoosePixelFormatARB(TmpDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats) == TRUE && NumFormats > 0)
+				break;
+			NumAASamples--;
 		}
-		else
-		{
-			UINT NumFormats = 0;
-			INT iPixelFormatAttribList[] =
+	}
+	else
+	{
+		UINT NumFormats = 0;
+		INT iPixelFormatAttribList[] =
 			{
 				WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
 				WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
@@ -843,126 +817,100 @@ InitContext:
 				WGL_STENCIL_BITS_ARB, 0,//DesiredStencilBits,
 				0 // End of attributes list
 			};
-			wglChoosePixelFormatARB(hDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats);
-		}
+		wglChoosePixelFormatARB(TmpDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats);
+	}
 
-		INT ContextFlags = 0;
-		if (!GL_KHR_debug)
-		{
-			GWarn->Logf(TEXT("OpenGL debugging extension not found!"));
-			UseOpenGLDebug = 0;
-		}
-		if (UseOpenGLDebug)
-			ContextFlags = WGL_CONTEXT_CORE_PROFILE_BIT_ARB | WGL_CONTEXT_DEBUG_BIT_ARB;
-		else ContextFlags = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+	INT ContextFlags = 0;
+	if (!GL_KHR_debug)
+	{
+		GWarn->Logf(TEXT("OpenGL debugging extension not found!"));
+		UseOpenGLDebug = 0;
+	}
+	if (UseOpenGLDebug)
+		ContextFlags = WGL_CONTEXT_CORE_PROFILE_BIT_ARB | WGL_CONTEXT_DEBUG_BIT_ARB;
+	else ContextFlags = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
 
-		INT iContextAttribs[] =
+	INT iContextAttribs[] =
 		{
-			WGL_CONTEXT_MAJOR_VERSION_ARB, MajorVersion,
-			WGL_CONTEXT_MINOR_VERSION_ARB, MinorVersion,
+			WGL_CONTEXT_MAJOR_VERSION_ARB, SelectedMajorVersion,
+			WGL_CONTEXT_MINOR_VERSION_ARB, SelectedMinorVersion,
 			WGL_CONTEXT_FLAGS_ARB, ContextFlags,
 			0 // End of attributes list
 		};
-		SetWindowPixelFormat();
-		hRC = wglCreateContextAttribsARB(hDC, 0, iContextAttribs);
-	}
+	SetWindowPixelFormat(TmpDC);
+	glContext = wglCreateContextAttribsARB(TmpDC, 0, iContextAttribs);
+	ReleaseDC(TmpDC);
+#endif
 
-	if (hRC)
+	if (!glContext)
+		return FALSE;
+
+	if (QueryOnly)
 	{
-		MakeCurrent();
-		Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
-		debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
-		debugf(NAME_Init, TEXT("GL_RENDERER   : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER)));
-		debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
-		debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
-
-		int NumberOfExtensions = 0;
-		glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
-		for (INT i = 0; i < NumberOfExtensions; i++)
-		{
-			FString ExtensionString = appFromAnsi((const ANSICHAR*)glGetStringi(GL_EXTENSIONS, i));
-			AllExtensions += ExtensionString;
-			AllExtensions += TEXT(" ");
-		}
-
-		// Extension list does not necessarily contain (all) wglExtensions !!
-		PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = nullptr;
-		wglGetExtensionsStringARB = reinterpret_cast<PFNWGLGETEXTENSIONSSTRINGARBPROC>(wglGetProcAddress("wglGetExtensionsStringARB"));
-
-		if (wglGetExtensionsStringARB)
-			AllExtensions += appFromAnsi(wglGetExtensionsStringARB(hDC));
-
-
-
-		FString ExtensionString = AllExtensions;
-		FString SplitString;
-		INT i = 0;
-		while (ExtensionString.Split(TEXT(" "), &SplitString, &ExtensionString, 0))
-		{
-			if (SplitString.Len())
-			{
-				debugf(NAME_DevLoad, TEXT("GL_EXTENSIONS(%i): %ls"),i, *SplitString);
-				i++;
-			}
-		}
-		NumberOfExtensions = i;
-
-		if (OpenGLVersion == GL_Core)
-			debugf(NAME_Init, TEXT("OpenGL %i.%i context initialized!"), MajorVersion, MinorVersion);
-		else
-			debugf(NAME_Init, TEXT("OpenGL ES %i.%i context initialized!"), MajorVersion, MinorVersion);
+#if _WIN32
+		wglDeleteContext(glContext);
+#else
+		SDL_GL_DestroyContext(glContext);
+#endif
+		glContext = NULL;
+		return TRUE;
 	}
+
+	MakeCurrent();
+
+#if _WIN32
+	if (!gladLoadGL())
+		appErrorf(TEXT("XOpenGL: Init failed!"));
+#else
+	if (OpenGLVersion == GL_ES)
+		gladLoadGLES2Loader((GLADloadproc)SDL_GL_GetProcAddress);
 	else
+		gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
+#endif
+
+	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
+	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
+	debugf(NAME_Init, TEXT("GL_RENDERER   : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER)));
+	debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
+	debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
+
+	AllExtensions = TEXT("");
+	glGetIntegerv(GL_NUM_EXTENSIONS, &NumberOfExtensions);
+	for (INT i = 0; i<NumberOfExtensions; i++)
+		AllExtensions += appFromAnsi((const ANSICHAR *)glGetStringi(GL_EXTENSIONS, i));
+
+#if _WIN32
+	if (wglGetExtensionsStringARB)
+		AllExtensions += appFromAnsi(wglGetExtensionsStringARB(hDC));
+#endif
+
+	FString ExtensionString = AllExtensions;
+	FString SplitString;
+	INT i = 0;
+	while (ExtensionString.Split(TEXT(" "), &SplitString, &ExtensionString, 0))
 	{
-		if (OpenGLVersion == GL_Core)
+		if (SplitString.Len())
 		{
-			if (UseBindlessTextures || UsePersistentBuffers)
-			{
-				if (MajorVersion == 3 && MinorVersion == 3) // already 3.3
-				{
-					appErrorf(TEXT("XOpenGL: Failed to init OpenGL %i.%i context."), MajorVersion, MinorVersion);
-					return 0;
-				}
-				else
-				{
-					//Safemode, try with lowest supported context, disable >3.3 features.
-					MajorVersion = 3;
-					MinorVersion = 3;
-
-					UsingBindlessTextures = false;
-					UsingPersistentBuffers = false;
-					UsingShaderDrawParameters = false;
-                    UseOpenGLDebug = false;
-
-                    debugf(NAME_Init, TEXT("XOpenGL: %i.%i context failed to initialize. Disabling UseShaderDrawParameters,UseBindlessTextures,UsePersistentBuffers and UseOpenGLDebug, switching to 3.3 context (min. version)."), MajorVersion, MinorVersion);
-					goto InitContext;
-				}
-			}
-			return 0;
-		}
-		else
-		{
-			appErrorf(TEXT("XOpenGL: No OpenGL ES %i.%i context support."), MajorVersion, MinorVersion);
-			return 0;
+			debugf(NAME_DevLoad, TEXT("GL_EXTENSIONS(%i): %ls"),i, *SplitString);
+			i++;
 		}
 	}
-
-
-	if (ShareLists && AllContexts.Num())
-		check(wglShareLists(AllContexts(0), hRC) == 1);
-	AllContexts.AddItem(hRC);
+	NumberOfExtensions = i;
 
 	if (UseOpenGLDebug)
 	{
 		glEnable(GL_DEBUG_OUTPUT);
 		glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
-		glDebugMessageCallback(&UXOpenGLRenderDevice::DebugCallback, NULL);
+		glDebugMessageCallback(UXOpenGLRenderDevice::DebugCallback, NULL);
 		glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, NULL, GL_TRUE);
-		GWarn->Logf(TEXT("OpenGL debugging enabled, this can cause severe performance drain!"));
+		GWarn->Logf(TEXT("XOpenGL: OpenGL debugging enabled, this can cause severe performance drain!"));
 	}
-	else
-		debugfSlow(NAME_DevGraphics, TEXT("XOpenGL: OpenGL debugging disabled."));
+
+#if _WIN32
+	if (ShareLists && AllContexts.Num())
+		check(wglShareLists(AllContexts(0), glContext) == 1);
 #endif
+	AllContexts.AddItem(glContext);
 
 	// Check and validate extensions & settings.
 	CheckExtensions();
@@ -975,32 +923,29 @@ void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
 #if !_WIN32
-	if (!CurrentGLContext || CurrentGLContext != glContext)
+//	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
 		//debugf(TEXT("XOpenGL: MakeCurrent"));
-		INT Result = SDL_GL_MakeCurrent(Window, glContext);
-		if (Result != 0)
+		bool Result = SDL_GL_MakeCurrent(Window, glContext);
+		if (!Result)
 			debugf(TEXT("XOpenGL: MakeCurrent failed with: %ls"), appFromAnsi(SDL_GetError()));
 		CurrentGLContext = glContext;
 	}
 #else
-	if (!hRC && !CurrentGLContext)
+	if (!glContext && !CurrentGLContext)
 		appErrorf(TEXT("No valid GL Context!"));
 
-	if (!hRC && CurrentGLContext)
-		hRC = CurrentGLContext;
-	check(hRC);
+	if (!glContext && CurrentGLContext)
+		glContext = CurrentGLContext;
+	check(glContext);
 
-	if (CurrentGLContext != hRC || GIsEditor)
+	if (CurrentGLContext != glContext || GIsEditor)
 	{
 		check(hDC);
-		if (!wglMakeCurrent(hDC, hRC))
+		if (!wglMakeCurrent(hDC, glContext))
 			appGetLastError();
-		CurrentGLContext = hRC;
+		CurrentGLContext = glContext;
 	}
-
-	CLEAR_GL_ERROR();
-
 #endif
 	unguard;
 }
@@ -1062,42 +1007,33 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	guard(UXOpenGLRenderDevice::SetRes);
 
 	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
-#if MACOSX && 0
-	DesiredStencilBits = 0;
-	DesiredDepthBits = 32;
-#else
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
-#endif
 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "), DesiredColorBits, DesiredStencilBits, DesiredDepthBits);
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
-#if !_WIN32
-	if (glContext && CurrentGLContext && glContext == CurrentGLContext)
-#else
-	if (hRC && CurrentGLContext && hRC == CurrentGLContext)
-#endif
+	if (glContext &&
+		CurrentGLContext &&
+		glContext == CurrentGLContext &&
+		!Fullscreen &&
+		!WasFullscreen &&
+		NewColorBytes == static_cast<INT>(Viewport->ColorBytes))
 	{
-		if (!Fullscreen && !WasFullscreen && NewColorBytes == static_cast<INT>(Viewport->ColorBytes))
-		{
-			// Change window size.
-			if (!Viewport->ResizeViewport(BLIT_HardwarePaint | BLIT_OpenGL, NewX, NewY, NewColorBytes))
-			{
-				return 0;
-			}
+		// Change window size.
+		if (!Viewport->ResizeViewport(BLIT_HardwarePaint | BLIT_OpenGL, NewX, NewY, NewColorBytes))
+			return 0;
 
-			// stijn: force a switch to our context if we're in the editor
+		// stijn: force a switch to our context if we're in the editor
 #if _WIN32
-			if (GIsEditor)
-			{
-				wglMakeCurrent(NULL, NULL);
-				MakeCurrent();
-			}
-#endif
-			glViewport(0, 0, NewX, NewY);
-			return 1;
+		if (GIsEditor)
+		{
+			wglMakeCurrent(NULL, NULL);
+			MakeCurrent();
 		}
+#endif
+		glViewport(0, 0, NewX, NewY);
+		return 1;
 	}
 
 #if _WIN32
@@ -1165,43 +1101,34 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		}
 	}
 	else UnsetRes();
-
-	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
-	if (!Result)
-	{
-		GWarn->Logf(TEXT("XOpenGL: Change window size failed!"));
-		if (Fullscreen)
-		{
-			TCHAR_CALL_OS(ChangeDisplaySettingsW(NULL, 0), ChangeDisplaySettingsA(NULL, 0));
-		}
-		return 0;
-	}
-
-	// (Re)init OpenGL rendering context.
-	if (hRC && hRC != CurrentGLContext)
-		MakeCurrent();
-	else
-		CreateOpenGLContext(Viewport, NewColorBytes);
 #else
-
     if (!Window)
-        SetSDLAttributes(); // Those have to been set BEFORE window creation in SDL2Drv.
+        SetSDLAttributes();
+#endif
 
 	UBOOL Result = Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_OpenGL) : (BLIT_HardwarePaint | BLIT_OpenGL), NewX, NewY, NewColorBytes);
 	if (!Result)
 	{
 		debugf(TEXT("XOpenGL: Change window size failed!"));
+		if (Fullscreen)
+#if _WIN32
+			ChangeDisplaySettingsW(NULL, 0);
+#endif
 		return 0;
 	}
 
-	if (glContext)
-    {
-        if (glContext != CurrentGLContext)
-            MakeCurrent();
-    }
-	else
-		CreateOpenGLContext(Viewport, NewColorBytes);
+#if _WIN32
+	hWnd = (HWND)Viewport->GetWindow();
+	hDC = GetDC(hWnd);
+#else
+	Window = (SDL_Window*)Viewport->GetWindow();
 #endif
+
+	// (Re)init OpenGL rendering context.
+	if (glContext)
+		MakeCurrent();
+	else
+		CreateOpenGLContext(Viewport->GetWindow(), NewColorBytes);
 
 	// Flush textures.
 	Flush(1);
@@ -1236,7 +1163,7 @@ void UXOpenGLRenderDevice::SwapControl()
 	switch (UseVSync)
 	{
 	case VS_Off:
-		if (SDL_GL_SetSwapInterval(0) != 0)
+		if (!SDL_GL_SetSwapInterval(0))
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
 		else
         {
@@ -1244,7 +1171,7 @@ void UXOpenGLRenderDevice::SwapControl()
         }
 		break;
 	case VS_On:
-		if (SDL_GL_SetSwapInterval(1) != 0)
+		if (!SDL_GL_SetSwapInterval(1))
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
 		else
         {
@@ -1252,10 +1179,10 @@ void UXOpenGLRenderDevice::SwapControl()
         }
 		break;
 	case VS_Adaptive:
-		if (SDL_GL_SetSwapInterval(-1) != 0)
+		if (!SDL_GL_SetSwapInterval(-1))
         {
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed. Falling back to SwapInterval 0 (VSync Off)."));
-			if (SDL_GL_SetSwapInterval(0) != 0)
+			if (!SDL_GL_SetSwapInterval(0))
                 debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
         }
 		else
@@ -1264,7 +1191,7 @@ void UXOpenGLRenderDevice::SwapControl()
         }
 		break;
 	default:
-		if (SDL_GL_SetSwapInterval(0) != 0)
+		if (!SDL_GL_SetSwapInterval(0))
 			debugf(NAME_Init, TEXT("XOpenGL: Setting default VSync off has failed."));
 		else
         {
@@ -1413,11 +1340,11 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 	CurrentBlendPolyFlags = 0;
 
-    SetProgram(No_Prog);
+	SetProgram(No_Prog);
 
 	SwapControl();
 
-	if (DistanceFogBuffer.GetElementPtr(0))
+	if (DistanceFogBuffer.Buffer)
 		ResetDistanceFog();
 
 	StoredOrthoFovAngle = 0;
@@ -1477,7 +1404,7 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 void UXOpenGLRenderDevice::UpdateCoords(FSceneNode* Frame)
 {
     guard(UXOpenGLRenderDevice::UpdateCoords);
-
+	
 	auto FrameState = FrameStateBuffer.GetElementPtr(0);
 
     // Update Coords:  World to Viewspace projection.
@@ -1503,7 +1430,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 
 	//Flush Buffers.
 	SetProgram(No_Prog);
-
+	
 	ResetDistanceFog();
 
 	//avoid some overhead, only calculate and set again if something was really changed.
@@ -1749,12 +1676,12 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	check(LockCount == 0);
 	++LockCount;
-    
+	
 	MakeCurrent();
 
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
-
+		
 	if (glClearDepthf)
 		glClearDepthf(1.f);
 #ifndef __EMSCRIPTEN__
@@ -1940,7 +1867,7 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 	guard(UXOpenGLRenderDevice::SetProgram);
 
 	if (ActiveProgram != NextProgram)
-	{		
+	{
 		// Flush the old program
 		Shaders[ActiveProgram]->DeactivateShader();
 
@@ -1989,14 +1916,14 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 	const auto CurrentProgram = ActiveProgram;
 	SetProgram(No_Prog);
 	SetProgram(CurrentProgram);
-
+	
 	// stijn: you have a serious problem in Engine/Render if you need this SetSceneNode call here!
 #if !MACOSX
 	SetSceneNode(Frame);
 #endif
 	SetBlend(PF_Occlude);
 	glClear(GL_DEPTH_BUFFER_BIT);
-
+	
 	unguard;
 }
 
@@ -2066,7 +1993,9 @@ FString GetTrueFalse(UBOOL Value)
 void UXOpenGLRenderDevice::Exit()
 {
 	guard(UXOpenGLRenderDevice::Exit);
-	debugf(NAME_Exit, TEXT("XOpenGL: Exit"));
+	debugf(TEXT("XOpenGL: Exit"));
+
+	MakeCurrent();
 
 	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);
@@ -2077,27 +2006,20 @@ void UXOpenGLRenderDevice::Exit()
 	SharedBindMap = NULL;
 	CurrentGLContext = NULL;
 
-# if !UNREAL_TOURNAMENT_OLDUNREAL
-#  if SDL2BUILD
-	SDL_GL_DeleteContext(glContext);
-#  elif SDL3BUILD
+	SDL_GL_MakeCurrent(Window, NULL);
 	SDL_GL_DestroyContext(glContext);
-#  endif
-# endif
 
 	AllContexts.RemoveItem(glContext);
 #else
 	// Shut down this GL context. May fail if window was already destroyed.
-	check(hRC)
+	check(glContext)
 	CurrentGLContext = NULL;
 	wglMakeCurrent(NULL, NULL);
-	wglDeleteContext(hRC);
-	verify(AllContexts.RemoveItem(hRC) == 1);
-	hRC = NULL;
+	wglDeleteContext(glContext);
+	verify(AllContexts.RemoveItem(glContext) == 1);
+	glContext = NULL;
 	if (WasFullscreen)
-	{
 		ChangeDisplaySettingsW(NULL, 0);
-	}
 
 	if (hDC)
 		ReleaseDC(hWnd, hDC);
@@ -2105,13 +2027,14 @@ void UXOpenGLRenderDevice::Exit()
 	ResetShaders();
 	if (AllContexts.Num() == 0 && SharedBindMap)
 	{
-	  delete SharedBindMap;
-	  SharedBindMap = NULL;
+		delete SharedBindMap;
+		SharedBindMap = NULL;
 	}
 
 	// Shut down global GL.
 	if (AllContexts.Num() == 0)
 		AllContexts.~TArray<HGLRC>();
+	NumDevices--;
 #endif
 
 #if _WIN32 && !UNREAL_OLDUNREAL && !UNREAL_TOURNAMENT_OLDUNREAL
@@ -2196,20 +2119,16 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 #if !_WIN32
 	CurrentGLContext = NULL;
 # if !UNREAL_TOURNAMENT_OLDUNREAL
-#  if SDL2BUILD
-	SDL_GL_DeleteContext(glContext);
-#  else
 	SDL_GL_DestroyContext(glContext);
-#  endif
 # endif
 #else
 # if XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP
 	// Shut down this GL context. May fail if window was already destroyed.
 	CurrentGLContext = NULL;
 	wglMakeCurrent(NULL, NULL);
-	wglDeleteContext(hRC);
-	AllContexts.RemoveItem(hRC);
-	hRC = NULL;
+	wglDeleteContext(glContext);
+	AllContexts.RemoveItem(glContext);
+	glContext = NULL;
 # endif
 
 	if (WasFullscreen)
@@ -2371,10 +2290,15 @@ HGLRC				UXOpenGLRenderDevice::CurrentGLContext = NULL;
 TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
 PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
 PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
+PFNWGLGETEXTENSIONSSTRINGARBPROC UXOpenGLRenderDevice::wglGetExtensionsStringARB = nullptr;
 #endif
-INT					UXOpenGLRenderDevice::LogLevel = 0;
-DWORD				UXOpenGLRenderDevice::ComposeSize = 0;
-BYTE*				UXOpenGLRenderDevice::Compose = NULL;
+INT	  UXOpenGLRenderDevice::LogLevel = 0;
+DWORD UXOpenGLRenderDevice::ComposeSize = 0;
+BYTE* UXOpenGLRenderDevice::Compose = NULL;
+INT   UXOpenGLRenderDevice::NumDevices = 0;
+BOOL  UXOpenGLRenderDevice::SelectedGLVersion = FALSE;
+INT   UXOpenGLRenderDevice::SelectedMajorVersion = 3;
+INT   UXOpenGLRenderDevice::SelectedMinorVersion = 3;
 
 TOpenGLMap<QWORD, UXOpenGLRenderDevice::FCachedTexture> *UXOpenGLRenderDevice::SharedBindMap;
 
