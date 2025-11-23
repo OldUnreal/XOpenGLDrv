@@ -641,7 +641,9 @@ InitContext:
 	if (!Window)
 		appErrorf(TEXT("XOpenGL: No SDL Window found!"));
 
-	glContext = SDL_GL_CreateContext(Window);
+	glContext = SDL_GL_GetCurrentContext();
+	if (glContext == NULL)
+		glContext = SDL_GL_CreateContext(Window);
 
 	if (glContext == NULL)
 	{
@@ -978,7 +980,7 @@ void UXOpenGLRenderDevice::MakeCurrent()
 		//debugf(TEXT("XOpenGL: MakeCurrent"));
 		INT Result = SDL_GL_MakeCurrent(Window, glContext);
 		if (Result != 0)
-			debugf(TEXT("XOpenGL: MakeCurrent failed with: %ls\n"), appFromAnsi(SDL_GetError()));
+			debugf(TEXT("XOpenGL: MakeCurrent failed with: %ls"), appFromAnsi(SDL_GetError()));
 		CurrentGLContext = glContext;
 	}
 #else
@@ -1414,6 +1416,9 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
     SetProgram(No_Prog);
 
 	SwapControl();
+
+	if (DistanceFogBuffer.GetElementPtr(0))
+		ResetDistanceFog();
 
 	StoredOrthoFovAngle = 0;
 	StoredOrthoFX = 0;
