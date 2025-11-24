@@ -241,7 +241,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 }
 
 #if _WIN32
-HWND UXOpenGLRenderDevice::CreateTemporaryWindow(HDC& OutDC) const
+HWND UXOpenGLRenderDevice::CreateTemporaryWindow(HDC& OutDC)
 {
 	// Create a temporary context so we can load the wgl functions
 	PIXELFORMATDESCRIPTOR temppfd{};
@@ -482,7 +482,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 		wglMakeCurrent(NULL, NULL);
 		wglDeleteContext(tempContext);
-		DestroyTemporaryWindow(TmphWnd, TmphDC);
+		DestroyTemporaryWindow(TemphWnd, TemphDC);
 	}
 #endif
 
@@ -672,8 +672,8 @@ void UXOpenGLRenderDevice::SelectGLVersion()
 		SelectedMajorVersion = 4;
 		SelectedMinorVersion = 1;
 #else
-		MajorVersion = 3;
-		MinorVersion = 3;
+		SelectedMajorVersion = 3;
+		SelectedMinorVersion = 3;
 		if (UseShaderDrawParameters)
 		{
 			if (!IsSupportedGLVersion(4, 6))
@@ -838,7 +838,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 		};
 	SetWindowPixelFormat(TmpDC);
 	glContext = wglCreateContextAttribsARB(TmpDC, 0, iContextAttribs);
-	ReleaseDC(TmpDC);
+	ReleaseDC(TmpWnd, TmpDC);
 #endif
 
 	if (!glContext)
