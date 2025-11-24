@@ -561,7 +561,6 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 		InViewport->GetOuterUClient()->NoLighting = 1; // Disable (Engine) lighting.
 #endif
 
-	// stijn: This ResetFog call was missing and caused the black screen bug in UT469
 	ResetDistanceFog();
 
 	SetFrameStateUniforms();
@@ -923,9 +922,8 @@ void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
 #if !_WIN32
-//	if (!CurrentGLContext || CurrentGLContext != glContext)
+	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
-		//debugf(TEXT("XOpenGL: MakeCurrent"));
 		bool Result = SDL_GL_MakeCurrent(Window, glContext);
 		if (!Result)
 			debugf(TEXT("XOpenGL: MakeCurrent failed with: %ls"), appFromAnsi(SDL_GetError()));
@@ -1292,11 +1290,10 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 
 #if _WIN32
 	if (GIsEditor)
-	{
 		wglMakeCurrent(NULL, NULL);
-		MakeCurrent();
-	}
 #endif
+
+	MakeCurrent();
 
 	// Create a list of lights.
 	if (LightList.Num())
@@ -1324,10 +1321,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	BindMap->Empty();
 
 	if (Binds.Num())
-	{
-		//debugf(TEXT("Binds.Num() %i"),Binds.Num());
 		glDeleteTextures(Binds.Num(), (GLuint*)&Binds(0));
-	}
 
 	for (INT i = 0; i < 8; i++) // Also reset all multi textures.
 		SetNoTexture(i);
@@ -1884,6 +1878,9 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 #if ENGINE_VERSION==227
 void UXOpenGLRenderDevice::SetDistanceFog(FFogSurf& Surf)
 {
+	// Stop batching
+	Shaders[ActiveProgram]->Flush(false);
+	
 	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
 	DistanceFogInfo->FogColor = glm::vec4(Surf.FogColor.X, Surf.FogColor.Y, Surf.FogColor.Z, Surf.FogColor.W);
 	DistanceFogInfo->FogStart = Surf.FogDistanceStart;
@@ -1901,6 +1898,7 @@ void UXOpenGLRenderDevice::ResetDistanceFog()
 	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
 	if (DistanceFogInfo->FogMode != -1)
 	{
+		Shaders[ActiveProgram]->Flush(false);
 		DistanceFogInfo->FogMode = -1;
 		DistanceFogBuffer.Bind();
 		DistanceFogBuffer.BufferData(true);
@@ -1912,10 +1910,7 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 {
 	guard(UXOpenGLRenderDevice::ClearZ);
 
-	// stijn: force a flush before we clear the depth buffer
-	const auto CurrentProgram = ActiveProgram;
-	SetProgram(No_Prog);
-	SetProgram(CurrentProgram);
+	Shaders[ActiveProgram]->Flush(false);
 	
 	// stijn: you have a serious problem in Engine/Render if you need this SetSceneNode call here!
 #if !MACOSX
@@ -1940,6 +1935,8 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 
 	SizeX = Viewport->SizeX;
 	SizeY = Viewport->SizeY;
+
+	MakeCurrent();
 
 	glReadPixels(0, 0, SizeX, SizeY, GL_RGBA, GL_UNSIGNED_BYTE, Pixels);
 	for (INT i = 0; i<SizeY / 2; i++)
