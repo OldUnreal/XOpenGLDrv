@@ -1887,8 +1887,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 #else
 	UBOOL SetWindowPixelFormat(HDC DC);
 	void  PrintFormat(HDC hDC, INT nPixelFormat);
-	HWND CreateTemporaryWindow(HDC& OutDC) const;
-	void DestroyTemporaryWindow(HWND TmphWnd, DC TmphDC) const;
+	HWND CreateTemporaryWindow(HDC& OutDC);
+	void DestroyTemporaryWindow(HWND TmphWnd, HDC TmphDC) const;
 #endif
 
 	static QSORT_RETURN CDECL CompareRes(const FPlane* A, const FPlane* B) {
