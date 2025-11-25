@@ -183,27 +183,16 @@ void main(void)
   mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
 #if OPT_BumpMaps
+  vec3 Tangent;
+  vec3 Bitangent;
+  vec3 T;
+  vec3 B;
   if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
   {
-    vec3 Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
-    vec3 Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
-    vec3 T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));
-    vec3 B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));
-
-   for (int i = 0; i < 3; ++i)
-   {
-     if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
-     {
-        vec3 N = normalize(vec3(modelMat * In[i].Normals));
-
-        // TBN must have right handed coord system.
-        // if (dot(cross(N, T), B) < 0.0)
-        // T = T * -1.0;
-        Out.TBNMat = mat3(T, B, N);
-        Out.TangentViewPos = Out.TBNMat * normalize(FrameCoords[0].xyz);
-        Out.TangentFragPos = Out.TBNMat * In[i].Coords.xyz;
-      }
-    }
+    Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
+    Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
+    T = normalize(vec3(modelMat * vec4(Tangent, 0.0)));
+    B = normalize(vec3(modelMat * vec4(Bitangent, 0.0)));
   }
 #endif
 	
@@ -215,6 +204,19 @@ void main(void)
 
   for (int i = 0; i < 3; ++i)
   {
+#if OPT_BumpMaps
+    if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+    {
+      vec3 N = normalize(vec3(modelMat * In[i].Normals));
+
+      // TBN must have right handed coord system.
+      // if (dot(cross(N, T), B) < 0.0)
+      // T = T * -1.0;
+      Out.TBNMat = mat3(T, B, N);
+      Out.TangentViewPos = Out.TBNMat * normalize(FrameCoords[0].xyz);
+      Out.TangentFragPos = Out.TBNMat * In[i].Coords.xyz;
+    }
+#endif
 #if OPT_DistanceFog || OPT_ClipDistance
     Out.EyeSpacePos = In[i].EyeSpacePos;
 #endif
