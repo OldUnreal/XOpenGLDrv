@@ -204,6 +204,7 @@ void main(void)
         Out.TangentFragPos = Out.TBNMat * In[i].Coords.xyz;
       }
     }
+  }
 #endif
 	
 #if OPT_ClipDistance
