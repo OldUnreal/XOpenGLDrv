@@ -763,7 +763,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 	glContext = SDL_GL_CreateContext((SDL_Window*)Window);
 #else
 	HWND TmpWnd = (HWND)Window;
-	HDC TmpDC = GetDC(TmpWnd);
+	hDC = GetDC(TmpWnd);
 	
 	iPixelFormat = 0;
 
@@ -795,7 +795,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 					0 // End of attributes list
 				};
 			
-			if (wglChoosePixelFormatARB(TmpDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats) == TRUE && NumFormats > 0)
+			if (wglChoosePixelFormatARB(hDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats) == TRUE && NumFormats > 0)
 				break;
 			NumAASamples--;
 		}
@@ -814,7 +814,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 				WGL_STENCIL_BITS_ARB, 0,//DesiredStencilBits,
 				0 // End of attributes list
 			};
-		wglChoosePixelFormatARB(TmpDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats);
+		wglChoosePixelFormatARB(hDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats);
 	}
 
 	INT ContextFlags = 0;
@@ -834,9 +834,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 			WGL_CONTEXT_FLAGS_ARB, ContextFlags,
 			0 // End of attributes list
 		};
-	SetWindowPixelFormat(TmpDC);
-	glContext = wglCreateContextAttribsARB(TmpDC, 0, iContextAttribs);
-	ReleaseDC(TmpWnd, TmpDC);
+	SetWindowPixelFormat(hDC);
+	glContext = wglCreateContextAttribsARB(hDC, 0, iContextAttribs);
 #endif
 
 	if (!glContext)
@@ -846,6 +845,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 	{
 #if _WIN32
 		wglDeleteContext(glContext);
+		ReleaseDC(TmpWnd, hDC);
 #else
 		SDL_GL_DestroyContext(glContext);
 #endif
@@ -1118,7 +1118,6 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 #if _WIN32
 	hWnd = (HWND)Viewport->GetWindow();
-	hDC = GetDC(hWnd);
 #else
 	Window = (SDL_Window*)Viewport->GetWindow();
 #endif
@@ -1288,11 +1287,6 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	guard(UXOpenGLRenderDevice::Flush);
 
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: Flush"));
-
-#if _WIN32
-	if (GIsEditor)
-		wglMakeCurrent(NULL, NULL);
-#endif
 
 	MakeCurrent();
 
@@ -1998,10 +1992,21 @@ void UXOpenGLRenderDevice::Exit()
 	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);
 
-#if !_WIN32
 	ResetShaders();
-	delete SharedBindMap;
-	SharedBindMap = NULL;
+	if (AllContexts.Num() == 0 && SharedBindMap)
+	{
+		delete SharedBindMap;
+		SharedBindMap = NULL;
+	}
+
+	// Delete UBOs
+	FrameStateBuffer.DeleteBuffer();
+	LightInfoBuffer.DeleteBuffer();
+	GlobalClipPlaneBuffer.DeleteBuffer();
+	EditorStateBuffer.DeleteBuffer();
+	DistanceFogBuffer.DeleteBuffer();
+
+#if !_WIN32
 	CurrentGLContext = NULL;
 
 	SDL_GL_MakeCurrent(Window, NULL);
@@ -2021,13 +2026,7 @@ void UXOpenGLRenderDevice::Exit()
 
 	if (hDC)
 		ReleaseDC(hWnd, hDC);
-	
-	ResetShaders();
-	if (AllContexts.Num() == 0 && SharedBindMap)
-	{
-		delete SharedBindMap;
-		SharedBindMap = NULL;
-	}
+	hDC = NULL;
 
 	// Shut down global GL.
 	if (AllContexts.Num() == 0)
