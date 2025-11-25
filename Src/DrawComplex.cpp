@@ -24,10 +24,12 @@ static void SetTextureHelper
 	INT Multi,
 	FTextureInfo& Info,
 	DWORD PolyFlags,
+	DWORD& DrawFlags,
+	DWORD AddDrawFlag,
 	FLOAT PanBias,
 	glm::vec4* TextureCoords,
 	glm::vec4* TextureInfo,
-	glm::uvec4* TexHandles
+	glm::uint64* TexHandles
 )
 {
 	RenDev->SetTexture(Multi, Info, PolyFlags, PanBias);
@@ -35,7 +37,8 @@ static void SetTextureHelper
 		*TextureCoords = glm::vec4(RenDev->TexInfo[Multi].UMult, RenDev->TexInfo[Multi].VMult, RenDev->TexInfo[Multi].UPan, RenDev->TexInfo[Multi].VPan);
 	if (TextureInfo)
 		*TextureInfo = glm::vec4(Info.Texture->Diffuse > 0.f ? Info.Texture->Diffuse : 1.f, Info.Texture->Specular, Info.Texture->Alpha > 0.f ? Info.Texture->Alpha : 1.f, Info.Texture->TEXTURE_SCALE_NAME);
-	StoreTexHandle(Multi, TexHandles, RenDev->TexInfo[Multi].BindlessTexHandle);
+	TexHandles[Multi] = RenDev->TexInfo[Multi].BindlessTexHandle;
+	DrawFlags |= AddDrawFlag;
 }
 
 /*-----------------------------------------------------------------------------
@@ -57,42 +60,10 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	check(Surface.Texture);
 
 	// Gather options
-	DWORD Options = ShaderOptions::OPT_None;
-	const DWORD NextPolyFlags = GetPolyFlagsAndShaderOptions(Surface.PolyFlags, Options, FALSE);
-	Options |= ShaderOptions::OPT_DiffuseTexture;
-
-#if ENGINE_VERSION==227
-	Options |= ShaderOptions::OPT_DistanceFog;
-	
-	if (Surface.EnvironmentMap && EnvironmentMaps)
-		Options |= ShaderOptions::OPT_EnvironmentMap;
-
-	if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
-		Options |= ShaderOptions::OPT_HeightMap;
-
-	if (Surface.BumpMap && BumpMaps)
-		Options |= ShaderOptions::OPT_BumpMap;
-#else
-	if (BumpMaps && Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap)
-		Options |= ShaderOptions::OPT_BumpMap;
-#endif
-
-	if (Surface.LightMap)
-		Options |= ShaderOptions::OPT_LightMap;
-
-	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
-		Options |= ShaderOptions::OPT_FogMap;
-
-	if (Surface.DetailTexture && DetailTextures)
-		Options |= ShaderOptions::OPT_DetailTexture;
-
-	if (Surface.MacroTexture && MacroTextures)
-		Options |= ShaderOptions::OPT_MacroTexture;
-
+	DWORD DrawFlags = ShaderDrawFlags::DF_None;
+	const DWORD NextPolyFlags = GetPolyFlagsAndDrawFlags(Surface.PolyFlags, DrawFlags, FALSE);
 	if (GIsEditor && NextPolyFlags & PF_Selected)
-		Options |= ShaderOptions::OPT_Selected;
-
-	Shader->SelectShaderSpecialization(ShaderOptions(Options));
+		DrawFlags |= ShaderDrawFlags::DF_Selected;
 
 	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
@@ -124,21 +95,21 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		DrawCallParams->DrawColor = HitTesting() ? FPlaneToVec4(HitColor) : FPlaneToVec4(Surface.FlatColor.Plane());
 
 	// Set Textures
-	SetTextureHelper(this, DiffuseTextureIndex, *Surface.Texture, NextPolyFlags, 0.0, &DrawCallParams->DiffuseUV, Surface.Texture->Texture ? &DrawCallParams->DiffuseInfo : nullptr, DrawCallParams->TexHandles);
+	SetTextureHelper(this, DiffuseTextureIndex, *Surface.Texture, NextPolyFlags, DrawFlags, ShaderDrawFlags::DF_DiffuseTexture, 0.0, &DrawCallParams->DiffuseUV, Surface.Texture->Texture ? &DrawCallParams->DiffuseInfo : nullptr, DrawCallParams->TexHandles);
 	if (!Surface.Texture->Texture)
 		DrawCallParams->DiffuseInfo = glm::vec4(1.f, 0.f, 0.f, 1.f);
 
 	if (Surface.LightMap)
-		SetTextureHelper(this, LightMapIndex, *Surface.LightMap, PF_None, -0.5, &DrawCallParams->LightMapUV, nullptr, DrawCallParams->TexHandles);
+		SetTextureHelper(this, LightMapIndex, *Surface.LightMap, PF_None, DrawFlags, ShaderDrawFlags::DF_LightMap, -0.5, &DrawCallParams->LightMapUV, nullptr, DrawCallParams->TexHandles);
 
 	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
-		SetTextureHelper(this, FogMapIndex, *Surface.FogMap, PF_AlphaBlend, -0.5, &DrawCallParams->FogMapUV, nullptr, DrawCallParams->TexHandles);
+		SetTextureHelper(this, FogMapIndex, *Surface.FogMap, PF_AlphaBlend, DrawFlags, ShaderDrawFlags::DF_FogMap, -0.5, &DrawCallParams->FogMapUV, nullptr, DrawCallParams->TexHandles);
 
 	if (Surface.DetailTexture && DetailTextures)
-		SetTextureHelper(this, DetailTextureIndex, *Surface.DetailTexture, PF_None, 0.0, &DrawCallParams->DetailUV, nullptr, DrawCallParams->TexHandles);
+		SetTextureHelper(this, DetailTextureIndex, *Surface.DetailTexture, PF_None, DrawFlags, ShaderDrawFlags::DF_DetailTexture, 0.0, &DrawCallParams->DetailUV, nullptr, DrawCallParams->TexHandles);
 
 	if (Surface.MacroTexture && MacroTextures)
-		SetTextureHelper(this, MacroTextureIndex, *Surface.MacroTexture, PF_None, 0.0, &DrawCallParams->MacroUV, &DrawCallParams->MacroInfo, DrawCallParams->TexHandles);
+		SetTextureHelper(this, MacroTextureIndex, *Surface.MacroTexture, PF_None, DrawFlags, ShaderDrawFlags::DF_MacroTexture, 0.0, &DrawCallParams->MacroUV, &DrawCallParams->MacroInfo, DrawCallParams->TexHandles);
 
 #if ENGINE_VERSION==227
 	if (Surface.BumpMap && BumpMaps)
@@ -153,21 +124,22 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Surface.Texture->Texture->BumpMap->Lock(Shader->BumpMapInfo, FTime(), 0, this);
 # endif
 #endif
-		SetTextureHelper(this, BumpMapIndex, FTEXTURE_GET(Shader->BumpMapInfo), PF_None, 0.0, nullptr, &DrawCallParams->BumpMapInfo, DrawCallParams->TexHandles);
+		SetTextureHelper(this, BumpMapIndex, FTEXTURE_GET(Shader->BumpMapInfo), PF_None, DrawFlags, ShaderDrawFlags::DF_BumpMap, 0.0, nullptr, &DrawCallParams->BumpMapInfo, DrawCallParams->TexHandles);
 	}
 
 #if ENGINE_VERSION==227
 	if (Surface.EnvironmentMap && EnvironmentMaps)
-		SetTextureHelper(this, EnvironmentMapIndex, *Surface.EnvironmentMap, PF_None, 0.0, &DrawCallParams->EnviroMapUV, nullptr, DrawCallParams->TexHandles);
+		SetTextureHelper(this, EnvironmentMapIndex, *Surface.EnvironmentMap, PF_None, DrawFlags, ShaderDrawFlags::DF_EnvironmentMap, 0.0, &DrawCallParams->EnviroMapUV, nullptr, DrawCallParams->TexHandles);
 
 	if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
-		SetTextureHelper(this, HeightMapIndex, *Surface.HeightMap, PF_None, 0.0, nullptr, &DrawCallParams->HeightMapInfo, DrawCallParams->TexHandles);
+		SetTextureHelper(this, HeightMapIndex, *Surface.HeightMap, PF_None, DrawFlags, ShaderDrawFlags::DF_HeightMap, 0.0, nullptr, &DrawCallParams->HeightMapInfo, DrawCallParams->TexHandles);
 #endif
 
 	// Other draw data
 	DrawCallParams->XAxis = glm::vec4(Facet.MapCoords.XAxis.X, Facet.MapCoords.XAxis.Y, Facet.MapCoords.XAxis.Z, Facet.MapCoords.XAxis | Facet.MapCoords.Origin);
 	DrawCallParams->YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
 	DrawCallParams->ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, 0.0);
+	DrawCallParams->DrawFlags = DrawFlags;
 
 	Shader->DrawBuffer.StartDrawCall();
 	auto DrawID = Shader->DrawBuffer.GetDrawID();
@@ -220,7 +192,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	Shader->ParametersBuffer.Advance(1);
 
 #if ENGINE_VERSION!=227
-	if (Options & ShaderOptions::OPT_BumpMap)
+	if (DrawFlags & ShaderDrawFlags::DF_BumpMap)
 		Surface.Texture->Texture->BumpMap->Unlock(Shader->BumpMapInfo);
 #endif
 
@@ -246,41 +218,32 @@ UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, 
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::ComplexParametersIndex;
 	NumTextureSamplers				= 8;
 	DrawMode						= GL_TRIANGLES;
-	NumVertexAttributes				= 3;
 	UseSSBOParametersBuffer			= RenDev->UsingShaderDrawParameters;
 	ParametersInfo					= DrawComplexParametersInfo;
 	VertexShaderFunc				= &BuildVertexShader;
 	GeoShaderFunc					= nullptr;
 	FragmentShaderFunc				= &BuildFragmentShader;
+	RelevantSpecializationOptions =
+		ShaderCompilationOptions::OPT_DetailTextures |
+		ShaderCompilationOptions::OPT_MacroTextures |
+		ShaderCompilationOptions::OPT_EnvironmentMaps |
+		ShaderCompilationOptions::OPT_BumpMaps |
+		ShaderCompilationOptions::OPT_HeightMaps |
+		ShaderCompilationOptions::OPT_HWLighting |
+		ShaderCompilationOptions::OPT_DistanceFog |
+		ShaderCompilationOptions::OPT_ClipDistance |
+		ShaderCompilationOptions::OPT_Editor |
+		ShaderCompilationOptions::OPT_SimulateMultiPass;
 }
 
 void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 {
+	for (INT i = 0; i < 3; ++i)
+		glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, DrawID)));
 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, Normal)));
 	VertBuffer.SetInputLayoutCreated();
-}
-
-void UXOpenGLRenderDevice::DrawComplexProgram::BuildCommonSpecializations()
-{
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_FogMap));
-	if (RenDev->DetailTextures)
-	{
-		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_DetailTexture));
-		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture));
-		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture | ShaderOptions::OPT_Translucent));
-		SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture | ShaderOptions::OPT_FogMap));
-
-		if (RenDev->MacroTextures)
-		{
-			SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_LightMap | ShaderOptions::OPT_DetailTexture | ShaderOptions::OPT_MacroTexture));
-		}
-	}
 }
 
 /*-----------------------------------------------------------------------------

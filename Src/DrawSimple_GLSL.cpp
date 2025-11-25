@@ -29,7 +29,7 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
 static const char* SimpleVertexShader = R"(
 layout(location = 0) in vec3 Coords; // == gl_Vertex
 layout(location = 1) in uint DrawID; // emulated gl_DrawID
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
 out float gl_ClipDistance[OPT_MaxClippingPlanes];
 #endif
 
@@ -37,7 +37,7 @@ void main(void)
 {
   gl_Position = modelviewprojMat * vec4(Coords, 1.0);
 
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   uint ClipIndex = uint(ClipParams.x);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords);
 #endif

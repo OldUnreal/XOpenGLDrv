@@ -556,10 +556,8 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	// Identity
 	FrameState->modelMat = glm::mat4(1.0f);
 
-#if UNREAL_OLDUNREAL
 	if (UseHWLighting)
 		InViewport->GetOuterUClient()->NoLighting = 1; // Disable (Engine) lighting.
-#endif
 
 	ResetDistanceFog();
 

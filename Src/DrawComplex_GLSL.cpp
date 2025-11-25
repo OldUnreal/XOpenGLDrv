@@ -33,6 +33,10 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
 	{"vec4", "ZAxis", 0},
 	{"vec4", "DrawColor", 0},
     {"uvec4", "TexHandles", 4},
+	{"uint", "DrawFlags", 0},
+    {"uint", "Dummy0", 0},
+    {"uint", "Dummy1", 0},
+    {"uint", "Dummy2", 0},
 	{ nullptr, nullptr, 0}
 };
 
@@ -46,42 +50,36 @@ layout(location = 2) in vec4 Normal;
 
 out vec3 vCoords;
 out vec2 vTexCoords;
-
-#if OPT_LightMap
 out vec2 vLightMapCoords;
-#endif
-
-#if OPT_FogMap
 out vec2 vFogMapCoords;
-#endif
 
-#if OPT_DetailTexture
+#if OPT_DetailTextures
 out vec2 vDetailTexCoords;
 #endif
 
-#if OPT_MacroTexture
+#if OPT_MacroTextures
 out vec2 vMacroTexCoords;
 #endif
 
-#if OPT_EnvironmentMap
+#if OPT_EnvironmentMaps
 out vec2 vEnvironmentTexCoords;
 #endif
 
-#if OPT_BumpMap
+#if OPT_BumpMaps
 out vec2 vBumpTexCoords;
 #endif
 
-#if OPT_BumpMap || OPT_HWLighting
+#if OPT_BumpMaps || OPT_HWLighting
 flat out mat3 vTBNMat;
 out vec3 vTangentViewPos;
 out vec3 vTangentFragPos;
 #endif
 
-#if OPT_BumpMap || OPT_DistanceFog || OPT_HWLighting
+#if OPT_BumpMaps || OPT_DistanceFog || OPT_HWLighting
 out vec4 vEyeSpacePos;
 #endif
 
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
 out float gl_ClipDistance[OPT_MaxClippingPlanes];
 #endif
 
@@ -93,9 +91,11 @@ void main(void)
   // UDot/VDot calculation.
   vec3 MapCoordsXAxis = GetXAxis(DrawID).xyz;
   vec3 MapCoordsYAxis = GetYAxis(DrawID).xyz;
-#if OPT_Editor || OPT_BumpMap || OPT_HWLighting
+#if OPT_Editor || OPT_BumpMaps || OPT_HWLighting
   vec3 MapCoordsZAxis = GetZAxis(DrawID).xyz;
 #endif
+
+  uint DrawFlags = GetDrawFlags(DrawID);
 
   float UDot = GetXAxis(DrawID).w;
   float VDot = GetYAxis(DrawID).w;
@@ -110,45 +110,56 @@ void main(void)
   vTexCoords = (MapDot - TexMapPan) * TexMapMult;
 
   // Texture UV Lightmap to fragment
-#if OPT_LightMap
-  vec2 LightMapMult = GetLightMapUV(DrawID).xy;
-  vec2 LightMapPan = GetLightMapUV(DrawID).zw;
-  vLightMapCoords = (MapDot - LightMapPan) * LightMapMult;
-#endif
+  if ((DrawFlags & DF_LightMap) == DF_LightMap)
+  {
+    vec2 LightMapMult = GetLightMapUV(DrawID).xy;
+    vec2 LightMapPan = GetLightMapUV(DrawID).zw;
+    vLightMapCoords = (MapDot - LightMapPan) * LightMapMult;
+  }
 
   // Texture UV FogMap
-#if OPT_FogMap
-  vec2 FogMapMult = GetFogMapUV(DrawID).xy;
-  vec2 FogMapPan = GetFogMapUV(DrawID).zw;
-  vFogMapCoords = (MapDot - FogMapPan) * FogMapMult;
-#endif
+  if ((DrawFlags & DF_FogMap) == DF_FogMap)
+  {
+    vec2 FogMapMult = GetFogMapUV(DrawID).xy;
+    vec2 FogMapPan = GetFogMapUV(DrawID).zw;
+    vFogMapCoords = (MapDot - FogMapPan) * FogMapMult;
+  }
 
   // Texture UV DetailTexture
-#if OPT_DetailTexture
-  vec2 DetailMult = GetDetailUV(DrawID).xy;
-  vec2 DetailPan = GetDetailUV(DrawID).zw;
-  vDetailTexCoords = (MapDot - DetailPan) * DetailMult;
+#if OPT_DetailTextures
+  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
+  {
+    vec2 DetailMult = GetDetailUV(DrawID).xy;
+    vec2 DetailPan = GetDetailUV(DrawID).zw;
+    vDetailTexCoords = (MapDot - DetailPan) * DetailMult;
+  }
 #endif
 
   // Texture UV Macrotexture
-#if OPT_MacroTexture
-  vec2 MacroMult = GetMacroUV(DrawID).xy;
-  vec2 MacroPan = GetMacroUV(DrawID).zw;
-  vMacroTexCoords = (MapDot - MacroPan) * MacroMult;
+#if OPT_MacroTextures
+  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
+  {
+    vec2 MacroMult = GetMacroUV(DrawID).xy;
+    vec2 MacroPan = GetMacroUV(DrawID).zw;
+    vMacroTexCoords = (MapDot - MacroPan) * MacroMult;
+  }
 #endif
 
   // Texture UV EnvironmentMap
-#if OPT_EnvironmentMap  
-  vec2 EnvironmentMapMult = GetEnviroMapUV(DrawID).xy;
-  vec2 EnvironmentMapPan = GetEnviroMapUV(DrawID).zw;
-  vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;
+#if OPT_EnvironmentMaps
+  if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
+  {
+    vec2 EnvironmentMapMult = GetEnviroMapUV(DrawID).xy;
+    vec2 EnvironmentMapPan = GetEnviroMapUV(DrawID).zw;
+    vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;
+  }
 #endif
 
-#if OPT_BumpMap || OPT_HWLighting || OPT_DistanceFog
+#if OPT_BumpMaps || OPT_HWLighting || OPT_DistanceFog
   vEyeSpacePos = modelviewMat * vec4(Coords.xyz, 1.0);
 #endif
 
-#if OPT_BumpMap || OPT_HWLighting
+#if OPT_BumpMaps || OPT_HWLighting
   vec3 EyeSpacePos = normalize(FrameCoords[0].xyz); // despite pretty perfect results (so far) this still seems somewhat wrong to me.
   vec3 T = normalize(vec3(MapCoordsXAxis.x, MapCoordsXAxis.y, MapCoordsXAxis.z));
   vec3 B = normalize(vec3(MapCoordsYAxis.x, MapCoordsYAxis.y, MapCoordsYAxis.z));
@@ -166,7 +177,7 @@ void main(void)
   gl_Position = modelviewprojMat * vec4(Coords.xyz, 1.0);
   vDrawID = DrawID;
 
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   uint ClipIndex = uint(ClipParams.x);
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, Coords.xyz);
 #endif
@@ -177,7 +188,7 @@ void main(void)
 static void EmitParallaxFunction(UXOpenGLRenderDevice* GL, FShaderWriterX& Out)
 {
     Out << R"(
-#if OPT_HeightMap
+#if OPT_HeightMaps
 vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float parallaxHeight)
 {
     float vParallaxScale = GetHeightMapInfo(vDrawID).z * 0.025;
@@ -186,7 +197,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
         if (GL->ParallaxVersion == Parallax_Basic) // very basic implementation
         {
             Out << R"(
-  float height = GetTexel(TexHandle, Texture7, ptexCoords).r;
+  float height = GetTexel(TexHandle, TMUHeightMap, ptexCoords).r;
   return ptexCoords - viewDir.xy * (height * 0.1);
 }
 #endif
@@ -211,12 +222,12 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
   // get initial values
   vec2  currentTexCoords = ptexCoords;
   float currentDepthMapValue = 0.0;
-  currentDepthMapValue = GetTexel(TexHandle, Texture7, currentTexCoords).r;
+  currentDepthMapValue = GetTexel(TexHandle, TMUHeightMap, currentTexCoords).r;
 
   while (currentLayerDepth < currentDepthMapValue)
   {
     currentTexCoords -= deltaTexCoords; // shift texture coordinates along direction of P
-    currentDepthMapValue = GetTexel(TexHandle, Texture7, currentTexCoords).r; // get depthmap value at current texture coordinates
+    currentDepthMapValue = GetTexel(TexHandle, TMUHeightMap, currentTexCoords).r; // get depthmap value at current texture coordinates
     currentLayerDepth += layerDepth; // get depth of next layer
   }
 
@@ -224,7 +235,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
 
   // get depth after and before collision for linear interpolation
   float afterDepth = currentDepthMapValue - currentLayerDepth;
-  float beforeDepth = GetTexel(TexHandle, Texture7, currentTexCoords).r - currentLayerDepth + layerDepth;
+  float beforeDepth = GetTexel(TexHandle, TMUHeightMap, currentTexCoords).r - currentLayerDepth + layerDepth;
 
   // interpolation of texture coordinates
   float weight = afterDepth / (afterDepth - beforeDepth);
@@ -246,14 +257,14 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
   float currentLayerHeight = 0.0; // depth of current layer
   vec2 dtex = vParallaxScale * viewDir.xy / viewDir.z / numLayers; // shift of texture coordinates for each iteration
   vec2 currentTexCoords = ptexCoords; // current texture coordinates
-  float heightFromTexture = GetTexel(TexHandle, Texture7, currentTexCoords).r; // depth from heightmap
+  float heightFromTexture = GetTexel(TexHandle, TMUHeightMap, currentTexCoords).r; // depth from heightmap
 
   // while point is above surface
   while (heightFromTexture > currentLayerHeight)
   {
     currentLayerHeight += layerHeight; // go to the next layer
     currentTexCoords -= dtex; // shift texture coordinates along V
-    heightFromTexture = GetTexel(TexHandle, Texture7, currentTexCoords).r; // new depth from heightmap
+    heightFromTexture = GetTexel(TexHandle, TMUHeightMap, currentTexCoords).r; // new depth from heightmap
   }
 
   ///////////////////////////////////////////////////////////
@@ -274,7 +285,7 @@ vec2 ParallaxMapping(vec2 ptexCoords, vec3 viewDir, uvec2 TexHandle, out float p
     deltaHeight /= 2.0;
  
     // new depth from heightmap
-    heightFromTexture = GetTexel(TexHandle, Texture7, currentTexCoords).r;
+    heightFromTexture = GetTexel(TexHandle, TMUHeightMap, currentTexCoords).r;
 
     // shift along or agains vector V
     if (heightFromTexture > currentLayerHeight) // below the surface
@@ -312,38 +323,32 @@ void UXOpenGLRenderDevice::DrawComplexProgram::BuildFragmentShader(GLuint Shader
     Out << R"(
 in vec3 vCoords;
 in vec2 vTexCoords;
-
-#if OPT_LightMap
 in vec2 vLightMapCoords;
-#endif
-
-#if OPT_FogMap
 in vec2 vFogMapCoords;
-#endif
 
-#if OPT_DetailTexture
+#if OPT_DetailTextures
 in vec2 vDetailTexCoords;
 #endif
 
-#if OPT_MacroTexture
+#if OPT_MacroTextures
 in vec2 vMacroTexCoords;
 #endif
 
-#if OPT_EnvironmentMap
+#if OPT_EnvironmentMaps
 in vec2 vEnvironmentTexCoords;
 #endif
 
-#if OPT_BumpMap
+#if OPT_BumpMaps
 flat in mat3 vTBNMat;
 in vec2 vBumpTexCoords;
 #endif
 
-#if OPT_BumpMap || OPT_HWLighting
+#if OPT_BumpMaps || OPT_HWLighting
 in vec3 vTangentViewPos;
 in vec3 vTangentFragPos;
 #endif
 
-#if OPT_BumpMap || OPT_DistanceFog
+#if OPT_BumpMaps || OPT_DistanceFog
 in vec4 vEyeSpacePos;
 #endif
 
@@ -363,32 +368,42 @@ layout(location = 0, index = 0) out vec4 FragColor;
     EmitParallaxFunction(GL, Out);
 
     Out << R"(
+uvec2 GetTexHandleHelper(uint DrawID, uint Index)
+{
+	uvec4 Handles = GetTexHandles(DrawID, Index / 2u);
+	return (Index % 2u == 0u) ? Handles.xy : Handles.zw;
+}
+
 void main(void)
 {
+  uint DrawFlags = GetDrawFlags(vDrawID);
   mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
   mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
   vec4 TotalColor = vec4(1.0);
   vec2 texCoords = vTexCoords;
 
-#if OPT_BumpMap || OPT_HWLighting
+#if OPT_BumpMaps || OPT_HWLighting
   vec3 TangentViewDir = normalize(vTangentViewPos - vTangentFragPos);
   int NumLights = int(LightData4[0].y);
 #endif
 
-#if OPT_HeightMap
-  float parallaxHeight = 1.0;
-  // get new texture coordinates from Parallax Mapping
-  texCoords = ParallaxMapping(vTexCoords, TangentViewDir, GetTexHandles(vDrawID, 3).zw, parallaxHeight);
-  //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
-  //discard; // texCoords = vTexCoords;
+#if OPT_HeightMaps
+  if ((DrawFlags & DF_HeightMap) == DF_HeightMap)
+  {
+    float parallaxHeight = 1.0;
+    // get new texture coordinates from Parallax Mapping
+    texCoords = ParallaxMapping(vTexCoords, TangentViewDir, GetTexHandleHelper(vDrawID, HeightMapIndex), parallaxHeight);
+    //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
+    //discard; // texCoords = vTexCoords;
+  }
 #endif
 
-  vec4 Color = GetTexel(GetTexHandles(vDrawID, 0).xy, Texture0, texCoords.xy);
+  vec4 Color = GetTexel(GetTexHandleHelper(vDrawID, DiffuseTextureIndex), TMUDiffuse, texCoords.xy);
   Color *= GetDiffuseInfo(vDrawID).x; // Diffuse factor.
   Color.a *= GetDiffuseInfo(vDrawID).z; // Alpha.
 	
-  TotalColor = ApplyPolyFlags(Color);
+  TotalColor = ApplyPolyFlags(Color, DrawFlags);
   vec4 LightColor = vec4(1.0);
 
 #if OPT_HWLighting
@@ -418,22 +433,24 @@ void main(void)
   
   TotalColor *= LightColor;
 
-#elif OPT_LightMap
-
-  LightColor = GetTexel(GetTexHandles(vDrawID, 0).zw, Texture1, vLightMapCoords);
-  // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
-  LightColor.rgb =
+#else
+  if ((DrawFlags & DF_LightMap) == DF_LightMap)
+  {
+    LightColor = GetTexel(GetTexHandleHelper(vDrawID, LightMapIndex), TMULightMap, vLightMapCoords);
+    // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
+    LightColor.rgb =
 # if OPT_GLES
-	LightColor.bgr
+  	  LightColor.bgr
 # else
-	LightColor.rgb
+	  LightColor.rgb
 # endif
-	* (LightMapIntensity * 255.0 / 127.0);
-  LightColor.a = 1.0;
-
+	  * (LightMapIntensity * 255.0 / 127.0);
+    LightColor.a = 1.0;
+  }
 #endif
 
-#if OPT_DetailTexture
+#if OPT_DetailTextures
+  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
   {
     float NearZ = vCoords.z / 512.0;
     float DetailScale = 1.0;
@@ -451,7 +468,7 @@ void main(void)
       bNear = clamp(0.65 - NearZ, 0.0, 1.0);
       if (bNear > 0.0)
       {
-        DetailTexColor = GetTexel(GetTexHandles(vDrawID, 1).zw, Texture3, vDetailTexCoords * DetailScale);
+        DetailTexColor = GetTexel(GetTexHandleHelper(vDrawID, DetailTextureIndex), TMUDetail, vDetailTexCoords * DetailScale);
         vec3 hsvDetailTex = rgb2hsv(DetailTexColor.rgb); // cool idea Han :)
         hsvDetailTex.b += (DetailTexColor.r - 0.1);
         hsvDetailTex = hsv2rgb(hsvDetailTex);
@@ -463,17 +480,21 @@ void main(void)
   }
 #endif
 
-#if OPT_MacroTexture
+#if OPT_MacroTextures
+  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
   {    
-    vec4 MacrotexColor = GetTexel(GetTexHandles(vDrawID, 2).xy, Texture4, vMacroTexCoords); 
-# if OPT_Masked
-    if (MacrotexColor.a < 0.5)
-      discard;
-    else MacrotexColor.rgb /= MacrotexColor.a;
-# elif OPT_AlphaBlended    
-    if (MacrotexColor.a < 0.01)
-      discard;
-# endif
+    vec4 MacrotexColor = GetTexel(GetTexHandleHelper(vDrawID, MacroTextureIndex), TMUMacro, vMacroTexCoords);
+    if ((DrawFlags & DF_Masked) == DF_Masked)
+    {
+      if (MacrotexColor.a < 0.5)
+        discard;
+      else MacrotexColor.rgb /= MacrotexColor.a;
+    }
+	else if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
+    {
+      if (MacrotexColor.a < 0.01)
+        discard;
+    }
 
     vec3 hsvMacroTex = rgb2hsv(MacrotexColor.rgb);
     hsvMacroTex.b += (MacrotexColor.r - 0.1);
@@ -484,12 +505,13 @@ void main(void)
 #endif
 
 	// BumpMap (Normal Map)
-#if OPT_BumpMap
+#if OPT_BumpMaps
+  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
   {
     float MinLight = 0.05f;
     
     //normal from normal map
-    vec3 TextureNormal = normalize(GetTexel(GetTexHandles(vDrawID, 2).zw, Texture5, texCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
+    vec3 TextureNormal = normalize(GetTexel(GetTexHandleHelper(vDrawID, BumpMapIndex), TMUBumpMap, texCoords).rgb * 2.0 - 1.0); // has to be texCoords instead of vBumpTexCoords, otherwise alignment won't work on bumps.
     vec3 BumpColor;
     vec3 TotalBumpColor = vec3(0.0, 0.0, 0.0);
 
@@ -512,9 +534,8 @@ void main(void)
       float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * MinLight);
       float attenuation = NormalLightRadius / (dist + b * dist * dist);
 
-# if OPT_Unlit
-      InLightPos = vec3(1.0, 1.0, 1.0); //no idea whats best here. Arbitrary value based on some tests.
-# endif
+      if ((DrawFlags & DF_Unlit) == DF_Unlit)
+        InLightPos = vec3(1.0, 1.0, 1.0); //no idea whats best here. Arbitrary value based on some tests.
 
       if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight) // Do not consider if not in range or in a different zone.
         continue;
@@ -542,29 +563,31 @@ void main(void)
 
   vec4 FogColor = vec4(0.0);
 
-#if OPT_FogMap
-    FogColor = GetTexel(GetTexHandles(vDrawID, 1).xy, Texture2, vFogMapCoords) * 2.0;
-#endif
+  if ((DrawFlags & DF_FogMap) == DF_FogMap)
+    FogColor = GetTexel(GetTexHandleHelper(vDrawID, FogMapIndex), TMUFogMap, vFogMapCoords) * 2.0;
 
-#if OPT_EnvironmentMap
+#if OPT_EnvironmentMaps
+  if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
   {    
-    vec4 EnvironmentColor = GetTexel(GetTexHandles(vDrawID, 3).xy, Texture6, vEnvironmentTexCoords);
-# if OPT_Masked
-    if (EnvironmentColor.a < 0.5)
-      discard;
-    else EnvironmentColor.rgb /= EnvironmentColor.a;
-# elif OPT_AlphaBlended
-    if (EnvironmentColor.a < 0.01)
-      discard;
-# endif
+    vec4 EnvironmentColor = GetTexel(GetTexHandleHelper(vDrawID, EnvironmentMapIndex), TMUEnvironmentMap, vEnvironmentTexCoords);
+    if ((DrawFlags & DF_Masked) == DF_Masked)
+    {
+      if (EnvironmentColor.a < 0.5)
+        discard;
+      else EnvironmentColor.rgb /= EnvironmentColor.a;
+    }
+    else if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
+    {
+      if (EnvironmentColor.a < 0.01)
+        discard;
+    }
 
     TotalColor *= vec4(EnvironmentColor.rgb, 1.0);
   }
 #endif
 
-#if !OPT_Modulated
+  if ((DrawFlags & DF_Modulated) != DF_Modulated)
     TotalColor = TotalColor * LightColor;
-#endif
 
   TotalColor += FogColor;
 
@@ -572,13 +595,13 @@ void main(void)
   // Add DistanceFog, needs to be added after Light has been applied. 
   if (DistanceFogMode >= 0)
   {
-# if OPT_Modulated
-    vec4 MixColor = vec4(0.5, 0.5, 0.5, 0.0);
-# elif OPT_Translucent && !OPT_EnvironmentMap
-    vec4 MixColor = vec4(0.0, 0.0, 0.0, 0.0);
-# else
-    vec4 MixColor = DistanceFogColor;
-# endif
+    vec4 MixColor;
+    if ((DrawFlags & DF_Modulated) == DF_Modulated)
+      MixColor = vec4(0.5, 0.5, 0.5, 0.0);
+    else if ((DrawFlags & DF_Translucent) == DF_Translucent && (DrawFlags & DF_EnvironmentMap) != DF_EnvironmentMap)
+      MixColor = vec4(0.0, 0.0, 0.0, 0.0);
+    else
+      MixColor = DistanceFogColor;
 
     float FogCoord = abs(vEyeSpacePos.z / vEyeSpacePos.w);
     TotalColor = mix(TotalColor, MixColor, getFogFactor(FogCoord));
@@ -596,22 +619,20 @@ void main(void)
   else if (RendMap == REN_Normals) //Thank you han!
   {
     // Dot.
-    float T = 0.5 * dot(normalize(vCoords), GetZAxis(vDrawID).xyz);    
-#  if OPT_Selected
+    float T = 0.5 * dot(normalize(vCoords), GetZAxis(vDrawID).xyz);
+
     // Selected.
-    TotalColor = vec4(0.0, 0.0, abs(T), 1.0);
-#  else
+    if ((DrawFlags & DF_Selected) == DF_Selected)
+      TotalColor = vec4(0.0, 0.0, abs(T), 1.0);
     // Normal.
-    TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);
-#  endif
+    else    
+      TotalColor = vec4(max(0.0, T), max(0.0, -T), 0.0, 1.0);
   }
 # endif
   else if (RendMap == REN_PlainTex)
     TotalColor = Color;
 
-
-# if OPT_Selected
-  if (RendMap != REN_Normals)
+  if ((DrawFlags & DF_Selected) == DF_Selected && RendMap != REN_Normals)
   {
     TotalColor.r = (TotalColor.r * 0.75);
     TotalColor.g = (TotalColor.g * 0.75);
@@ -620,15 +641,12 @@ void main(void)
     if (TotalColor.a < 0.5)
       TotalColor.a = 0.51;
   }
-# endif
 
   // HitSelection, Zoneview etc.
   if (bool(HitTesting))
     TotalColor = vDrawColor; // Use ONLY DrawColor.
-# if !OPT_Modulated
-  else 
+  else if ((DrawFlags & DF_Modulated) != DF_Modulated)
     TotalColor = GammaCorrect(Gamma, TotalColor);    
-# endif
 
 #endif // OPT_Editor
 
@@ -639,8 +657,9 @@ void main(void)
   FragColor = TotalColor;
 #endif
 
-#if !OPT_Editor && !OPT_Modulated
-  FragColor = GammaCorrect(Gamma, FragColor);
+#if !OPT_Editor
+  if ((DrawFlags & DF_Modulated) != DF_Modulated)
+    FragColor = GammaCorrect(Gamma, FragColor);
 #endif
 }
 )";
@@ -689,7 +708,7 @@ Out << R"(
   // current parameters
   float currentLayerHeight = initialHeight - layerHeight;
   vec2 currentTexCoords = initialTexCoord + texStep;
-  float heightFromTexture = GetTexel(GetTexHandles(vDrawID, 3).zw, Texture7, currentTexCoords).r;
+  float heightFromTexture = GetTexel(GetTexHandleHelper(vDrawID, HeightMapIndex), TMUHeightMap, currentTexCoords).r;
 
   int stepIndex = 1;
 
@@ -708,7 +727,7 @@ Out << R"(
     stepIndex += 1;
     currentLayerHeight -= layerHeight;
     currentTexCoords += texStep;
-    heightFromTexture = GetTexel(GetTexHandles(vDrawID, 3).zw, Texture7, currentTexCoords).r;
+    heightFromTexture = GetTexel(GetTexHandleHelper(vDrawID, HeightMapIndex), TMUHeightMap, currentTexCoords).r;
   }
 
   // Shadowing factor should be 1 if there were no points under the surface

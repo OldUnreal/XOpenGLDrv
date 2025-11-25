@@ -804,7 +804,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	unguard;
 }
 
-DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, BOOL RemoveOccludeIfSolid)
+DWORD UXOpenGLRenderDevice::GetPolyFlagsAndDrawFlags(DWORD PolyFlags, DWORD& DrawFlags, BOOL RemoveOccludeIfSolid)
 {
 	if ((PolyFlags & (PF_RenderFog | PF_Translucent)) != PF_RenderFog)
 		PolyFlags &= ~PF_RenderFog;
@@ -821,33 +821,33 @@ DWORD UXOpenGLRenderDevice::GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD&
 	const DWORD RelevantPolyFlags = (PF_Modulated | PF_RenderFog | PF_Masked | PF_Straight_AlphaBlend | PF_Premultiplied_AlphaBlend | PF_Unlit | PF_Translucent | PF_Environment);
 	if ((CachedPolyFlags & RelevantPolyFlags) ^ (PolyFlags & RelevantPolyFlags))
 	{
-		Options = ShaderOptions::OPT_None;
+		DrawFlags = ShaderDrawFlags::DF_None;
 
 		if (PolyFlags & PF_Modulated)
-			Options |= ShaderOptions::OPT_Modulated;
+			DrawFlags |= ShaderDrawFlags::DF_Modulated;
 
 		if (PolyFlags & PF_RenderFog)
-			Options |= ShaderOptions::OPT_RenderFog;
+			DrawFlags |= ShaderDrawFlags::DF_RenderFog;
 
 		if (PolyFlags & PF_Masked)
-			Options |= ShaderOptions::OPT_Masked;
+			DrawFlags |= ShaderDrawFlags::DF_Masked;
 
 		if (PolyFlags & (PF_Straight_AlphaBlend | PF_Premultiplied_AlphaBlend))
-			Options |= ShaderOptions::OPT_AlphaBlended;
+			DrawFlags |= ShaderDrawFlags::DF_AlphaBlended;
 
 		if (PolyFlags & PF_Translucent)
-			Options |= ShaderOptions::OPT_Translucent;
+			DrawFlags |= ShaderDrawFlags::DF_Translucent;
 
 		if (PolyFlags & PF_Environment)
-			Options |= ShaderOptions::OPT_Environment;
+			DrawFlags |= ShaderDrawFlags::DF_Environment;
 
 		CachedPolyFlags = PolyFlags;
-		CachedShaderOptions = Options;
+		CachedDrawFlags = DrawFlags;
 	}
 	else
 	{
 		// nothing changed
-		Options = CachedShaderOptions;
+		DrawFlags = CachedDrawFlags;
 	}
 
     return PolyFlags;

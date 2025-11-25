@@ -18,7 +18,11 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
 =
 {
 	{"vec4", "DrawColor", 0},
-	{"uvec4", "TexHandles", 0},
+	{"uvec4", "TexHandle", 0},
+	{"uint", "DrawFlags", 0},
+	{"uint", "Dummy0", 0},
+	{"uint", "Dummy1", 0},
+	{"uint", "Dummy2", 0},
 	{ nullptr, nullptr, 0}
 };
 
@@ -77,13 +81,13 @@ in VertexData
 void main(void)
 {	
   vec4 TotalColor;
-  vec4 Color = GetTexel(GetTexHandles(vDrawID).xy, Texture0, In.TexCoords.xy);
+  vec4 Color = GetTexel(GetTexHandle(vDrawID).xy, TMUDiffuse, In.TexCoords.xy);
+  uint DrawFlags = GetDrawFlags(vDrawID);
 
-  TotalColor = ApplyPolyFlags(Color) * GetDrawColor(vDrawID);
+  TotalColor = ApplyPolyFlags(Color, DrawFlags) * GetDrawColor(vDrawID);
 
-#if !OPT_Modulated
-  TotalColor = GammaCorrect(Gamma, TotalColor);
-#endif
+  if ((DrawFlags & DF_Modulated) != DF_Modulated)
+    TotalColor = GammaCorrect(Gamma, TotalColor);
 
 #if OPT_SimulateMultiPass
   FragColor = TotalColor;
@@ -148,7 +152,7 @@ out GeometryData
 	Out << R"(
 } Out;
 
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
 out float gl_ClipDistance[OPT_MaxClippingPlanes];
 #endif
 
@@ -188,7 +192,7 @@ void main()
   Out.TexCoords.x = (U)*UMult;
   Out.TexCoords.y = (V)*VMult;
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, In[0].Coords);
 #endif
   EmitVertex();
@@ -200,7 +204,7 @@ void main()
   Out.TexCoords.x = (U + UL) * UMult;
   Out.TexCoords.y = (V)*VMult;
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, In[1].Coords);
 #endif
   EmitVertex();
@@ -212,7 +216,7 @@ void main()
   Out.TexCoords.x = (U + UL) * UMult;
   Out.TexCoords.y = (V + VL) * VMult;
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, In[2].Coords);
 #endif
   EmitVertex();
@@ -225,7 +229,7 @@ void main()
   Out.TexCoords.x = (U)*UMult;
   Out.TexCoords.y = (V)*VMult;
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, In[0].Coords);
 #endif
   EmitVertex();
@@ -237,7 +241,7 @@ void main()
   Out.TexCoords.x = (U + UL) * UMult;
   Out.TexCoords.y = (V + VL) * VMult;
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, In[1].Coords);
 #endif
   EmitVertex();
@@ -249,7 +253,7 @@ void main()
   Out.TexCoords.x = (U)*UMult;
   Out.TexCoords.y = (V + VL) * VMult;
   gl_Position = modelviewprojMat * vec4(Position, 1.0);
-#if OPT_SupportsClipDistance
+#if OPT_ClipDistance
   gl_ClipDistance[ClipIndex] = PlaneDot(ClipPlane, In[2].Coords);
 #endif
   EmitVertex();  
@@ -282,20 +286,22 @@ void main(void)
   uint DrawID = vDrawID;
 #endif
 
+  uint DrawFlags = GetDrawFlags(DrawID);
+
   vec4 TotalColor;
-  vec4 Color = GetTexel(GetTexHandles(DrawID).xy, Texture0, In.TexCoords.xy);
+  vec4 Color = GetTexel(GetTexHandle(DrawID).xy, TMUDiffuse, In.TexCoords.xy);
 
-  TotalColor = ApplyPolyFlags(Color) * GetDrawColor(DrawID);
+  TotalColor = ApplyPolyFlags(Color, DrawFlags) * GetDrawColor(DrawID);
 
-#if !OPT_Modulated
-  TotalColor = GammaCorrect(Gamma, TotalColor);
-#endif
+  if ((DrawFlags & DF_Modulated) != DF_Modulated)
+    TotalColor = GammaCorrect(Gamma, TotalColor);
 
 #if OPT_Editor
-# if OPT_Selected
-  TotalColor.g = TotalColor.g - 0.04;
-  TotalColor = clamp(TotalColor, 0.0, 1.0);
-# endif
+  if ((DrawFlags & DF_Selected) == DF_Selected)
+  {
+    TotalColor.g = TotalColor.g - 0.04;
+    TotalColor = clamp(TotalColor, 0.0, 1.0);
+  }
 
   if (bool(HitTesting))
     TotalColor = GetDrawColor(DrawID);

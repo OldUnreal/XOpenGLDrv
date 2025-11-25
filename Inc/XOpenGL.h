@@ -330,17 +330,6 @@ inline glm::vec4 FPlaneToVec4(FPlane Plane)
 	return glm::vec4(Plane.X, Plane.Y, Plane.Z, Plane.W);
 }
 
-//
-// SetTexture helper
-//
-inline void StoreTexHandle(INT Index, glm::uvec4* Dst, const glm::uint64 TextureHandle)
-{
-	if (Index % 2)
-		*reinterpret_cast<glm::uint64*>(&Dst[Index / 2].z) = TextureHandle;
-	else
-		*reinterpret_cast<glm::uint64*>(&Dst[Index / 2].x) = TextureHandle;
-}
-
 #ifndef END_LINE
 #define END_LINE "\n"
 #endif
@@ -595,6 +584,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	GLuint NumClipPlanes;
 	BYTE LastZMode;
+	DWORD CachedPolyFlags; // The last set of polyflags we derived drawflags for
+	DWORD CachedDrawFlags; // And the corresponding drawflags
 
 	// Lock variables.
 	FPlane FlashScale, FlashFog;
@@ -668,8 +659,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	} TexInfo[9];
 	
 	bool UsingBindlessTextures;		// Are we currently using bindless textures?
-	DWORD CachedPolyFlags;			// Last PolyFlags we used to select a shader specialization...
-	DWORD CachedShaderOptions;		// ...and the resulting shader options
 
 	//
 	// Hit Testing State
@@ -1144,53 +1133,85 @@ class UXOpenGLRenderDevice : public URenderDevice
 		Complex_Prog,
 		Max_Prog,
 	};
+
+	class ShaderDrawFlags
+	{
+	public:
+		enum
+		{
+			DF_None				= 0x0000,
+
+			// Various types of textures we can use in a shader
+			DF_DiffuseTexture	= 0x0001,
+			DF_LightMap			= 0x0002,
+			DF_FogMap			= 0x0004,
+			DF_DetailTexture	= 0x0008,
+			DF_MacroTexture		= 0x0010,
+			DF_BumpMap			= 0x0020,
+			DF_EnvironmentMap	= 0x0040,
+			DF_HeightMap		= 0x0080,
+
+			// PolyFlags the shader needs to know about
+			DF_Masked			= 0x0100,
+			DF_Unlit			= 0x0200,
+			DF_Modulated		= 0x0400,
+			DF_Translucent		= 0x0800,
+			DF_Environment		= 0x1000,
+			DF_RenderFog		= 0x2000,
+			DF_AlphaBlended		= 0x4000,
+
+			// Per-draw call editor state the shader needs to know about
+			DF_Selected			= 0x8000
+		};
+	};
     
-    class ShaderOptions
+    class ShaderCompilationOptions
     {
 		public:
         enum
         {
-            OPT_None				= 0x000000,
-            
-            // Types of textures we can use in a shader
-            OPT_DiffuseTexture		= 0x000001,
-            OPT_LightMap			= 0x000002,
-            OPT_FogMap				= 0x000004,
-            OPT_DetailTexture		= 0x000010,
-            OPT_MacroTexture		= 0x000020,
-            OPT_BumpMap				= 0x000040,
-            OPT_EnvironmentMap		= 0x000080,
-            OPT_HeightMap			= 0x000100,
-            
-            // Relevant PolyFlags
-            OPT_Masked				= 0x000200,
-            OPT_Unlit				= 0x000400,
-            OPT_Modulated			= 0x000800,
-            OPT_Translucent			= 0x001000,
-            OPT_Environment			= 0x002000,
-            OPT_RenderFog			= 0x004000,
-            OPT_AlphaBlended		= 0x008000,
-            
-            // Miscellaneous
-            OPT_DistanceFog			= 0x010000, // 227 distance fogging code. Seems rather slow
-			OPT_NoNearZ				= 0x020000, // Not actually used in the shader code, but forces a flush when we're switching between NoNearZ and NearZ
-			OPT_Selected			= 0x040000
+            OPT_None				 = 0x000000,
+
+			// Texture types enabled in the renderer config
+			OPT_DetailTextures       = 0x000001,
+			OPT_MacroTextures        = 0x000002,
+			OPT_EnvironmentMaps		 = 0x000004,
+			OPT_BumpMaps			 = 0x000008,
+			OPT_HeightMaps			 = 0x000010,
+
+			// Features enabled in the renderer config
+			OPT_DistanceFog			 = 0x000020,
+			OPT_SimulateMultiPass    = 0x000040,
+			OPT_HWLighting           = 0x000080,
+
+			// Hardware/driver capabilities we're using
+			OPT_GLCore               = 0x000100,
+			OPT_GLES                 = 0x000200,
+			OPT_GeometryShaders      = 0x000400,
+			OPT_BindlessTextures     = 0x000800,
+			OPT_PersistentBuffers    = 0x001000,
+			OPT_ShaderDrawParameters = 0x002000,
+			OPT_ClipDistance         = 0x004000,
+
+			// Enabled editor-specific code
+			OPT_Editor				 = 0x008000
         };
 
-		ShaderOptions(DWORD ShaderOptions)
+		ShaderCompilationOptions(DWORD ShaderOptions)
 		{
 			OptionsMask = ShaderOptions;
 		}
-		ShaderOptions() {}
+		ShaderCompilationOptions() {}
         
         FString GetShortString() const;
         FString GetPreprocessorString() const;
-        
+
+		void SetOptionsForRendererConfig(UXOpenGLRenderDevice* RenDev);
         void SetOption(DWORD Option);
         void UnsetOption(DWORD Option);
         bool HasOption(DWORD Option) const;
         
-        friend DWORD GetTypeHash(const ShaderOptions& Options)
+        friend DWORD GetTypeHash(const ShaderCompilationOptions& Options)
         {
             return Options.OptionsMask;
         }
@@ -1200,25 +1221,30 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return OptionsMask == Options;
 		}
 
-		bool operator==(const ShaderOptions& Options)
+		bool operator==(const ShaderCompilationOptions& Options)
 		{
 			return OptionsMask == Options.OptionsMask;
 		}
+
+		ShaderCompilationOptions operator&(const ShaderCompilationOptions& Options)
+        {
+			return ShaderCompilationOptions(Options.OptionsMask & OptionsMask);
+        }
         
     private:
         FString GetStringHelper(void (*AddOptionFunc)(FString&, const TCHAR*, bool)) const;
         DWORD OptionsMask{};
     };
     
-    class ShaderSpecialization
+    class CompiledShader
     {
     public:
-		ShaderOptions Options{};
+		ShaderCompilationOptions Options{};
         GLuint VertexShaderObject{};
         GLuint GeoShaderObject{};
         GLuint FragmentShaderObject{};
         GLuint ShaderProgramObject{};
-        FString SpecializationName;
+        FString ShaderName;
     };
 
 	// Common interface for all shaders
@@ -1235,20 +1261,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		typedef void (ShaderWriterFunc)(GLuint, class UXOpenGLRenderDevice*, FShaderWriterX&);
 
-		//
-		// We can compile different variants of the same shader functions and specialize them 
-		// based on the invocation context (described by the shader options).
-		// This specialization mechanism allows us to create (nearly) branchless shader code,
-		// which massively boosts performance on some GPUs.
-		//
-		TMap<ShaderOptions, ShaderSpecialization*>   Specializations;
+		// Allow recompiling shaders dynamically when renderer options change
+        CompiledShader*								CurrentSpecialization{};
 
-		//
-		// Lookups in the Specializations map can be quite slow, so we cache the previous
-		// lookup result here.
-		//
-        ShaderSpecialization*                       LastSpecialization{};		
-        ShaderOptions                               LastOptions;
+		// Which options can prompt a recompilation of this shader?
+		ShaderCompilationOptions					RelevantSpecializationOptions;
 
 		MultiDrawIndirectBuffer						DrawBuffer;
 		const TCHAR*                                ShaderName{};
@@ -1260,7 +1277,6 @@ class UXOpenGLRenderDevice : public URenderDevice
         INT                                         ParametersBufferBindingIndex;
         INT                                         NumTextureSamplers;
         GLenum                                      DrawMode;
-		INT											NumVertexAttributes;
 		BOOL										UseSSBOParametersBuffer;
 		const DrawCallParameterInfo*				ParametersInfo;		
 		ShaderWriterFunc*							VertexShaderFunc;
@@ -1270,36 +1286,41 @@ class UXOpenGLRenderDevice : public URenderDevice
 		virtual ~ShaderProgram();
 
 		//
-		// Per-specialization functionality
+		// State support
 		//
 
 		// Binds the uniform with the specified @Name to the binding point with index @BindingIndex in compiled shader program @ProgramObject
-		void  BindUniform(ShaderSpecialization* Specialization, const GLuint BindingIndex, const char* Name) const;
-
-		void GetUniformLocation(ShaderSpecialization* Specialization, GLint& Uniform, const char* Name) const;
+		void BindUniform(CompiledShader* Specialization, const GLuint BindingIndex, const char* Name) const;
+		void GetUniformLocation(CompiledShader* Specialization, GLint& Uniform, const char* Name) const;
 
 		// Binds shader-specific state such as uniforms
-		virtual void BindShaderState(ShaderSpecialization* Specialization);
+		virtual void BindShaderState(CompiledShader* Specialization);
 
-		// Switches to the specified shader specialization, possibly creating/compiling it on-the-fly
-		virtual void SelectShaderSpecialization(ShaderOptions Options);
+		// Switches to the specified shader, possibly creating/compiling it on-the-fly
+		virtual void UseShader();
+
+		// Recompile/respecialize the shader after the renderer options change
+		void RecompileShader(ShaderCompilationOptions Options);
 
 		//
 		// Compilation support
 		//
 
+		// Emit the shared header for a GLSL shader
+		void EmitGlobals(ShaderCompilationOptions Options, GLuint ShaderType, UXOpenGLRenderDevice* RenDev, FShaderWriterX& Out, bool HaveGeoShader);
+
 		// Compiles one shader function		
-		bool CompileShaderFunction(GLuint ShaderFunctionObject, GLuint FunctionType, ShaderOptions Options, ShaderWriterFunc Func, bool HaveGeoShader=false);
+		bool CompileShaderFunction(GLuint ShaderFunctionObject, GLuint FunctionType, ShaderCompilationOptions Options, ShaderWriterFunc Func, bool HaveGeoShader=false);
 
 		// Compiles and links an entire shader program
 		// @GeoShaderFunc may be nullptr
-		bool BuildShaderProgram(ShaderSpecialization* Specialization, ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc);
+		bool BuildShaderProgram(CompiledShader* Shader, ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc);
 
 		// Links the shader program after compiling all of its functions
 		bool LinkShaderProgram(GLuint ShaderProgramObject) const;
 
-		// Completely deletes/unmaps all compiled specializations of this shader
-		void DeleteShaders();
+		// Completely deletes/unmaps this shader
+		void DeleteShader();
 
 		// Used to describe the layout of the drawcall parameters		
 		static void EmitDrawCallParametersHeader(const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseSSBO, bool EmitGetters);
@@ -1328,9 +1349,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		// Dispatches buffered data. If @Rotate is true, we switch to a different (part of a) vertex and parameters buffer before returning
 		virtual void Flush(bool Rotate = false) = 0;
-
-		// Precompiles shaders we're definitely going to need
-		virtual void BuildCommonSpecializations() = 0;
 	};
 
 	// Base class for shader implementations
@@ -1350,7 +1368,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual ~ShaderProgramImpl()
 		{
-			DeleteShaders();
+			DeleteShader();
 			UnmapBuffers();
 		}		
 
@@ -1416,20 +1434,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 			VertBuffer.Wait();
 			VertBuffer.Bind();
 			ParametersBuffer.Bind();
-			for (INT i = 0; i < NumVertexAttributes; ++i)
-				glEnableVertexAttribArray(i);
-			// TODO: Check if we really need this
-			// memset(&DrawCallParams, 0, sizeof(DrawCallParams));
-
-			LastOptions = ShaderOptions::OPT_None;
-			LastSpecialization = nullptr;
+			UseShader();
 		}
 
 		virtual void DeactivateShader()
 		{
 			Flush(false);
-			for (INT i = 0; i < NumVertexAttributes; ++i)
-				glDisableVertexAttribArray(i);
 		}
 
 		virtual void MapBuffers()
@@ -1458,8 +1468,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			VertBuffer.DeleteBuffer();
 			ParametersBuffer.DeleteBuffer();
 		}
-
-		virtual void BuildCommonSpecializations() {}
 
 		// Templated member data
 		DrawCallParamsType                          DrawCallParams;
@@ -1567,13 +1575,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 
 	// ============================== DRAWTILE ==============================
-	struct DrawTileParameters
+	struct alignas(16) DrawTileParameters
 	{
 		glm::vec4		DrawColor;
-		glm::uvec4      TexHandles[1];  // Intentionally made this a uvec4 for alignment purposes 
+		glm::uint64     TexHandles[2]; // mirrored as a uvec4 in GLSL since uint64 is not universally supported
+		glm::uint32     DrawFlags;
+		glm::uint32     Dummy0;
+		glm::uint32     Dummy1;
+		glm::uint32     Dummy2;
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawTileParametersInfo[];
-	static_assert(sizeof(DrawTileParameters) == 0x20, "Invalid tile draw parameters size");
+	static_assert(sizeof(DrawTileParameters) == 48, "Invalid tile draw parameters size");
 
 	struct DrawTileVertexES
 	{
@@ -1608,15 +1620,20 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static_assert(sizeof(DrawSimpleVertex) == 16, "Invalid simple buffered vert size");
 
 	// ============================== DRAWGOURAUD ==============================
-	struct DrawGouraudParameters
+	struct alignas(16) DrawGouraudParameters
 	{
 		glm::vec4 DiffuseInfo;			// UMult, VMult, Diffuse, Alpha
 		glm::vec4 DetailMacroInfo;		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
 		glm::vec4 MiscInfo;				// BumpMap Specular, Gamma
 		glm::vec4 DrawColor;
-		glm::uvec4 TexHandles[4];       // Holds up to 4 glm::uint64 texture handles
+		glm::uint64 TexHandles[8];		// mirrored as 4 uvec4s
+		glm::uint32 DrawFlags;
+		glm::uint32 Dummy0;
+		glm::uint32 Dummy1;
+		glm::uint32 Dummy2;
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawGouraudParametersInfo[];
+	static_assert(sizeof(DrawGouraudParameters) == 144, "Invalid complex drawcall parameters size");
 
 	struct DrawGouraudVertex
 	{
@@ -1630,7 +1647,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static_assert(sizeof(DrawGouraudVertex) == 72, "Invalid gouraud buffered vertex size");
 
 	// ============================== DRAWCOMPLEX ==============================
-	struct DrawComplexParameters
+	struct alignas(16) DrawComplexParameters
 	{
 		glm::vec4 DiffuseUV;
 		glm::vec4 LightMapUV;
@@ -1646,10 +1663,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 YAxis;
 		glm::vec4 ZAxis;
 		glm::vec4 DrawColor;
-		glm::uvec4 TexHandles[4];  // Holds up to 8 glm::uint64 texture handles
+		glm::uint64 TexHandles[8]; // mirrored as 4 uvec2s
+		glm::uint32 DrawFlags;
+		glm::uint32 Dummy0;
+		glm::uint32 Dummy1;
+		glm::uint32 Dummy2;
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawComplexParametersInfo[];
-	static_assert(sizeof(DrawComplexParameters) == 288, "Invalid complex drawcall parameters size");
+	static_assert(sizeof(DrawComplexParameters) == 304, "Invalid complex drawcall parameters size");
 
 	struct DrawComplexVertex
 	{
@@ -1680,7 +1701,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void CreateInputLayout();	
 		void ActivateShader();
 		void DeactivateShader();
-		void BuildCommonSpecializations();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -1697,7 +1717,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void CreateInputLayout();
 		void ActivateShader();
 		void DeactivateShader();
-		void BuildCommonSpecializations();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -1715,7 +1734,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void CreateInputLayout();
 		void ActivateShader();
 		void DeactivateShader();
-		void BuildCommonSpecializations();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -1731,7 +1749,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void CreateInputLayout();
 		void ActivateShader();
 		void DeactivateShader();
-		void BuildCommonSpecializations();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -1748,7 +1765,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
 		void CreateInputLayout();
-		void BuildCommonSpecializations();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -1768,7 +1784,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
 		void CreateInputLayout();
-		void BuildCommonSpecializations();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -1786,7 +1801,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 		NoProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
 		void Flush(bool Rotate);
 		void CreateInputLayout();
-		void BuildCommonSpecializations();
 		void MapBuffers();
 		void UnmapBuffers();
 		void ActivateShader();
@@ -1848,8 +1862,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// Helper functions
 	//
-	void PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
-	void FinishGouraudCall(FTextureInfo& Info);
+	DWORD PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags);
+	void FinishGouraudCall(FTextureInfo& Info, DWORD DrawFlags);
 	void PrepareSimpleCall(ShaderProgram* Shader, glm::uint& OldLineFlags, glm::uint LineFlags, glm::uint& OldBlendMode, glm::uint BlendMode);
 
 	//
@@ -1918,7 +1932,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias);
 	void  SetNoTexture(INT Multi);
-	DWORD GetPolyFlagsAndShaderOptions(DWORD PolyFlags, DWORD& Options, BOOL RemoveOccludeIfSolid);
+	DWORD GetPolyFlagsAndDrawFlags(DWORD PolyFlags, DWORD& DrawFlags, BOOL RemoveOccludeIfSolid);
 	void  SetBlend(DWORD PolyFlags);
 	DWORD SetDepth(DWORD LineFlags);
 	void  SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, UBOOL NoSmooth);

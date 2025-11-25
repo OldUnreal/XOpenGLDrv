@@ -32,13 +32,13 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	auto ShaderCore = dynamic_cast<DrawTileCoreProgram*>(Shaders[Tile_Prog]);
 	auto ShaderES   = dynamic_cast<DrawTileESProgram*>  (Shaders[Tile_Prog]);
 	
-	DWORD Options = ShaderOptions::OPT_None;
-	DWORD NextPolyFlags = GetPolyFlagsAndShaderOptions(PolyFlags, Options, TRUE);
-	Options |= ShaderOptions::OPT_DiffuseTexture;
+	DWORD DrawFlags = ShaderDrawFlags::DF_None;
+	DWORD NextPolyFlags = GetPolyFlagsAndDrawFlags(PolyFlags, DrawFlags, TRUE);
+	DrawFlags |= ShaderDrawFlags::DF_DiffuseTexture;
 	PolyFlags &= ~(PF_RenderHint | PF_Unlit); // Using PF_RenderHint internally for CW/CCW switch.
 
 	if (GIsEditor && NextPolyFlags & PF_Selected)
-		Options |= ShaderOptions::OPT_Selected;
+		DrawFlags |= ShaderDrawFlags::DF_Selected;
 
 	// Hack to render HUD on top of everything in 469
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -72,7 +72,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		CanBuffer = ShaderCore->VertBuffer.CanBuffer(3) && 
 			ShaderCore->ParametersBuffer.CanBuffer(1) &&
 			!ShaderCore->DrawBuffer.IsFull();
-		ShaderCore->SelectShaderSpecialization(ShaderOptions(Options));
 		DrawCallParams = ShaderCore->ParametersBuffer.GetCurrentElementPtr();
 	}
 	else
@@ -80,7 +79,6 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		CanBuffer = ShaderES->VertBuffer.CanBuffer(6) &&
 			ShaderES->ParametersBuffer.CanBuffer(1) &&
 			!ShaderES->DrawBuffer.IsFull();
-		ShaderES->SelectShaderSpecialization(ShaderOptions(Options));
 		DrawCallParams = ShaderES->ParametersBuffer.GetCurrentElementPtr();
 	}	
 
@@ -128,7 +126,8 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	// Buffer new drawcall parameters
 	const auto& TexInfo = this->TexInfo[DiffuseTextureIndex];
 	DrawCallParams->DrawColor = DrawColor;
-	StoreTexHandle(DiffuseTextureIndex, DrawCallParams->TexHandles, TexInfo.BindlessTexHandle);
+	DrawCallParams->TexHandles[DiffuseTextureIndex] = TexInfo.BindlessTexHandle;
+	DrawCallParams->DrawFlags = DrawFlags;
 
 	if (GIsEditor &&
 		Frame->Viewport->Actor &&
@@ -228,7 +227,6 @@ UXOpenGLRenderDevice::DrawTileESProgram::DrawTileESProgram(const TCHAR* Name, UX
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::TileParametersIndex;
 	NumTextureSamplers				= 1;
 	DrawMode						= GL_TRIANGLES;
-	NumVertexAttributes				= 3;
 	UseSSBOParametersBuffer			= RenDev->UsingShaderDrawParameters; // heh. You never know...
 	ParametersInfo					= DrawTileParametersInfo;
 	VertexShaderFunc				= &BuildVertexShader;
@@ -239,6 +237,8 @@ UXOpenGLRenderDevice::DrawTileESProgram::DrawTileESProgram(const TCHAR* Name, UX
 
 void UXOpenGLRenderDevice::DrawTileESProgram::CreateInputLayout()
 {
+	for (INT i = 0; i < 3; ++i)
+		glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexES), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawTileVertexES), (GLvoid*)(offsetof(DrawTileVertexES, DrawID)));
 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexES), (GLvoid*)(offsetof(DrawTileVertexES, TexCoords)));
@@ -280,16 +280,6 @@ void UXOpenGLRenderDevice::DrawTileESProgram::ActivateShader()
 #endif
 }
 
-void UXOpenGLRenderDevice::DrawTileESProgram::BuildCommonSpecializations()
-{
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_AlphaBlended));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_AlphaBlended));
-}
-
 /*-----------------------------------------------------------------------------
 	OpenGL Core Tile Shader
 -----------------------------------------------------------------------------*/
@@ -302,17 +292,23 @@ UXOpenGLRenderDevice::DrawTileCoreProgram::DrawTileCoreProgram(const TCHAR* Name
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::TileParametersIndex;
 	NumTextureSamplers				= 1;
 	DrawMode						= GL_TRIANGLES;
-	NumVertexAttributes				= 5;
 	UseSSBOParametersBuffer			= RenDev->UsingShaderDrawParameters;
 	ParametersInfo					= DrawTileParametersInfo;
 	VertexShaderFunc				= &BuildVertexShader;
 	GeoShaderFunc					= &BuildGeometryShader;
 	FragmentShaderFunc				= &BuildFragmentShader;
 	DepthTesting					= FALSE;
+	RelevantSpecializationOptions =
+		ShaderCompilationOptions::OPT_ClipDistance |
+		ShaderCompilationOptions::OPT_Editor |
+		ShaderCompilationOptions::OPT_SimulateMultiPass |
+		ShaderCompilationOptions::OPT_GeometryShaders;
 }
 
 void UXOpenGLRenderDevice::DrawTileCoreProgram::CreateInputLayout()
 {
+	for (INT i = 0; i < 5; ++i)
+		glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawTileVertexCore), (GLvoid*)(offsetof(DrawTileVertexCore, DrawID)));
 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawTileVertexCore), (GLvoid*)(offsetof(DrawTileVertexCore, TexCoords0)));
@@ -354,16 +350,6 @@ void UXOpenGLRenderDevice::DrawTileCoreProgram::ActivateShader()
 		DepthTesting = TRUE;
 	}
 #endif
-}
-
-void UXOpenGLRenderDevice::DrawTileCoreProgram::BuildCommonSpecializations()
-{
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_Translucent|ShaderOptions::OPT_AlphaBlended));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture|ShaderOptions::OPT_AlphaBlended));
 }
 
 /*-----------------------------------------------------------------------------

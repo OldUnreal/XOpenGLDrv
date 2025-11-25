@@ -49,47 +49,32 @@ static void SetTextureHelper
 	UTexture* Texture, 
 	FSceneNode* Frame, 
 	FTEXTURE_PTR& CachedInfo,
-	glm::uvec4* TexHandles
+	glm::uint64* TexHandles,
+	DWORD& DrawFlags,
+	DWORD AddDrawFlag
 )
 {
 #if XOPENGL_MODIFIED_LOCK
-	 CachedInfo = Texture->GetTexture(INDEX_NONE, RenDev);
+	CachedInfo = Texture->GetTexture(INDEX_NONE, RenDev);
 #else
-	 Texture->Lock(CachedInfo, Frame->Viewport->CurrentTime, -1, RenDev);
+	Texture->Lock(CachedInfo, Frame->Viewport->CurrentTime, -1, RenDev);
 #endif
 
-	 RenDev->SetTexture(Multi, FTEXTURE_GET(CachedInfo), Texture->PolyFlags, 0.f);
-	 StoreTexHandle(Multi, TexHandles, RenDev->TexInfo[Multi].BindlessTexHandle);
+	RenDev->SetTexture(Multi, FTEXTURE_GET(CachedInfo), Texture->PolyFlags, 0.f);
+	TexHandles[Multi] = RenDev->TexInfo[Multi].BindlessTexHandle;
+	DrawFlags |= AddDrawFlag;
 }
 
-void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags)
+DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags)
 {
 	auto Shader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
 
 	// Gather options
-	DWORD Options = ShaderOptions::OPT_None;
-	DWORD NextPolyFlags = GetPolyFlagsAndShaderOptions(PolyFlags, Options, FALSE);
+	DWORD DrawFlags = ShaderDrawFlags::DF_None;
+	DWORD NextPolyFlags = GetPolyFlagsAndDrawFlags(PolyFlags, DrawFlags, FALSE);
 	UBOOL NoNearZ = (GUglyHackFlags & HACKFLAGS_NoNearZ) == HACKFLAGS_NoNearZ;
-	if (NoNearZ)
-		Options |= ShaderOptions::OPT_NoNearZ;
-	Options |= ShaderOptions::OPT_DiffuseTexture;
-
-	if (Info.Texture && Info.Texture->DetailTexture && DetailTextures)
-		Options |= ShaderOptions::OPT_DetailTexture;
-
-	if (Info.Texture && Info.Texture->MacroTexture && MacroTextures)
-		Options |= ShaderOptions::OPT_MacroTexture;
-
-#if ENGINE_VERSION==227
-	Options |= ShaderOptions::OPT_DistanceFog;
-	if (Info.Texture && Info.Texture->BumpMap && BumpMaps)
-		Options |= ShaderOptions::OPT_BumpMap;
-#endif
-
 	if (GIsEditor && NextPolyFlags & PF_Selected)
-		Options |= ShaderOptions::OPT_Selected;
-
-	Shader->SelectShaderSpecialization(Options);
+		DrawFlags |= ShaderDrawFlags::DF_Selected;
 
 	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
@@ -111,7 +96,7 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 				StoredFY != Frame->FY ||
 				!StoredbNearZ))
 		{
-			SetProjection(Frame, 1);
+			SetProjection(Frame, 1); // TODO/FIXME: Shouldn't this second argument be !NoNearZ ?
 		}
 	}	
 	
@@ -128,12 +113,13 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 
 	SetTexture(DiffuseTextureIndex, Info, NextPolyFlags, 0.0);
 	DrawCallParams->DiffuseInfo = glm::vec4(TexInfo[DiffuseTextureIndex].UMult, TexInfo[DiffuseTextureIndex].VMult, Info.Texture ? Info.Texture->Diffuse : 1.f, TextureAlpha);
-	StoreTexHandle(DiffuseTextureIndex, DrawCallParams->TexHandles, TexInfo[DiffuseTextureIndex].BindlessTexHandle);
+	DrawCallParams->TexHandles[DiffuseTextureIndex] = TexInfo[DiffuseTextureIndex].BindlessTexHandle;
+	DrawFlags |= ShaderDrawFlags::DF_DiffuseTexture;
 
 	DrawCallParams->DetailMacroInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
 	if (Info.Texture && Info.Texture->DetailTexture && DetailTextures)
 	{
-		SetTextureHelper(this, DetailTextureIndex, Info.Texture->DetailTexture, Frame, Shader->DetailTextureInfo, DrawCallParams->TexHandles);
+		SetTextureHelper(this, DetailTextureIndex, Info.Texture->DetailTexture, Frame, Shader->DetailTextureInfo, DrawCallParams->TexHandles, DrawFlags, ShaderDrawFlags::DF_DetailTexture);
 		DrawCallParams->DetailMacroInfo.x = TexInfo[DetailTextureIndex].UMult;
 		DrawCallParams->DetailMacroInfo.y = TexInfo[DetailTextureIndex].VMult;
 	}
@@ -142,30 +128,33 @@ void UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& I
 #if ENGINE_VERSION==227
 	if (Info.Texture && Info.Texture->BumpMap && BumpMaps)
 	{
-		SetTextureHelper(this, BumpMapIndex, Info.Texture->BumpMap, Frame, Shader->BumpMapInfo, DrawCallParams->TexHandles);
+		SetTextureHelper(this, BumpMapIndex, Info.Texture->BumpMap, Frame, Shader->BumpMapInfo, DrawCallParams->TexHandles, DrawFlags, ShaderDrawFlags::DF_BumpMap);
 		DrawCallParams->MiscInfo.x = Info.Texture->BumpMap->Specular;
 	}
 #endif
 
 	if (Info.Texture && Info.Texture->MacroTexture && MacroTextures)
 	{
-		SetTextureHelper(this, MacroTextureIndex, Info.Texture->MacroTexture, Frame, Shader->MacroTextureInfo, DrawCallParams->TexHandles);
+		SetTextureHelper(this, MacroTextureIndex, Info.Texture->MacroTexture, Frame, Shader->MacroTextureInfo, DrawCallParams->TexHandles, DrawFlags, ShaderDrawFlags::DF_MacroTexture);
 		DrawCallParams->DetailMacroInfo.z = TexInfo[MacroTextureIndex].UMult;
 		DrawCallParams->DetailMacroInfo.w = TexInfo[MacroTextureIndex].VMult;
 	}
+
+	DrawCallParams->DrawFlags = DrawFlags;
+	return DrawFlags;
 }
 
-void UXOpenGLRenderDevice::FinishGouraudCall(FTextureInfo& Info)
+void UXOpenGLRenderDevice::FinishGouraudCall(FTextureInfo& Info, DWORD DrawFlags)
 {
 #if !XOPENGL_MODIFIED_LOCK
 	auto Shader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
-	if (Shader->LastOptions.HasOption(ShaderOptions::OPT_DetailTexture))
+	if (DrawFlags & ShaderDrawFlags::DF_DetailTexture)
 		Info.Texture->DetailTexture->Unlock(Shader->DetailTextureInfo);
 
-	if (Shader->LastOptions.HasOption(ShaderOptions::OPT_BumpMap))
+	if (DrawFlags & ShaderDrawFlags::DF_BumpMap)
 		Info.Texture->BumpMap->Unlock(Shader->BumpMapInfo);
 
-	if (Shader->LastOptions.HasOption(ShaderOptions::OPT_MacroTexture))
+	if (DrawFlags & ShaderDrawFlags::DF_MacroTexture)
 		Info.Texture->MacroTexture->Unlock(Shader->MacroTextureInfo);
 #endif
 }
@@ -213,7 +202,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		}
 	}
 
-	PrepareGouraudCall(Frame, Info, PolyFlags);
+	DWORD DrawFlags = PrepareGouraudCall(Frame, Info, PolyFlags);
 
 	Shader->DrawBuffer.StartDrawCall();
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
@@ -231,7 +220,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	Shader->VertBuffer.Advance(OutVertexCount);
 	Shader->ParametersBuffer.Advance(1);
 
-	FinishGouraudCall(Info);
+	FinishGouraudCall(Info, DrawFlags);
     STAT(unclockFast(Stats.GouraudPolyCycles));
 	unguard;
 }
@@ -261,7 +250,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	}
 #endif
 
-	PrepareGouraudCall(Frame, Info, PolyFlags);
+	DWORD DrawFlags = PrepareGouraudCall(Frame, Info, PolyFlags);
 
 	Shader->DrawBuffer.StartDrawCall();
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
@@ -298,7 +287,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	Shader->VertBuffer.Advance(PolyListSize);
 	Shader->ParametersBuffer.Advance(1);
 
-	FinishGouraudCall(Info);
+	FinishGouraudCall(Info, DrawFlags);
     STAT(unclockFast(Stats.GouraudPolyCycles));
 	unguard;
 }
@@ -414,16 +403,27 @@ UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, 
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::GouraudParametersIndex;
 	NumTextureSamplers				= 6;
 	DrawMode						= GL_TRIANGLES;
-	NumVertexAttributes				= 6;
 	UseSSBOParametersBuffer			= RenDev->UsingShaderDrawParameters;
 	ParametersInfo					= DrawGouraudParametersInfo;
 	VertexShaderFunc				= &BuildVertexShader;
 	GeoShaderFunc					= RenDev->UsingGeometryShaders ? &BuildGeometryShader : nullptr; // optional
 	FragmentShaderFunc				= &BuildFragmentShader;
+	RelevantSpecializationOptions =
+		ShaderCompilationOptions::OPT_DetailTextures |
+		ShaderCompilationOptions::OPT_MacroTextures |
+		ShaderCompilationOptions::OPT_BumpMaps |
+		ShaderCompilationOptions::OPT_HWLighting |
+		ShaderCompilationOptions::OPT_DistanceFog |
+		ShaderCompilationOptions::OPT_ClipDistance |
+		ShaderCompilationOptions::OPT_Editor |
+		ShaderCompilationOptions::OPT_SimulateMultiPass |
+		ShaderCompilationOptions::OPT_GeometryShaders;
 }
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 {
+	for (INT i = 0; i < 6; ++i)
+		glEnableVertexAttribArray(i);
 	using Vert = DrawGouraudVertex;
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vert), (GLvoid*)(offsetof(Vert, DrawID)));
@@ -432,18 +432,6 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, LightColor)));
 	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, FogColor)));
 	VertBuffer.SetInputLayoutCreated();
-}
-
-void UXOpenGLRenderDevice::DrawGouraudProgram::BuildCommonSpecializations()
-{
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Environment));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Environment | ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Modulated));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Masked));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_Translucent));
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_DiffuseTexture | ShaderOptions::OPT_NoNearZ));
 }
 
 /*-----------------------------------------------------------------------------

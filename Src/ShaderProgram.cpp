@@ -16,14 +16,14 @@
 #include "XOpenGLDrv.h"
 #include "XOpenGL.h"
 
-static void EmitGlobals(UXOpenGLRenderDevice::ShaderProgram* Program, UXOpenGLRenderDevice::ShaderOptions Options, GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, bool HaveGeoShader)
+void UXOpenGLRenderDevice::ShaderProgram::EmitGlobals(ShaderCompilationOptions Options, GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out, bool HaveGeoShader)
 {
-	// VERSION
-	if (GL->OpenGLVersion == GL_Core)
+	if (Options.HasOption(ShaderCompilationOptions::OPT_GLCore))
 	{
-		if (GL->UsingShaderDrawParameters)
+		if (Options.HasOption(ShaderCompilationOptions::OPT_ShaderDrawParameters))
 			Out << "#version 460 core" END_LINE;
-		else if (GL->UsingBindlessTextures || GL->UsingPersistentBuffers)
+		else if (Options.HasOption(ShaderCompilationOptions::OPT_BindlessTextures) || 
+			Options.HasOption(ShaderCompilationOptions::OPT_PersistentBuffers))
 			Out << "#version 450 core" END_LINE;
 		else
 			Out << "#version 330 core" END_LINE;
@@ -34,10 +34,10 @@ static void EmitGlobals(UXOpenGLRenderDevice::ShaderProgram* Program, UXOpenGLRe
 	  Out << "#extension GL_OES_shader_io_blocks : require" END_LINE;
 	}
 
-	if (GL->UsingBindlessTextures)
+	if (Options.HasOption(ShaderCompilationOptions::OPT_BindlessTextures))
 		Out << "#extension GL_ARB_bindless_texture : require" END_LINE;
 
-	if (GL->UsingShaderDrawParameters)
+	if (Options.HasOption(ShaderCompilationOptions::OPT_ShaderDrawParameters))
 	{
 		Out << R"(
 #extension GL_ARB_shader_draw_parameters : require
@@ -45,7 +45,7 @@ static void EmitGlobals(UXOpenGLRenderDevice::ShaderProgram* Program, UXOpenGLRe
 )";
 	}
 
-	if (GL->OpenGLVersion == GL_ES)
+	if (Options.HasOption(ShaderCompilationOptions::OPT_GLES))
 	{
 		Out << R"(
 // The following extension appears not to be available on RaspberryPi4 at the moment.
@@ -65,19 +65,8 @@ precision lowp int;
 	Out << appToAnsi(*Options.GetPreprocessorString());
 
 	// Emit hardcoded options
-	Out << "#define OPT_GLCore " << (GL->OpenGLVersion == GL_Core ? 1 : 0) << END_LINE;
-	Out << "#define OPT_GLES " << (GL->OpenGLVersion == GL_Core ? 0 : 1) << END_LINE;
-	Out << "#define OPT_GeometryShaders " << (GL->UsingGeometryShaders ? 1 : 0) << END_LINE;
 	Out << "#define OPT_DetailMax " << GL->DetailMax << END_LINE;
-	Out << "#define OPT_SimulateMultiPass " << (GL->SimulateMultiPass ? 1 : 0) << END_LINE;
-#if ENGINE_VERSION==227
-	Out << "#define OPT_HWLighting " << (GL->UseHWLighting ? 1 : 0) << END_LINE;
-#else
-	Out << "#define OPT_HWLighting 0" << END_LINE;
-#endif
-	Out << "#define OPT_SupportsClipDistance " << (GL->SupportsClipDistance ? 1 : 0) << END_LINE;
 	Out << "#define OPT_MaxClippingPlanes " << GL->MaxClippingPlanes << END_LINE;
-	Out << "#define OPT_Editor " << (GIsEditor ? 1 : 0) << END_LINE;
 
 	// Emit engine constants
 #if ENGINE_VERSION==227
@@ -88,27 +77,64 @@ precision lowp int;
 	Out << "#define ENGINE_VERSION " << ENGINE_VERSION << END_LINE;	
 	Out << "#define MAX_LIGHTS " << MAX_LIGHTS << END_LINE;	
 
-	if (GIsEditor)
-	{
-		Out << "#define REN_None " << REN_None << "u" << END_LINE;
-		Out << "#define REN_Wire " << REN_Wire << "u" << END_LINE;
-		Out << "#define REN_Zones " << REN_Zones << "u" << END_LINE;
-		Out << "#define REN_Polys " << REN_Polys << "u" << END_LINE;
-		Out << "#define REN_PolyCuts " << REN_PolyCuts << "u" << END_LINE;
-		Out << "#define REN_WalkableSurfs " << REN_WalkableSurfs << "u" << END_LINE;
-		Out << "#define REN_DynLight " << REN_DynLight << "u" << END_LINE;
-		Out << "#define REN_PlainTex " << REN_PlainTex << "u" << END_LINE;
-		Out << "#define REN_OrthXY " << REN_OrthXY << "u" << END_LINE;
-		Out << "#define REN_OrthXZ " << REN_OrthXZ << "u" << END_LINE;
-		Out << "#define REN_TexView " << REN_TexView << "u" << END_LINE;
-		Out << "#define REN_TexBrowser " << REN_TexBrowser << "u" << END_LINE;
-		Out << "#define REN_MeshView " << REN_MeshView << "u" << END_LINE;
+	// Editor rendering modes
+	Out << "#define REN_None " << REN_None << "u" << END_LINE;
+	Out << "#define REN_Wire " << REN_Wire << "u" << END_LINE;
+	Out << "#define REN_Zones " << REN_Zones << "u" << END_LINE;
+	Out << "#define REN_Polys " << REN_Polys << "u" << END_LINE;
+	Out << "#define REN_PolyCuts " << REN_PolyCuts << "u" << END_LINE;
+	Out << "#define REN_WalkableSurfs " << REN_WalkableSurfs << "u" << END_LINE;
+	Out << "#define REN_DynLight " << REN_DynLight << "u" << END_LINE;
+	Out << "#define REN_PlainTex " << REN_PlainTex << "u" << END_LINE;
+	Out << "#define REN_OrthXY " << REN_OrthXY << "u" << END_LINE;
+	Out << "#define REN_OrthXZ " << REN_OrthXZ << "u" << END_LINE;
+	Out << "#define REN_TexView " << REN_TexView << "u" << END_LINE;
+	Out << "#define REN_TexBrowser " << REN_TexBrowser << "u" << END_LINE;
+	Out << "#define REN_MeshView " << REN_MeshView << "u" << END_LINE;
 #if ENGINE_VERSION==227
-		Out << "#define REN_Normals " << REN_Normals << "u" << END_LINE;
+	Out << "#define REN_Normals " << REN_Normals << "u" << END_LINE;
 #else
-		Out << "#define REN_Normals " << (REN_MAX + 1) << "u" << END_LINE;
+	Out << "#define REN_Normals " << (REN_MAX + 1) << "u" << END_LINE;
 #endif
-	}
+
+	// Draw flags
+	Out << "#define DF_None " << ShaderDrawFlags::DF_None << "u" << END_LINE;
+	Out << "#define DF_DiffuseTexture " << ShaderDrawFlags::DF_DiffuseTexture << "u" << END_LINE;
+	Out << "#define DF_LightMap " << ShaderDrawFlags::DF_LightMap << "u" << END_LINE;
+	Out << "#define DF_FogMap " << ShaderDrawFlags::DF_FogMap << "u" << END_LINE;
+	Out << "#define DF_DetailTexture " << ShaderDrawFlags::DF_DetailTexture << "u" << END_LINE;
+	Out << "#define DF_MacroTexture " << ShaderDrawFlags::DF_MacroTexture << "u" << END_LINE;
+	Out << "#define DF_BumpMap " << ShaderDrawFlags::DF_BumpMap << "u" << END_LINE;
+	Out << "#define DF_EnvironmentMap " << ShaderDrawFlags::DF_EnvironmentMap << "u" << END_LINE;
+	Out << "#define DF_HeightMap " << ShaderDrawFlags::DF_HeightMap << "u" << END_LINE;
+	Out << "#define DF_Masked " << ShaderDrawFlags::DF_Masked << "u" << END_LINE;
+	Out << "#define DF_Unlit " << ShaderDrawFlags::DF_Unlit << "u" << END_LINE;
+	Out << "#define DF_Modulated " << ShaderDrawFlags::DF_Modulated << "u" << END_LINE;
+	Out << "#define DF_Translucent " << ShaderDrawFlags::DF_Translucent << "u" << END_LINE;
+	Out << "#define DF_Environment " << ShaderDrawFlags::DF_Environment << "u" << END_LINE;
+	Out << "#define DF_RenderFog " << ShaderDrawFlags::DF_RenderFog << "u" << END_LINE;
+	Out << "#define DF_AlphaBlended " << ShaderDrawFlags::DF_AlphaBlended << "u" << END_LINE;
+	Out << "#define DF_Selected " << ShaderDrawFlags::DF_Selected << "u" << END_LINE;
+
+	// Texture indices into the texhandles array
+	Out << "#define DiffuseTextureIndex " << DiffuseTextureIndex << "u" << END_LINE;
+	Out << "#define LightMapIndex " << LightMapIndex << "u" << END_LINE;
+	Out << "#define FogMapIndex " << FogMapIndex << "u" << END_LINE;
+	Out << "#define DetailTextureIndex " << DetailTextureIndex << "u" << END_LINE;
+	Out << "#define MacroTextureIndex " << MacroTextureIndex << "u" << END_LINE;
+	Out << "#define BumpMapIndex " << BumpMapIndex << "u" << END_LINE;
+	Out << "#define EnvironmentMapIndex " << EnvironmentMapIndex << "u" << END_LINE;
+	Out << "#define HeightMapIndex " << HeightMapIndex << "u" << END_LINE;
+
+	// Aliases for the TMUs we bind textures to when we're not using bindless textures
+	Out << "#define TMUDiffuse Texture" << DiffuseTextureIndex << END_LINE;
+	Out << "#define TMULightMap Texture" << LightMapIndex << END_LINE;
+	Out << "#define TMUFogMap Texture" << FogMapIndex << END_LINE;
+	Out << "#define TMUDetail Texture" << DetailTextureIndex << END_LINE;
+	Out << "#define TMUMacro Texture" << MacroTextureIndex << END_LINE;
+	Out << "#define TMUBumpMap Texture" << BumpMapIndex << END_LINE;
+	Out << "#define TMUEnvironmentMap Texture" << EnvironmentMapIndex << END_LINE;
+	Out << "#define TMUHeightMap Texture" << HeightMapIndex << END_LINE;
 
 	Out << R"(
 layout(std140) uniform FrameState
@@ -127,7 +153,7 @@ layout(std140) uniform FrameState
 };
 )";
 
-	for (INT i = 0; i < Program->NumTextureSamplers; ++i)
+	for (INT i = 0; i < NumTextureSamplers; ++i)
 		Out << "uniform sampler2D Texture" << i << ";" << END_LINE;
 
 	Out << R"(
@@ -210,41 +236,37 @@ vec3 hsv2rgb(vec3 c)
   vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
-)";
 
-	if (GL->UsingBindlessTextures)
-	{
-		Out << R"(
+#if OPT_BindlessTextures
 vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
 {
   return texture(sampler2D(BindlessTexHandle), TexCoords);
 }
-)";
-	}
-	else
-	{
-		// texture bound to TMU. BindlessTexBum is meaningless here
-		Out << R"(
+#else
+// texture bound to TMU. BindlessTexBum is meaningless here
 vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
 {
   return texture(BoundSampler, TexCoords);
 }
+#endif
 )";
-	}
 
 	if (ShaderType == GL_FRAGMENT_SHADER)
 	{
 		Out << R"(
-vec4 ApplyPolyFlags(vec4 Color)
+vec4 ApplyPolyFlags(vec4 Color, uint DrawFlags)
 {
-#if OPT_Masked
+  if ((DrawFlags & DF_Masked) == DF_Masked)
+  {
     if (Color.a < 0.5)
       discard;
     else Color.rgb /= Color.a;
-#elif OPT_AlphaBlended
+  }
+  else if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
+  {
     if (Color.a < 0.01)
       discard;
-#endif
+  }
   return Color;
 }
 )";
@@ -280,6 +302,11 @@ static void GetTypeInfo(const char* TypeName, INT& SizeBytes, INT& Components)
 	{
 		SizeBytes = 16;
 		Components = 4;
+	}
+	else if (!strcmp("vec2", TypeName) || !strcmp("uvec2", TypeName))
+	{
+		SizeBytes = 8;
+		Components = 2;
 	}
 	else if (!strcmp("int", TypeName) || !strcmp("uint", TypeName) || !strcmp("float", TypeName))
 	{
@@ -377,7 +404,7 @@ layout(std140) uniform All)" << appToAnsi(Program->ShaderName) << R"(ShaderDrawP
 
 		Out << Info->Type << " Get" << Info->Name;
 		if (Info->ArrayCount > 0)
-			Out << "(uint DrawID, int Index)" END_LINE;
+			Out << "(uint DrawID, uint Index)" END_LINE;
 		else
 			Out << "(uint DrawID)" END_LINE;
 		Out << "{" END_LINE;
@@ -396,7 +423,7 @@ layout(std140) uniform All)" << appToAnsi(Program->ShaderName) << R"(ShaderDrawP
 }
 
 // Helpers
-void UXOpenGLRenderDevice::ShaderProgram::BindUniform(ShaderSpecialization* Specialization, const GLuint BindingIndex, const char* Name) const
+void UXOpenGLRenderDevice::ShaderProgram::BindUniform(CompiledShader* Specialization, const GLuint BindingIndex, const char* Name) const
 {
 	const GLuint BlockIndex = glGetUniformBlockIndex(Specialization->ShaderProgramObject, Name);
 	if (BlockIndex == GL_INVALID_INDEX)
@@ -408,7 +435,7 @@ void UXOpenGLRenderDevice::ShaderProgram::BindUniform(ShaderSpecialization* Spec
 	glUniformBlockBinding(Specialization->ShaderProgramObject, BlockIndex, BindingIndex);
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::GetUniformLocation(ShaderSpecialization* Specialization, GLint& Uniform, const char* Name) const
+void UXOpenGLRenderDevice::ShaderProgram::GetUniformLocation(CompiledShader* Specialization, GLint& Uniform, const char* Name) const
 {
 	Uniform = glGetUniformLocation(Specialization->ShaderProgramObject, Name);
 	if (Uniform == GL_INVALID_INDEX)
@@ -456,11 +483,11 @@ static void DumpShader(const char* Source, bool AddLineNumbers)
 		debugf(TEXT("%ls"), *Lines(i));
 }
 
-bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFunctionObject, GLuint FunctionType, ShaderOptions Options, ShaderWriterFunc Func, bool HaveGeoShader)
+bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFunctionObject, GLuint FunctionType, ShaderCompilationOptions Options, ShaderWriterFunc Func, bool HaveGeoShader)
 {
 	guard(CompileShader);
 	FShaderWriterX ShOut;
-	EmitGlobals(this, Options, FunctionType, RenDev, ShOut, HaveGeoShader);
+	EmitGlobals(Options, FunctionType, RenDev, ShOut, HaveGeoShader);
 
 	if (ParametersInfo)
 		EmitDrawCallParametersHeader(ParametersInfo, ShOut, this, ParametersBufferBindingIndex, UseSSBOParametersBuffer, true);
@@ -614,15 +641,8 @@ void UXOpenGLRenderDevice::InitShaders()
 		DistanceFogBuffer.RebindBufferBase(GlobalShaderBindingIndices::DistanceFogInfoIndex);
 	}
 #endif
-	
-	for (const auto Shader : Shaders)
-	{
-		if (!Shader)
-			continue;
 
-		Shader->MapBuffers();
-		Shader->BuildCommonSpecializations();
-	}
+	RecompileShaders();
 
 	unguard;
 }
@@ -649,12 +669,19 @@ void UXOpenGLRenderDevice::ResetShaders()
 
 void UXOpenGLRenderDevice::RecompileShaders()
 {
-	// This forces us to select new shader specalizations
-	CachedPolyFlags = 0;
-	CachedShaderOptions = 0;
+	ShaderCompilationOptions Options;
+	Options.SetOptionsForRendererConfig(this);
+	for (const auto Shader : Shaders)
+	{
+		if (!Shader)
+			continue;
+
+		Shader->MapBuffers();
+		Shader->RecompileShader(Options);
+	}
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* Specialization)
+void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(CompiledShader* Specialization)
 {
 	BindUniform(Specialization, FrameStateIndex, "FrameState");
 	BindUniform(Specialization, LightInfoIndex, "LightInfo");
@@ -680,41 +707,38 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(ShaderSpecialization* 
 	}
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::SelectShaderSpecialization(ShaderOptions Options)
+void UXOpenGLRenderDevice::ShaderProgram::UseShader()
 {
-	// Fast path to avoid an expensive pipeline state lookup
-	if (Options == LastOptions && LastSpecialization)
-		return;
+	glUseProgram(CurrentSpecialization->ShaderProgramObject);
+}
 
-	// We have to change to a different shader. Make sure we flush all buffered data
-	Flush(false);
-
-	// We have to switch to a different specialization. See if we've already compiled it
-	auto Specialization = Specializations.FindRef(Options);
-	if (Specialization)
+void UXOpenGLRenderDevice::ShaderProgram::RecompileShader(ShaderCompilationOptions Options)
+{
+	if (CurrentSpecialization &&
+		(CurrentSpecialization->Options & RelevantSpecializationOptions) == (Options & RelevantSpecializationOptions))
 	{
-		LastOptions = Options;
-		LastSpecialization = Specialization;
-		glUseProgram(Specialization->ShaderProgramObject);
+		// No relevant options changed - skip recompilation
 		return;
 	}
 
-	// Awww, we'll have to compile it
-	Specialization = new ShaderSpecialization;
-	Specializations.Set(Options, Specialization);
+	if (!VertexShaderFunc || !FragmentShaderFunc)
+		return;
 
-	Specialization->Options = Options;
-	Specialization->SpecializationName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
+	if (CurrentSpecialization)
+	{
+		DeleteShader();
+		delete CurrentSpecialization;
+	}
+	CurrentSpecialization = new CompiledShader;
+	CurrentSpecialization->Options = Options;
+	CurrentSpecialization->ShaderName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
 
-	check(BuildShaderProgram(Specialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
-
-	LastOptions = Options;
-	LastSpecialization = Specialization;
-	glUseProgram(Specialization->ShaderProgramObject);
-	BindShaderState(Specialization);
+	check(BuildShaderProgram(CurrentSpecialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
+	glUseProgram(CurrentSpecialization->ShaderProgramObject);
+	BindShaderState(CurrentSpecialization);
 }
 
-bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderSpecialization* Specialization, ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc)
+bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(CompiledShader* Specialization, ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc)
 {
 	Specialization->VertexShaderObject   = glCreateShader(GL_VERTEX_SHADER);
 	if (GeoShaderFunc)
@@ -746,73 +770,103 @@ bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(ShaderSpecializatio
 	glDeleteShader(Specialization->FragmentShaderObject);
 
 	Specialization->VertexShaderObject = Specialization->GeoShaderObject = Specialization->FragmentShaderObject = 0;
-	
+
 	return true;
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::DeleteShaders()
+void UXOpenGLRenderDevice::ShaderProgram::DeleteShader()
 {
-	for (TMap<ShaderOptions, ShaderSpecialization*>::TIterator It(Specializations); It; ++It)
-	{
-		const auto Specialization = It.Value();
+	if (!CurrentSpecialization)
+		return;
 
-		if (!Specialization->ShaderProgramObject)
-			continue;
+	if (!CurrentSpecialization->ShaderProgramObject)
+		return;
 
-		if (Specialization->VertexShaderObject)
-			glDetachShader(Specialization->ShaderProgramObject, Specialization->VertexShaderObject);
+	if (CurrentSpecialization->VertexShaderObject)
+		glDetachShader(CurrentSpecialization->ShaderProgramObject, CurrentSpecialization->VertexShaderObject);
 
-		if (Specialization->GeoShaderObject)
-			glDetachShader(Specialization->ShaderProgramObject, Specialization->GeoShaderObject);
+	if (CurrentSpecialization->GeoShaderObject)
+		glDetachShader(CurrentSpecialization->ShaderProgramObject, CurrentSpecialization->GeoShaderObject);
 
-		if (Specialization->FragmentShaderObject)
-			glDetachShader(Specialization->ShaderProgramObject, Specialization->FragmentShaderObject);
+	if (CurrentSpecialization->FragmentShaderObject)
+		glDetachShader(CurrentSpecialization->ShaderProgramObject, CurrentSpecialization->FragmentShaderObject);
 
-		glDeleteProgram(Specialization->ShaderProgramObject);
+	glDeleteProgram(CurrentSpecialization->ShaderProgramObject);
 
-		delete Specialization;
-	}
-
-	Specializations.Empty();
+	delete CurrentSpecialization;
 }
 
 UXOpenGLRenderDevice::ShaderProgram::~ShaderProgram()
 = default;
 
 /*-----------------------------------------------------------------------------
-    ShaderOptions
+    ShaderCompilationOptions
 -----------------------------------------------------------------------------*/
-FString UXOpenGLRenderDevice::ShaderOptions::GetStringHelper(void (*AddOptionFunc)(FString&, const TCHAR*, bool)) const
+void UXOpenGLRenderDevice::ShaderCompilationOptions::SetOptionsForRendererConfig(UXOpenGLRenderDevice* RenDev)
+{
+	OptionsMask = 0;
+	if (RenDev->DetailTextures)
+		SetOption(OPT_DetailTextures);
+	if (RenDev->MacroTextures)
+		SetOption(OPT_MacroTextures);
+#if UNREAL_OLDUNREAL
+	if (RenDev->EnvironmentMaps)
+		SetOption(OPT_EnvironmentMaps);
+	if (RenDev->BumpMaps)
+		SetOption(OPT_BumpMaps);
+	if (RenDev->ParallaxVersion != Parallax_Disabled)
+		SetOption(OPT_HeightMaps);
+	if (RenDev->SupportsDistanceFog)
+		SetOption(OPT_DistanceFog);
+#endif
+	if (RenDev->SimulateMultiPass)
+		SetOption(OPT_SimulateMultiPass);
+	if (RenDev->UseHWLighting)
+		SetOption(OPT_HWLighting);
+	if (RenDev->OpenGLVersion == GL_Core)
+		SetOption(OPT_GLCore);
+	else
+		SetOption(OPT_GLES);
+	if (RenDev->UsingGeometryShaders)
+		SetOption(OPT_GeometryShaders);
+	if (RenDev->UsingBindlessTextures)
+		SetOption(OPT_BindlessTextures);
+	if (RenDev->UsingPersistentBuffers)
+		SetOption(OPT_PersistentBuffers);
+	if (RenDev->UsingShaderDrawParameters)
+		SetOption(OPT_ShaderDrawParameters);
+	if (RenDev->SupportsClipDistance)
+		SetOption(OPT_ClipDistance);
+	if (GIsEditor)
+		SetOption(OPT_Editor);
+}
+
+FString UXOpenGLRenderDevice::ShaderCompilationOptions::GetStringHelper(void (*AddOptionFunc)(FString&, const TCHAR*, bool)) const
 {
     FString Result;
 #define ADD_OPTION(x) \
 AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
     
-    ADD_OPTION(OPT_DiffuseTexture)
-    ADD_OPTION(OPT_LightMap)
-    ADD_OPTION(OPT_FogMap)
-    ADD_OPTION(OPT_DetailTexture)
-    ADD_OPTION(OPT_MacroTexture)
-    ADD_OPTION(OPT_BumpMap)
-    ADD_OPTION(OPT_EnvironmentMap)
-    ADD_OPTION(OPT_HeightMap)
-    ADD_OPTION(OPT_Masked)
-    ADD_OPTION(OPT_Unlit)
-    ADD_OPTION(OPT_Modulated)
-    ADD_OPTION(OPT_Translucent)
-    ADD_OPTION(OPT_Environment)
-    ADD_OPTION(OPT_RenderFog)
-    ADD_OPTION(OPT_AlphaBlended)
+    ADD_OPTION(OPT_DetailTextures)
+    ADD_OPTION(OPT_MacroTextures)
+    ADD_OPTION(OPT_BumpMaps)
+    ADD_OPTION(OPT_HeightMaps)
     ADD_OPTION(OPT_DistanceFog)
-	ADD_OPTION(OPT_NoNearZ)
-	ADD_OPTION(OPT_Selected)
+    ADD_OPTION(OPT_SimulateMultiPass)
+    ADD_OPTION(OPT_HWLighting)
+    ADD_OPTION(OPT_GeometryShaders)
+    ADD_OPTION(OPT_BindlessTextures)
+    ADD_OPTION(OPT_PersistentBuffers)
+    ADD_OPTION(OPT_ShaderDrawParameters)
+    ADD_OPTION(OPT_ClipDistance)
+    ADD_OPTION(OPT_Editor)
     
     if (Result.Len() == 0)
         AddOptionFunc(Result, TEXT("OPT_None"), true);
     return Result;
 }
 
-FString UXOpenGLRenderDevice::ShaderOptions::GetShortString() const
+FString UXOpenGLRenderDevice::ShaderCompilationOptions::GetShortString() const
 {
     return GetStringHelper([](FString& Result, const TCHAR* OptionName, bool IsSet) {
 		if (IsSet)
@@ -824,24 +878,24 @@ FString UXOpenGLRenderDevice::ShaderOptions::GetShortString() const
     });
 }
 
-FString UXOpenGLRenderDevice::ShaderOptions::GetPreprocessorString() const
+FString UXOpenGLRenderDevice::ShaderCompilationOptions::GetPreprocessorString() const
 {
     return GetStringHelper([](FString& Result, const TCHAR* OptionName, bool IsSet) {
         Result += FString::Printf(TEXT("#define %ls %d\n"), OptionName, IsSet ? 1 : 0);
     });
 }
 
-void UXOpenGLRenderDevice::ShaderOptions::SetOption(DWORD Option)
+void UXOpenGLRenderDevice::ShaderCompilationOptions::SetOption(DWORD Option)
 {
     OptionsMask |= Option;
 }
 
-void UXOpenGLRenderDevice::ShaderOptions::UnsetOption(DWORD Option)
+void UXOpenGLRenderDevice::ShaderCompilationOptions::UnsetOption(DWORD Option)
 {
     OptionsMask &= ~Option;
 }
 
-bool UXOpenGLRenderDevice::ShaderOptions::HasOption(DWORD Option) const
+bool UXOpenGLRenderDevice::ShaderCompilationOptions::HasOption(DWORD Option) const
 {
     return OptionsMask & Option;
 }
@@ -858,7 +912,6 @@ UXOpenGLRenderDevice::NoProgram::NoProgram(const TCHAR* Name, UXOpenGLRenderDevi
 	ParametersBufferBindingIndex	= 0;
 	NumTextureSamplers				= 0;
 	DrawMode						= GL_TRIANGLES;
-	NumVertexAttributes				= 0;
 	UseSSBOParametersBuffer			= false;
 	ParametersInfo					= nullptr;
 	VertexShaderFunc				= nullptr;
@@ -866,7 +919,6 @@ UXOpenGLRenderDevice::NoProgram::NoProgram(const TCHAR* Name, UXOpenGLRenderDevi
 	FragmentShaderFunc				= nullptr;
 }
 
-void UXOpenGLRenderDevice::NoProgram::BuildCommonSpecializations()	{}
 void UXOpenGLRenderDevice::NoProgram::CreateInputLayout()			{}
 void UXOpenGLRenderDevice::NoProgram::Flush(bool Rotate)			{}
 void UXOpenGLRenderDevice::NoProgram::MapBuffers()					{}

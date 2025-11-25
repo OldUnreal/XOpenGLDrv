@@ -72,8 +72,6 @@ void UXOpenGLRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD Lin
 		Shader->OldLineFlags, LineFlags,
 		Shader->OldBlendMode, BlendMode);
 
-	Shader->SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
-
 	Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
 	Shader->DrawBuffer.StartDrawCall();
@@ -135,8 +133,6 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 			Shader->OldLineFlags, LineFlags,
 			Shader->OldBlendMode, BlendMode);
 
-		Shader->SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
-
 		Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
 		Shader->DrawBuffer.StartDrawCall();
@@ -182,8 +178,6 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 	PrepareSimpleCall(Shader,
 		Shader->OldLineFlags, LineFlags,
 		Shader->OldBlendMode, BlendMode);
-
-	Shader->SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
 
 	Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
@@ -234,8 +228,6 @@ void UXOpenGLRenderDevice::EndFlash()
 			Shader->OldLineFlags, LineFlags,
 			Shader->OldBlendMode, BlendMode);
 
-		Shader->SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
-
 		Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
 		const FLOAT RFX2 = 2.f * RProjZ / Viewport->SizeX;
@@ -275,16 +267,21 @@ UXOpenGLRenderDevice::DrawSimpleLineProgram::DrawSimpleLineProgram(const TCHAR* 
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::SimpleLineParametersIndex;
 	NumTextureSamplers				= 0;
 	DrawMode						= GL_LINES;
-	NumVertexAttributes				= 2;
 	UseSSBOParametersBuffer			= false;
 	ParametersInfo					= DrawSimpleParametersInfo;
 	VertexShaderFunc				= &BuildVertexShader;
 	GeoShaderFunc					= nullptr;
 	FragmentShaderFunc				= &BuildFragmentShader;
+	RelevantSpecializationOptions =
+		ShaderCompilationOptions::OPT_ClipDistance |
+		ShaderCompilationOptions::OPT_Editor |
+		ShaderCompilationOptions::OPT_SimulateMultiPass;
 }
 
 void UXOpenGLRenderDevice::DrawSimpleLineProgram::CreateInputLayout()
 {
+	for (INT i = 0; i < 2; ++i)
+		glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawSimpleVertex), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawSimpleVertex), (GLvoid*)(offsetof(DrawSimpleVertex, DrawID)));
 	VertBuffer.SetInputLayoutCreated();
@@ -306,11 +303,6 @@ void UXOpenGLRenderDevice::DrawSimpleLineProgram::DeactivateShader()
 		RenDev->SetBlend(OldBlendMode);
 }
 
-void UXOpenGLRenderDevice::DrawSimpleLineProgram::BuildCommonSpecializations()
-{
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
-}
-
 /*-----------------------------------------------------------------------------
 	Simple Triangle Shader
 -----------------------------------------------------------------------------*/
@@ -323,16 +315,21 @@ UXOpenGLRenderDevice::DrawSimpleTriangleProgram::DrawSimpleTriangleProgram(const
 	ParametersBufferBindingIndex	= GlobalShaderBindingIndices::SimpleTriangleParametersIndex;
 	NumTextureSamplers				= 0;
 	DrawMode						= GL_TRIANGLES;
-	NumVertexAttributes				= 2;
 	UseSSBOParametersBuffer			= false;
 	ParametersInfo					= DrawSimpleParametersInfo;
 	VertexShaderFunc				= &BuildVertexShader;
 	GeoShaderFunc					= nullptr;
 	FragmentShaderFunc				= &BuildFragmentShader;
+	RelevantSpecializationOptions =
+		ShaderCompilationOptions::OPT_ClipDistance |
+		ShaderCompilationOptions::OPT_Editor |
+		ShaderCompilationOptions::OPT_SimulateMultiPass;
 }
 
 void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::CreateInputLayout()
 {
+	for (INT i = 0; i < 2; ++i)
+		glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawSimpleVertex), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT, sizeof(DrawSimpleVertex), (GLvoid*)(offsetof(DrawSimpleVertex, DrawID)));
 	VertBuffer.SetInputLayoutCreated();
@@ -352,11 +349,6 @@ void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::DeactivateShader()
 		RenDev->SetDepth(OldLineFlags);
 	if (RenDev->CurrentBlendPolyFlags != OldBlendMode)
 		RenDev->SetBlend(OldBlendMode);
-}
-
-void UXOpenGLRenderDevice::DrawSimpleTriangleProgram::BuildCommonSpecializations()
-{
-	SelectShaderSpecialization(ShaderOptions(ShaderOptions::OPT_None));
 }
 
 /*-----------------------------------------------------------------------------
