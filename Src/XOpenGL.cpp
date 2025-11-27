@@ -834,7 +834,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 			WGL_CONTEXT_FLAGS_ARB, ContextFlags,
 			0 // End of attributes list
 		};
-	SetWindowPixelFormat(hDC);
+	if (!QueryOnly)
+		SetWindowPixelFormat(hDC);
 	glContext = wglCreateContextAttribsARB(hDC, 0, iContextAttribs);
 #endif
 
