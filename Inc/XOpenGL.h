@@ -1575,7 +1575,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 
 	// ============================== DRAWTILE ==============================
-	struct alignas(16) DrawTileParameters
+	struct DrawTileParameters
 	{
 		glm::vec4		DrawColor;
 		glm::uint64     TexHandles[2]; // mirrored as a uvec4 in GLSL since uint64 is not universally supported
@@ -1620,7 +1620,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static_assert(sizeof(DrawSimpleVertex) == 16, "Invalid simple buffered vert size");
 
 	// ============================== DRAWGOURAUD ==============================
-	struct alignas(16) DrawGouraudParameters
+	struct DrawGouraudParameters
 	{
 		glm::vec4 DiffuseInfo;			// UMult, VMult, Diffuse, Alpha
 		glm::vec4 DetailMacroInfo;		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
@@ -1647,7 +1647,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static_assert(sizeof(DrawGouraudVertex) == 72, "Invalid gouraud buffered vertex size");
 
 	// ============================== DRAWCOMPLEX ==============================
-	struct alignas(16) DrawComplexParameters
+	struct DrawComplexParameters
 	{
 		glm::vec4 DiffuseUV;
 		glm::vec4 LightMapUV;
