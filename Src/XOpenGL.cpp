@@ -943,7 +943,7 @@ void UXOpenGLRenderDevice::MakeCurrent()
 	{
 		check(hDC);
 		if (!wglMakeCurrent(hDC, glContext))
-			appGetLastError();
+			debugf(NAME_Warning, TEXT("wglMakeCurrent failed for (%p, %p). GetLastError: %d %s"), hDC, glContext, appGetSystemErrorCode(), appGetSystemErrorMessage());
 		CurrentGLContext = glContext;
 	}
 #endif
