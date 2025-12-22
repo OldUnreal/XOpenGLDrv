@@ -846,11 +846,14 @@ FString UXOpenGLRenderDevice::ShaderCompilationOptions::GetStringHelper(void (*A
     FString Result;
 #define ADD_OPTION(x) \
 AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
-    
+
+	ADD_OPTION(OPT_GLES)
+	ADD_OPTION(OPT_GLCore)
     ADD_OPTION(OPT_DetailTextures)
     ADD_OPTION(OPT_MacroTextures)
     ADD_OPTION(OPT_BumpMaps)
     ADD_OPTION(OPT_HeightMaps)
+	ADD_OPTION(OPT_EnvironmentMaps)
     ADD_OPTION(OPT_DistanceFog)
     ADD_OPTION(OPT_SimulateMultiPass)
     ADD_OPTION(OPT_HWLighting)
