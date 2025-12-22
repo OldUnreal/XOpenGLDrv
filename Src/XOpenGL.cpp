@@ -1010,7 +1010,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
 
-	debugf(NAME_DevGraphics, TEXT("XOpenGL: DesiredColorBits %i,DesiredStencilBits %i, DesiredDepthBits %i "), DesiredColorBits, DesiredStencilBits, DesiredDepthBits);
+	debugf(TEXT("XOpenGL::SetRes %dx%d - Fullscreen %d"), NewX, NewY, Fullscreen);
 
 	// If not fullscreen, and color bytes hasn't changed, do nothing.
 	if (glContext &&
@@ -1385,6 +1385,11 @@ UBOOL UXOpenGLRenderDevice::Exec(const TCHAR* Cmd, FOutputDevice& Ar)
 	{
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: VideoFlush"));
 		Flush(1);
+		return 1;
+	}
+	else if (ParseCommand(&Cmd, TEXT("RESETCONTEXT")))
+	{
+		CurrentGLContext = NULL;
 		return 1;
 	}
 	return 0;
