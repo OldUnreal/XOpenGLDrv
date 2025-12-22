@@ -70,9 +70,9 @@ precision lowp int;
 
 	// Emit engine constants
 #if ENGINE_VERSION==227
-	Out << "#define LE_Sunlight " << LE_Sunlight << END_LINE;
+	Out << "#define LE_Sunlight " << LE_Sunlight << "u" << END_LINE;
 #else
-	Out << "#define LE_Sunlight " << (LE_MAX + 1) << END_LINE;
+	Out << "#define LE_Sunlight " << (LE_MAX + 1) << "u" << END_LINE;
 #endif
 	Out << "#define ENGINE_VERSION " << ENGINE_VERSION << END_LINE;	
 	Out << "#define MAX_LIGHTS " << MAX_LIGHTS << END_LINE;	
