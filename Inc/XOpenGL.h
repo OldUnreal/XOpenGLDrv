@@ -1444,22 +1444,28 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual void MapBuffers()
 		{
-			VertBuffer.GenerateVertexBuffer(RenDev);
-			VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize);
-			VertBuffer.Bind();
-			CreateInputLayout();
-
-			if (UseSSBOParametersBuffer)
+			if (!VertBuffer.Buffer)
 			{
-				ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1)));
-				ParametersBuffer.GenerateSSBOBuffer(RenDev, ParametersBufferBindingIndex);
-				ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+				VertBuffer.GenerateVertexBuffer(RenDev);
+				VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize);
+				VertBuffer.Bind();
+				CreateInputLayout();
 			}
-			else
+
+			if (!ParametersBuffer.Buffer)
 			{
-				ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1));
-				ParametersBuffer.GenerateUBOBuffer(RenDev, ParametersBufferBindingIndex);
-				ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+				if (UseSSBOParametersBuffer)
+				{
+					ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1)));
+					ParametersBuffer.GenerateSSBOBuffer(RenDev, ParametersBufferBindingIndex);
+					ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+				}
+				else
+				{
+					ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1));
+					ParametersBuffer.GenerateUBOBuffer(RenDev, ParametersBufferBindingIndex);
+					ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+				}
 			}
 		}
 
