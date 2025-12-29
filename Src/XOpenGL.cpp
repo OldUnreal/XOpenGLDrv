@@ -730,7 +730,7 @@ UBOOL UXOpenGLRenderDevice::SetSDLAttributes() const
         SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
     }
 	
-	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, DesiredDepthBits);
+	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
 	
 	if (UseOpenGLDebug)
