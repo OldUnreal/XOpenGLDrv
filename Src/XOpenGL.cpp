@@ -30,6 +30,67 @@
 #include <sys/time.h>
 #endif
 
+#if !_WIN32
+namespace
+{
+	template <typename TResult>
+	inline bool XOpenGLSDLCallSucceeded(TResult Result)
+	{
+#if SDL2BUILD
+		return Result == 0;
+#elif SDL3BUILD
+		return Result;
+#else
+		#error XOpenGLDrv requires either SDL2BUILD or SDL3BUILD to be enabled.
+#endif
+	}
+
+	template <typename TAttribute>
+	inline bool XOpenGLSetGLAttribute(TAttribute Attribute, int Value)
+	{
+		return XOpenGLSDLCallSucceeded(SDL_GL_SetAttribute(Attribute, Value));
+	}
+
+	inline bool XOpenGLSetSwapInterval(int Interval)
+	{
+		return XOpenGLSDLCallSucceeded(SDL_GL_SetSwapInterval(Interval));
+	}
+
+	inline bool XOpenGLMakeCurrent(SDL_Window* Window, SDL_GLContext Context)
+	{
+		return XOpenGLSDLCallSucceeded(SDL_GL_MakeCurrent(Window, Context));
+	}
+
+	inline SDL_Window* XOpenGLCreateHiddenGLWindow(const char* Title, int Width, int Height)
+	{
+#if SDL2BUILD
+		return SDL_CreateWindow(
+			Title,
+			SDL_WINDOWPOS_UNDEFINED,
+			SDL_WINDOWPOS_UNDEFINED,
+			Width,
+			Height,
+			SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+#elif SDL3BUILD
+		return SDL_CreateWindow(Title, Width, Height, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+#else
+		#error XOpenGLDrv requires either SDL2BUILD or SDL3BUILD to be enabled.
+#endif
+	}
+
+	inline void XOpenGLDestroyContext(SDL_GLContext Context)
+	{
+#if SDL2BUILD
+		SDL_GL_DeleteContext(Context);
+#elif SDL3BUILD
+		SDL_GL_DestroyContext(Context);
+#else
+		#error XOpenGLDrv requires either SDL2BUILD or SDL3BUILD to be enabled.
+#endif
+	}
+}
+#endif
+
 /*-----------------------------------------------------------------------------
 	UXOpenGLDrv.
 -----------------------------------------------------------------------------*/
@@ -294,7 +355,7 @@ void UXOpenGLRenderDevice::DestroyTemporaryWindow(HWND TemphWnd, HDC TemphDC) co
 #else
 SDL_Window* UXOpenGLRenderDevice::CreateTemporaryWindow() const
 {
-	return SDL_CreateWindow("OpenGLQueryWindow", 2, 2, SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL);
+	return XOpenGLCreateHiddenGLWindow("OpenGLQueryWindow", 2, 2);
 }
 void UXOpenGLRenderDevice::DestroyTemporaryWindow(SDL_Window* Window) const
 {
@@ -721,24 +782,24 @@ void UXOpenGLRenderDevice::SelectGLVersion()
 UBOOL UXOpenGLRenderDevice::SetSDLAttributes() const
 {
     guard(UXOpenGLRenderDevice::SetSDLAttributes);
-    bool SDLSuccess = SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
+    bool SDLSuccess = XOpenGLSetGLAttribute(SDL_GL_DOUBLEBUFFER, 1);
+	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
     
 	if (UseAA)
     {
-        SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS,1);
-        SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
+        SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+        SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
     }
 	
-	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-    SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE,UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
+	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
 	
 	if (UseOpenGLDebug)
-		SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+		SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
 	
-	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, (OpenGLVersion == GL_ES) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
-	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, SelectedMajorVersion);
-	SDLSuccess &= SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, SelectedMinorVersion);
+	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_CONTEXT_PROFILE_MASK, (OpenGLVersion == GL_ES) ? SDL_GL_CONTEXT_PROFILE_ES : SDL_GL_CONTEXT_PROFILE_CORE);
+	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, SelectedMajorVersion);
+	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_CONTEXT_MINOR_VERSION, SelectedMinorVersion);
     
 	if (!SDLSuccess)
         debugf(NAME_DevLoad, TEXT("XOpenGL: SDL Error in SetSDLAttributes (probably non fatal): %ls"), appFromAnsi(SDL_GetError()));
@@ -847,9 +908,9 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 #if _WIN32
 		wglDeleteContext(glContext);
 		ReleaseDC(TmpWnd, hDC);
-#else
-		SDL_GL_DestroyContext(glContext);
-#endif
+	#else
+		XOpenGLDestroyContext(glContext);
+	#endif
 		glContext = NULL;
 		return TRUE;
 	}
@@ -923,10 +984,10 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
-#if !_WIN32
+	#if !_WIN32
 	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
-		bool Result = SDL_GL_MakeCurrent(Window, glContext);
+		bool Result = XOpenGLMakeCurrent(Window, glContext);
 		if (!Result)
 			debugf(TEXT("XOpenGL: MakeCurrent failed with: %ls"), appFromAnsi(SDL_GetError()));
 		CurrentGLContext = glContext;
@@ -1162,7 +1223,7 @@ void UXOpenGLRenderDevice::SwapControl()
 	switch (UseVSync)
 	{
 	case VS_Off:
-		if (!SDL_GL_SetSwapInterval(0))
+		if (!XOpenGLSetSwapInterval(0))
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
 		else
         {
@@ -1170,7 +1231,7 @@ void UXOpenGLRenderDevice::SwapControl()
         }
 		break;
 	case VS_On:
-		if (!SDL_GL_SetSwapInterval(1))
+		if (!XOpenGLSetSwapInterval(1))
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync on has failed."));
 		else
         {
@@ -1178,10 +1239,10 @@ void UXOpenGLRenderDevice::SwapControl()
         }
 		break;
 	case VS_Adaptive:
-		if (!SDL_GL_SetSwapInterval(-1))
+		if (!XOpenGLSetSwapInterval(-1))
         {
 			debugf(NAME_Init, TEXT("XOpenGL: Setting VSync adaptive has failed. Falling back to SwapInterval 0 (VSync Off)."));
-			if (!SDL_GL_SetSwapInterval(0))
+			if (!XOpenGLSetSwapInterval(0))
                 debugf(NAME_Init, TEXT("XOpenGL: Setting VSync off has failed."));
         }
 		else
@@ -1190,7 +1251,7 @@ void UXOpenGLRenderDevice::SwapControl()
         }
 		break;
 	default:
-		if (!SDL_GL_SetSwapInterval(0))
+		if (!XOpenGLSetSwapInterval(0))
 			debugf(NAME_Init, TEXT("XOpenGL: Setting default VSync off has failed."));
 		else
         {
@@ -2012,14 +2073,14 @@ void UXOpenGLRenderDevice::Exit()
 	EditorStateBuffer.DeleteBuffer();
 	DistanceFogBuffer.DeleteBuffer();
 
-#if !_WIN32
-	CurrentGLContext = NULL;
+	#if !_WIN32
+		CurrentGLContext = NULL;
 
-	SDL_GL_MakeCurrent(Window, NULL);
-	SDL_GL_DestroyContext(glContext);
+		XOpenGLMakeCurrent(Window, NULL);
+		XOpenGLDestroyContext(glContext);
 
-	AllContexts.RemoveItem(glContext);
-#else
+		AllContexts.RemoveItem(glContext);
+	#else
 	// Shut down this GL context. May fail if window was already destroyed.
 	check(glContext)
 	CurrentGLContext = NULL;
@@ -2119,12 +2180,12 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	}
 #endif
 
-#if !_WIN32
-	CurrentGLContext = NULL;
-# if !UNREAL_TOURNAMENT_OLDUNREAL
-	SDL_GL_DestroyContext(glContext);
-# endif
-#else
+	#if !_WIN32
+		CurrentGLContext = NULL;
+	# if !UNREAL_TOURNAMENT_OLDUNREAL
+		XOpenGLDestroyContext(glContext);
+	# endif
+	#else
 # if XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP
 	// Shut down this GL context. May fail if window was already destroyed.
 	CurrentGLContext = NULL;
