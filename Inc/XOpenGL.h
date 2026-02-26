@@ -38,10 +38,14 @@
     #include <unistd.h>
 #endif
 
-#ifdef SDL2BUILD
-    #include <SDL2/SDL.h>
-#elif SDL3BUILD
-    #include <SDL3/SDL.h>
+#if !_WIN32
+	#if SDL2BUILD
+		#include <SDL2/SDL.h>
+	#elif SDL3BUILD
+		#include <SDL3/SDL.h>
+	#else
+		#error XOpenGLDrv requires either SDL2BUILD or SDL3BUILD to be enabled.
+	#endif
 #endif
 
 
