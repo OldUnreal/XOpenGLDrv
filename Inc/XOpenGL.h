@@ -528,6 +528,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	UBOOL WasFullscreen;
 
+	INT CachedPhysicalSizeX;
+	INT CachedPhysicalSizeY;
+
+	GLuint ScalingFBO;
+	GLuint ScalingColorAttachment;
+	GLuint ScalingDepthAttachment;
+	INT    ScalingFBOWidth;
+	INT    ScalingFBOHeight;
+	UBOOL  ScalingFBOBound;
+
 	// Context specifics.
 	INT DesiredColorBits;
 	INT DesiredStencilBits;
@@ -1900,6 +1910,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL CreateOpenGLContext(void* Window, INT NewColorBytes, UBOOL QueryOnly=FALSE);
 	void  UnsetRes();
 	void  SwapControl();
+
+	UBOOL NeedsScalingPresent() const;
+	void  EnsureScalingFBO(INT Width, INT Height);
+	void  DestroyScalingFBO();
 
 	UBOOL IsSupportedGLVersion(INT MajorVersion, INT MinorVersion);
 	void SelectGLVersion();

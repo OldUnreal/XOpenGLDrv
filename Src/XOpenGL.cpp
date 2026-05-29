@@ -1201,6 +1201,10 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 	// Remember fullscreenness.
 	WasFullscreen = Fullscreen;
+
+	CachedPhysicalSizeX = 0;
+	CachedPhysicalSizeY = 0;
+
 	return 1;
 	unguard;
 }
@@ -1725,6 +1729,62 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	unguard;
 }
 
+UBOOL UXOpenGLRenderDevice::NeedsScalingPresent() const
+{
+	return Viewport
+		&& Viewport->PhysicalSizeX > 0 && Viewport->PhysicalSizeY > 0
+		&& (Viewport->PhysicalSizeX != Viewport->SizeX || Viewport->PhysicalSizeY != Viewport->SizeY);
+}
+
+void UXOpenGLRenderDevice::EnsureScalingFBO(INT Width, INT Height)
+{
+	guard(UXOpenGLRenderDevice::EnsureScalingFBO);
+
+	if (ScalingFBO && ScalingFBOWidth == Width && ScalingFBOHeight == Height)
+		return;
+
+	DestroyScalingFBO();
+
+	glGenFramebuffers(1, &ScalingFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, ScalingFBO);
+
+	glGenRenderbuffers(1, &ScalingColorAttachment);
+	glBindRenderbuffer(GL_RENDERBUFFER, ScalingColorAttachment);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, Width, Height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, ScalingColorAttachment);
+
+	glGenRenderbuffers(1, &ScalingDepthAttachment);
+	glBindRenderbuffer(GL_RENDERBUFFER, ScalingDepthAttachment);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Width, Height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, ScalingDepthAttachment);
+
+	GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	if (Status != GL_FRAMEBUFFER_COMPLETE)
+	{
+		debugf(NAME_Warning, TEXT("XOpenGL: scaling FBO incomplete (status=0x%x) at %dx%d"), Status, Width, Height);
+		DestroyScalingFBO();
+		return;
+	}
+
+	ScalingFBOWidth  = Width;
+	ScalingFBOHeight = Height;
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::DestroyScalingFBO()
+{
+	if (ScalingDepthAttachment) { glDeleteRenderbuffers(1, &ScalingDepthAttachment); ScalingDepthAttachment = 0; }
+	if (ScalingColorAttachment) { glDeleteRenderbuffers(1, &ScalingColorAttachment); ScalingColorAttachment = 0; }
+	if (ScalingFBO)             { glDeleteFramebuffers(1, &ScalingFBO);              ScalingFBO = 0; }
+	ScalingFBOWidth  = 0;
+	ScalingFBOHeight = 0;
+	ScalingFBOBound  = FALSE;
+}
+
 static INT LockCount = 0;
 void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
@@ -1734,6 +1794,26 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	++LockCount;
 	
 	MakeCurrent();
+
+	ScalingFBOBound = FALSE;
+	if (NeedsScalingPresent())
+	{
+		EnsureScalingFBO(Viewport->SizeX, Viewport->SizeY);
+		if (ScalingFBO)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, ScalingFBO);
+			glViewport(0, 0, Viewport->SizeX, Viewport->SizeY);
+			ScalingFBOBound = TRUE;
+		}
+	}
+
+	if (!ScalingFBOBound && !WasFullscreen && Viewport->PhysicalSizeX > 0 && Viewport->PhysicalSizeY > 0 &&
+		(Viewport->PhysicalSizeX != CachedPhysicalSizeX || Viewport->PhysicalSizeY != CachedPhysicalSizeY) )
+	{
+		glViewport(0, 0, Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
+		CachedPhysicalSizeX = Viewport->PhysicalSizeX;
+		CachedPhysicalSizeY = Viewport->PhysicalSizeY;
+	}
 
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
@@ -1793,19 +1873,28 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	// Unlock and render.
 	check(LockCount == 1);
 
+	if (Blit)
+	{
+		SetProgram(No_Prog);
+
+		if (ScalingFBOBound)
+		{
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, ScalingFBO);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+			glBlitFramebuffer(
+				0, 0, ScalingFBOWidth, ScalingFBOHeight,
+				0, 0, Viewport->PhysicalSizeX, Viewport->PhysicalSizeY,
+				GL_COLOR_BUFFER_BIT, GL_LINEAR);
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			ScalingFBOBound = FALSE;
+		}
+
 #if !_WIN32
-	if (Blit)
-	{
-		SetProgram(No_Prog);
 		SDL_GL_SwapWindow(Window);
-	}
 #else
-	if (Blit)
-	{
-		SetProgram(No_Prog);
 		verify(SwapBuffers(hDC));
-	}
 #endif
+	}
 
     // Check for optional frame rate limit
     // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
@@ -2055,6 +2144,8 @@ void UXOpenGLRenderDevice::Exit()
 	debugf(TEXT("XOpenGL: Exit"));
 
 	MakeCurrent();
+
+	DestroyScalingFBO();
 
 	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);
