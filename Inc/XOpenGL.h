@@ -1105,16 +1105,37 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return TotalCommands + BaseInstanceOffset;
 		}
 
+		void Init()
+		{
+			if (!IndirectBufferName)
+				glGenBuffers(1, &IndirectBufferName);
+		}
+
+		void Delete()
+		{
+			if (IndirectBufferName)
+			{
+				glDeleteBuffers(1, &IndirectBufferName);
+				IndirectBufferName = 0;
+			}
+		}
+
         void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
         {
-			// stijn: This does not work yet and I don't know why. Do we need to store the command buffer
-			// in a GL_DRAW_INDIRECT_BUFFER even though the spec says that's optional?
-			// glMultiDrawArraysIndirect(Mode, &CommandBuffer(0), TotalCommands, 0);
-			for (INT i = 0; i < TotalCommands; ++i)
+			if (IndirectBufferName && glMultiDrawArraysIndirect)
 			{
-				glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
-				//glDrawArrays(Mode, 0, CommandBuffer(i).Count);
-				//glDrawArraysInstancedBaseInstance(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count, CommandBuffer(i).InstanceCount, CommandBuffer(i).BaseInstance);
+				glBindBuffer(GL_DRAW_INDIRECT_BUFFER, IndirectBufferName);
+				glBufferData(GL_DRAW_INDIRECT_BUFFER,
+				             TotalCommands * sizeof(MultiDrawIndirectCommand),
+				             &CommandBuffer(0),
+				             GL_STREAM_DRAW);
+				glMultiDrawArraysIndirect(Mode, nullptr, TotalCommands, 0);
+				glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+			}
+			else
+			{
+				for (INT i = 0; i < TotalCommands; ++i)
+					glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
 			}
         }
 
@@ -1134,6 +1155,7 @@ class UXOpenGLRenderDevice : public URenderDevice
     private:
         INT BaseInstanceOffset{};
         INT FirstVertexOffset{};
+        GLuint IndirectBufferName{};
     };
 
 	//
@@ -1461,6 +1483,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual void MapBuffers()
 		{
+			DrawBuffer.Init();
+
 			if (!VertBuffer.Buffer)
 			{
 				VertBuffer.GenerateVertexBuffer(RenDev);
@@ -1488,6 +1512,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual void UnmapBuffers()
 		{
+			DrawBuffer.Delete();
 			VertBuffer.DeleteBuffer();
 			ParametersBuffer.DeleteBuffer();
 		}

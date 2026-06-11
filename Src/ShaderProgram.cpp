@@ -337,7 +337,7 @@ INT UXOpenGLRenderDevice::ShaderProgram::GetMaximumUniformBufferSize(const DrawC
 	// TODO: Check the various component limits
 
 	if (TotalSizeBytes > 0)
-		return (RenDev->MaxUniformBlockSize / TotalSizeBytes / 2);
+		return (RenDev->MaxUniformBlockSize / TotalSizeBytes);
 	return 16;
 }
 
