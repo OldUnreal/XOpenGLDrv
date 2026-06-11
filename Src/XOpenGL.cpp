@@ -1914,6 +1914,13 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 					glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 2, DiscardAttachments);
 				}
 			}
+			else if (glInvalidateFramebuffer)
+			{
+				// Non-MSAA: color is still needed for the postprocess pass but
+				// depth is never read again, so let the driver discard it.
+				static const GLenum DiscardAttachments[] = { GL_DEPTH_STENCIL_ATTACHMENT };
+				glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, DiscardAttachments);
+			}
 
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glDrawBuffer(GL_BACK);
