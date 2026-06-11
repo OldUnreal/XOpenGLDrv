@@ -220,7 +220,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UsePrecache = 1;
 	ShareLists = 1;
 #if MACOSX
-	UseAA = 0; // stijn: This is slow AF on modern macs! The game is barely playable if you enable it
+	UseAA = 0; // stijn: MSAA used to make the game unplayable on macOS so I turned this off by default. However, we now use multisampled FBOs for MSAA. That should make it playable, but it's still noticeably slower than on other platforms
 #else
 	UseAA = 1;
 #endif
@@ -785,12 +785,6 @@ UBOOL UXOpenGLRenderDevice::SetSDLAttributes() const
     bool SDLSuccess = XOpenGLSetGLAttribute(SDL_GL_DOUBLEBUFFER, 1);
 	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_BUFFER_SIZE, DesiredColorBits);
     
-	if (UseAA)
-    {
-        SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-        SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_MULTISAMPLESAMPLES, NumAASamples);
-    }
-	
 	SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_DEPTH_SIZE, 24);
     SDLSuccess &= XOpenGLSetGLAttribute(SDL_GL_FRAMEBUFFER_SRGB_CAPABLE, UseSRGBTextures); // CheckMe!!! Does this work in GL ES?
 	
@@ -837,31 +831,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 	pfd.cDepthBits = DesiredDepthBits;
 	pfd.iLayerType = PFD_MAIN_PLANE;
 
-	if (UseAA && !GIsEditor)
-	{
-		while (NumAASamples > 0)
-		{
-			UINT NumFormats = 0;
-			INT iPixelFormatAttribList[] =
-				{
-					WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-					WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-					WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-					WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-					WGL_COLOR_BITS_ARB, DesiredColorBits,
-					WGL_DEPTH_BITS_ARB, DesiredDepthBits,
-					WGL_STENCIL_BITS_ARB, 0,//DesiredStencilBits,
-					WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-					WGL_SAMPLES_ARB, NumAASamples,
-					0 // End of attributes list
-				};
-			
-			if (wglChoosePixelFormatARB(hDC, iPixelFormatAttribList, NULL, 1, &iPixelFormat, &NumFormats) == TRUE && NumFormats > 0)
-				break;
-			NumAASamples--;
-		}
-	}
-	else
+	// MSAA is now inside RenderFBO; always request a plain single-sample window surface.
 	{
 		UINT NumFormats = 0;
 		INT iPixelFormatAttribList[] =
@@ -1743,9 +1713,7 @@ void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
 
 	DestroyRenderFBO();
 
-	glGenFramebuffers(1, &RenderFBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
-
+	// Always create the single-sample color texture used by the postprocess pass.
 	glGenTextures(1, &RenderColorTexture);
 	glBindTexture(GL_TEXTURE_2D, RenderColorTexture);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
@@ -1754,22 +1722,74 @@ void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glBindTexture(GL_TEXTURE_2D, 0);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, RenderColorTexture, 0);
 
-	glGenRenderbuffers(1, &RenderDepthAttachment);
-	glBindRenderbuffer(GL_RENDERBUFFER, RenderDepthAttachment);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Width, Height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RenderDepthAttachment);
+	GLenum Status;
 
-	GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-	glBindRenderbuffer(GL_RENDERBUFFER, 0);
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	if (Status != GL_FRAMEBUFFER_COMPLETE)
+	if (UseAA)
 	{
-		debugf(NAME_Warning, TEXT("XOpenGL: render FBO incomplete (status=0x%x) at %dx%d"), Status, Width, Height);
-		DestroyRenderFBO();
-		return;
+		// MSAA render FBO: color + depth/stencil as multisample renderbuffers.
+		glGenFramebuffers(1, &RenderFBO);
+		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
+
+		glGenRenderbuffers(1, &RenderColorMSAA);
+		glBindRenderbuffer(GL_RENDERBUFFER, RenderColorMSAA);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER, NumAASamples, GL_RGBA8, Width, Height);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, RenderColorMSAA);
+
+		glGenRenderbuffers(1, &RenderDepthAttachment);
+		glBindRenderbuffer(GL_RENDERBUFFER, RenderDepthAttachment);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER, NumAASamples, GL_DEPTH24_STENCIL8, Width, Height);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RenderDepthAttachment);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+		Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		if (Status != GL_FRAMEBUFFER_COMPLETE)
+		{
+			debugf(NAME_Warning, TEXT("XOpenGL: MSAA render FBO incomplete (status=0x%x) at %dx%d"), Status, Width, Height);
+			DestroyRenderFBO();
+			return;
+		}
+
+		// Single-sample resolve FBO: RenderColorTexture as the only attachment.
+		// glBlitFramebuffer resolves MSAA into this at the end of each frame.
+		glGenFramebuffers(1, &RenderResolvedFBO);
+		glBindFramebuffer(GL_FRAMEBUFFER, RenderResolvedFBO);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, RenderColorTexture, 0);
+
+		Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		if (Status != GL_FRAMEBUFFER_COMPLETE)
+		{
+			debugf(NAME_Warning, TEXT("XOpenGL: resolve FBO incomplete (status=0x%x) at %dx%d"), Status, Width, Height);
+			DestroyRenderFBO();
+			return;
+		}
+	}
+	else
+	{
+		// Non-MSAA path: single FBO with color texture + depth/stencil renderbuffer.
+		glGenFramebuffers(1, &RenderFBO);
+		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
+		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, RenderColorTexture, 0);
+
+		glGenRenderbuffers(1, &RenderDepthAttachment);
+		glBindRenderbuffer(GL_RENDERBUFFER, RenderDepthAttachment);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Width, Height);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RenderDepthAttachment);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
+
+		Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+		if (Status != GL_FRAMEBUFFER_COMPLETE)
+		{
+			debugf(NAME_Warning, TEXT("XOpenGL: render FBO incomplete (status=0x%x) at %dx%d"), Status, Width, Height);
+			DestroyRenderFBO();
+			return;
+		}
 	}
 
 	RenderFBOWidth  = Width;
@@ -1781,7 +1801,9 @@ void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
 void UXOpenGLRenderDevice::DestroyRenderFBO()
 {
 	if (RenderDepthAttachment) { glDeleteRenderbuffers(1, &RenderDepthAttachment); RenderDepthAttachment = 0; }
+	if (RenderColorMSAA)       { glDeleteRenderbuffers(1, &RenderColorMSAA);       RenderColorMSAA = 0; }
 	if (RenderColorTexture)    { glDeleteTextures(1, &RenderColorTexture);         RenderColorTexture = 0; }
+	if (RenderResolvedFBO)     { glDeleteFramebuffers(1, &RenderResolvedFBO);      RenderResolvedFBO = 0; }
 	if (RenderFBO)             { glDeleteFramebuffers(1, &RenderFBO);              RenderFBO = 0; }
 	RenderFBOWidth  = 0;
 	RenderFBOHeight = 0;
@@ -1874,6 +1896,24 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		{
 			const INT DstW = (Viewport->PhysicalSizeX > 0) ? Viewport->PhysicalSizeX : Viewport->SizeX;
 			const INT DstH = (Viewport->PhysicalSizeY > 0) ? Viewport->PhysicalSizeY : Viewport->SizeY;
+
+			if (UseAA && RenderResolvedFBO)
+			{
+				// Resolve MSAA into the single-sample texture for the postprocess pass.
+				glBindFramebuffer(GL_READ_FRAMEBUFFER, RenderFBO);
+				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, RenderResolvedFBO);
+				glBlitFramebuffer(0, 0, RenderFBOWidth, RenderFBOHeight,
+				                  0, 0, RenderFBOWidth, RenderFBOHeight,
+				                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+				// Discard MSAA tile data — lets TBDR GPUs (Apple Silicon) skip
+				// writing the multisample buffer back to memory after the resolve.
+				if (glInvalidateFramebuffer)
+				{
+					static const GLenum DiscardAttachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT };
+					glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 2, DiscardAttachments);
+				}
+			}
 
 			glBindFramebuffer(GL_FRAMEBUFFER, 0);
 			glDrawBuffer(GL_BACK);

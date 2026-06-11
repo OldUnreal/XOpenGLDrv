@@ -533,6 +533,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	GLuint RenderFBO;
 	GLuint RenderColorTexture;
+	GLuint RenderColorMSAA;       // multisample color renderbuffer (UseAA only)
+	GLuint RenderResolvedFBO;     // single-sample resolve target (UseAA only)
 	GLuint RenderDepthAttachment;
 	INT    RenderFBOWidth;
 	INT    RenderFBOHeight;
