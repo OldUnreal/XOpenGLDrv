@@ -575,9 +575,10 @@ void UXOpenGLRenderDevice::InitShaders()
 	Shaders[No_Prog]				= new NoProgram(TEXT("No"), this);
 	Shaders[Simple_Triangle_Prog]	= new DrawSimpleTriangleProgram(TEXT("DrawSimpleTriangle"), this);
 	Shaders[Simple_Line_Prog]		= new DrawSimpleLineProgram(TEXT("DrawSimpleLine"), this);
-	Shaders[Tile_Prog]				= (OpenGLVersion == GL_Core && UsingGeometryShaders) 
-		? static_cast<ShaderProgram*>(new DrawTileCoreProgram(TEXT("DrawTile"), this)) 
+	Shaders[Tile_Prog]				= (OpenGLVersion == GL_Core && UsingGeometryShaders)
+		? static_cast<ShaderProgram*>(new DrawTileCoreProgram(TEXT("DrawTile"), this))
 		: static_cast<ShaderProgram*>(new DrawTileESProgram(TEXT("DrawTile"), this));
+	Shaders[PostProcess_Prog]		= new PostProcessProgram(TEXT("PostProcess"), this);
 	Shaders[Gouraud_Prog]			= new DrawGouraudProgram(TEXT("DrawGouraud"), this);
 	Shaders[Complex_Prog]			= new DrawComplexProgram(TEXT("DrawComplex"), this);
 
@@ -693,7 +694,7 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(CompiledShader* Specia
 	BindUniform(Specialization, DistanceFogInfoIndex, "DistanceFogParams");
 #endif
 
-	if (!UseSSBOParametersBuffer)
+	if (!UseSSBOParametersBuffer && ParametersInfo)
 		BindUniform(Specialization, ParametersBufferBindingIndex, appToAnsi(*FString::Printf(TEXT("All%lsShaderDrawParams"), ShaderName)));
 
 	// Bind regular texture samplers to their respective TMUs

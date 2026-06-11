@@ -645,8 +645,6 @@ void main(void)
   // HitSelection, Zoneview etc.
   if (bool(HitTesting))
     TotalColor = vDrawColor; // Use ONLY DrawColor.
-  else if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    TotalColor = GammaCorrect(Gamma, TotalColor);    
 
 #endif // OPT_Editor
 
@@ -655,11 +653,6 @@ void main(void)
   FragColor1 = ((vec4(1.0) - TotalColor) * LightColor);
 #else
   FragColor = TotalColor;
-#endif
-
-#if !OPT_Editor
-  if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    FragColor = GammaCorrect(Gamma, FragColor);
 #endif
 }
 )";

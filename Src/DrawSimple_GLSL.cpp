@@ -73,14 +73,6 @@ void main(void)
   FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;
 #endif
 FragColor = TotalColor;
-
-#if OPT_Editor
-  if (!bool(HitTesting)) {
-#endif
-    FragColor = GammaCorrect(Gamma, FragColor);
-#if OPT_Editor
-  }
-#endif
 }
 )";
 

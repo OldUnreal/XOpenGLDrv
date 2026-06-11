@@ -511,8 +511,6 @@ void main(void)
   // HitSelection, Zoneview etc.
   if (bool(HitTesting))
     TotalColor = DrawColor; // Use DrawColor.
-  else if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    TotalColor = GammaCorrect(Gamma, TotalColor);
 
 #endif // OPT_Editor
 
@@ -521,11 +519,6 @@ void main(void)
   FragColor1 = ((vec4(1.0) - TotalColor * LightColor)); //no, this is not entirely right, TotalColor has already LightColor applied. But will blow any fog/transparency otherwise. However should not make any (visual) difference here for this equation. Any better idea?
 #else
   FragColor = TotalColor;
-#endif
-
-#if !OPT_Editor
-  if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    FragColor = GammaCorrect(Gamma, FragColor);
 #endif
 }
 )";

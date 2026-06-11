@@ -528,6 +528,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 	UBOOL WasFullscreen;
 
+	INT CachedPhysicalSizeX;
+	INT CachedPhysicalSizeY;
+
+	GLuint RenderFBO;
+	GLuint RenderColorTexture;
+	GLuint RenderDepthAttachment;
+	INT    RenderFBOWidth;
+	INT    RenderFBOHeight;
+	UBOOL  RenderFBOBound;
+
 	// Context specifics.
 	INT DesiredColorBits;
 	INT DesiredStencilBits;
@@ -1133,6 +1143,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		Simple_Triangle_Prog,
         Simple_Line_Prog,
 		Tile_Prog,
+		PostProcess_Prog,
 		Gouraud_Prog,
 		Complex_Prog,
 		Max_Prog,
@@ -1817,6 +1828,24 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void DeactivateShader();
 	};
 
+	class PostProcessProgram : public ShaderProgramImpl<NoVertex, NoParameters>
+	{
+	public:
+		PostProcessProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
+		void Flush(bool Rotate);
+		void CreateInputLayout();
+		void MapBuffers();
+		void UnmapBuffers();
+		void ActivateShader();
+		void DeactivateShader();
+		void Draw(GLuint Texture, INT DstW, INT DstH);
+
+		static void BuildVertexShader  (GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
+		static void BuildFragmentShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
+
+		GLuint BlitVAO{};
+	};
+
 	//
 	// UObject interface
 	//
@@ -1900,6 +1929,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL CreateOpenGLContext(void* Window, INT NewColorBytes, UBOOL QueryOnly=FALSE);
 	void  UnsetRes();
 	void  SwapControl();
+
+	void  UpdateRenderFBO(INT Width, INT Height);
+	void  DestroyRenderFBO();
 
 	UBOOL IsSupportedGLVersion(INT MajorVersion, INT MinorVersion);
 	void SelectGLVersion();

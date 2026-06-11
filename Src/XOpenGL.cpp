@@ -985,7 +985,7 @@ void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UOpenGLRenderDevice::MakeCurrent);
 	#if !_WIN32
-	if (!CurrentGLContext || CurrentGLContext != glContext)
+//	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
 		bool Result = XOpenGLMakeCurrent(Window, glContext);
 		if (!Result)
@@ -1182,6 +1182,11 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	hWnd = (HWND)Viewport->GetWindow();
 #else
 	Window = (SDL_Window*)Viewport->GetWindow();
+	// On macOS, going fullscreen changes the NSOpenGLContext's underlying drawable.
+	// SDL_GL_MakeCurrent triggers [NSOpenGLContext update] which updates the context
+	// to the new drawable dimensions. Without this, the default framebuffer stays
+	// at the pre-fullscreen size and blitting to PhysicalSizeX/Y fails.
+	CurrentGLContext = NULL;
 #endif
 
 	// (Re)init OpenGL rendering context.
@@ -1201,6 +1206,10 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 
 	// Remember fullscreenness.
 	WasFullscreen = Fullscreen;
+
+	CachedPhysicalSizeX = 0;
+	CachedPhysicalSizeY = 0;
+
 	return 1;
 	unguard;
 }
@@ -1725,6 +1734,60 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	unguard;
 }
 
+void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
+{
+	guard(UXOpenGLRenderDevice::UpdateRenderFBO);
+
+	if (RenderFBO && RenderFBOWidth == Width && RenderFBOHeight == Height)
+		return;
+
+	DestroyRenderFBO();
+
+	glGenFramebuffers(1, &RenderFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
+
+	glGenTextures(1, &RenderColorTexture);
+	glBindTexture(GL_TEXTURE_2D, RenderColorTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, Width, Height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, RenderColorTexture, 0);
+
+	glGenRenderbuffers(1, &RenderDepthAttachment);
+	glBindRenderbuffer(GL_RENDERBUFFER, RenderDepthAttachment);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Width, Height);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RenderDepthAttachment);
+
+	GLenum Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	if (Status != GL_FRAMEBUFFER_COMPLETE)
+	{
+		debugf(NAME_Warning, TEXT("XOpenGL: render FBO incomplete (status=0x%x) at %dx%d"), Status, Width, Height);
+		DestroyRenderFBO();
+		return;
+	}
+
+	RenderFBOWidth  = Width;
+	RenderFBOHeight = Height;
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::DestroyRenderFBO()
+{
+	if (RenderDepthAttachment) { glDeleteRenderbuffers(1, &RenderDepthAttachment); RenderDepthAttachment = 0; }
+	if (RenderColorTexture)    { glDeleteTextures(1, &RenderColorTexture);         RenderColorTexture = 0; }
+	if (RenderFBO)             { glDeleteFramebuffers(1, &RenderFBO);              RenderFBO = 0; }
+	RenderFBOWidth  = 0;
+	RenderFBOHeight = 0;
+	RenderFBOBound  = FALSE;
+}
+
 static INT LockCount = 0;
 void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
@@ -1734,6 +1797,16 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	++LockCount;
 	
 	MakeCurrent();
+
+	RenderFBOBound = FALSE;
+	UpdateRenderFBO(Viewport->SizeX, Viewport->SizeY);
+	if (RenderFBO)
+	{
+		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
+		glDrawBuffer(GL_COLOR_ATTACHMENT0);
+		glViewport(0, 0, Viewport->SizeX, Viewport->SizeY);
+		RenderFBOBound = TRUE;
+	}
 
 	// Clear the Z buffer if needed.
 	glClearColor(ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W);
@@ -1793,19 +1866,31 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	// Unlock and render.
 	check(LockCount == 1);
 
+	if (Blit)
+	{
+		SetProgram(No_Prog);
+
+		if (RenderFBOBound)
+		{
+			const INT DstW = (Viewport->PhysicalSizeX > 0) ? Viewport->PhysicalSizeX : Viewport->SizeX;
+			const INT DstH = (Viewport->PhysicalSizeY > 0) ? Viewport->PhysicalSizeY : Viewport->SizeY;
+
+			glBindFramebuffer(GL_FRAMEBUFFER, 0);
+			glDrawBuffer(GL_BACK);
+
+			SetProgram(PostProcess_Prog);
+			static_cast<PostProcessProgram*>(Shaders[PostProcess_Prog])->Draw(RenderColorTexture, DstW, DstH);
+			SetProgram(No_Prog);
+
+			RenderFBOBound = FALSE;
+		}
+
 #if !_WIN32
-	if (Blit)
-	{
-		SetProgram(No_Prog);
 		SDL_GL_SwapWindow(Window);
-	}
 #else
-	if (Blit)
-	{
-		SetProgram(No_Prog);
 		verify(SwapBuffers(hDC));
-	}
 #endif
+	}
 
     // Check for optional frame rate limit
     // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
@@ -2055,6 +2140,8 @@ void UXOpenGLRenderDevice::Exit()
 	debugf(TEXT("XOpenGL: Exit"));
 
 	MakeCurrent();
+
+	DestroyRenderFBO();
 
 	if (!GIsEditor && !GIsRequestingExit)
 		Flush(0);

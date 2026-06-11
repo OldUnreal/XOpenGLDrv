@@ -86,9 +86,6 @@ void main(void)
 
   TotalColor = ApplyPolyFlags(Color, DrawFlags) * GetDrawColor(vDrawID);
 
-  if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    TotalColor = GammaCorrect(Gamma, TotalColor);
-
 #if OPT_SimulateMultiPass
   FragColor = TotalColor;
   FragColor1 = vec4(1.0, 1.0, 1.0, 1.0) - TotalColor;
@@ -292,9 +289,6 @@ void main(void)
   vec4 Color = GetTexel(GetTexHandle(DrawID).xy, TMUDiffuse, In.TexCoords.xy);
 
   TotalColor = ApplyPolyFlags(Color, DrawFlags) * GetDrawColor(DrawID);
-
-  if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    TotalColor = GammaCorrect(Gamma, TotalColor);
 
 #if OPT_Editor
   if ((DrawFlags & DF_Selected) == DF_Selected)
