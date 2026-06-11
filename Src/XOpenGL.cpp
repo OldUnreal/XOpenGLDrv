@@ -1708,7 +1708,7 @@ void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
 {
 	guard(UXOpenGLRenderDevice::UpdateRenderFBO);
 
-	if (RenderFBO && RenderFBOWidth == Width && RenderFBOHeight == Height)
+	if (RenderFBO && RenderFBOWidth == Width && RenderFBOHeight == Height && (RenderColorMSAA != 0) == (bool)UseAA)
 		return;
 
 	DestroyRenderFBO();
