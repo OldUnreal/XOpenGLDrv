@@ -91,10 +91,9 @@ void UXOpenGLRenderDevice::PostProcessProgram::DeactivateShader()
 {
 	glBindVertexArray(0);
 	glEnable(GL_DEPTH_TEST);
-	// Invalidate the blend state cache so the next frame's SetBlend re-applies
-	// the correct blend func. We can't call SetBlend here because we're outside
-	// the Lock/Unlock game-rendering context.
+	// Make sure we set the correct blend state again when we activate the next shader
 	RenDev->CurrentBlendPolyFlags = 0;
+	RenDev->SetNoTexture(DiffuseTextureIndex);
 }
 
 void UXOpenGLRenderDevice::PostProcessProgram::Draw(GLuint Texture, INT DstW, INT DstH)
@@ -103,6 +102,9 @@ void UXOpenGLRenderDevice::PostProcessProgram::Draw(GLuint Texture, INT DstW, IN
 	// enabled state (the renderer keeps it always enabled).
 	glBlendFunc(GL_ONE, GL_ZERO);
 	glActiveTexture(GL_TEXTURE0 + DiffuseTextureIndex);
+
+	// Unbind the current sampler for TMU 0 because it might use the wrong filters
+	glBindSampler(DiffuseTextureIndex, 0);
 	glBindTexture(GL_TEXTURE_2D, Texture);
 	glViewport(0, 0, DstW, DstH);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
