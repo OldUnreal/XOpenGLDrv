@@ -82,6 +82,9 @@ void UXOpenGLRenderDevice::PostProcessProgram::UnmapBuffers()
 
 void UXOpenGLRenderDevice::PostProcessProgram::ActivateShader()
 {
+	if (RenDev->ArrayPoint)
+		RenDev->ArrayPoint->Unbind();
+	glDisable(GL_CULL_FACE);
 	glDisable(GL_DEPTH_TEST);
 	glBindVertexArray(BlitVAO);
 	UseShader();
@@ -108,5 +111,5 @@ void UXOpenGLRenderDevice::PostProcessProgram::Draw(GLuint Texture, INT DstW, IN
 	glBindTexture(GL_TEXTURE_2D, Texture);
 	glViewport(0, 0, DstW, DstH);
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	//glBindTexture(GL_TEXTURE_2D, 0);
 }

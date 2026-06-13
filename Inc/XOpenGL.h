@@ -1059,104 +1059,73 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BindingIndex{};
 	};
     
-    //
-    // Helper class for glMultiDrawArraysIndirect batching
-    //
-    class MultiDrawIndirectBuffer
-    {
-    public:
-		MultiDrawIndirectBuffer()
+	//
+	// Helper class for glMultiDrawArrays batching
+	//
+	class MultiDrawBuffer
+	{
+	public:
+		MultiDrawBuffer()
 		{
-			CommandBuffer.AddZeroed(1024);
+			FirstArray.AddZeroed(1024);
+			CountArray.AddZeroed(1024);
 		}
 
-        MultiDrawIndirectBuffer(INT MaxMultiDraw)
-        {
-            CommandBuffer.AddZeroed(MaxMultiDraw);
-        }
-
-        void StartDrawCall()
-        {
-            CommandBuffer(TotalCommands).FirstVertex = TotalVertices + FirstVertexOffset;
-            CommandBuffer(TotalCommands).BaseInstance = TotalCommands + BaseInstanceOffset;
-            CommandBuffer(TotalCommands).InstanceCount = 1;
-        }
-
-        void EndDrawCall(INT Vertices)
-        {
-            TotalVertices += Vertices;
-            CommandBuffer(TotalCommands++).Count = Vertices;
-        }
-
-        bool IsFull() const
-        {
-            return TotalCommands + 1 >= CommandBuffer.Num();
-        }
-
-        void Reset(INT NewFirstVertexOffset=0, INT NewBaseInstanceOffset=0)
-        {
-            TotalCommands = TotalVertices = 0;
-            FirstVertexOffset = NewFirstVertexOffset;
-            BaseInstanceOffset = NewBaseInstanceOffset;
-        }
-
-		glm::uint GetDrawID() const
+		MultiDrawBuffer(INT MaxMultiDraw)
 		{
-			return TotalCommands + BaseInstanceOffset;
+			FirstArray.AddZeroed(MaxMultiDraw);
+			CountArray.AddZeroed(MaxMultiDraw);
 		}
 
-		void Init()
+		void StartDrawCall() { FirstArray(TotalCommands) = TotalVertices + FirstVertexOffset; }
+
+		void EndDrawCall(INT Vertices)
 		{
-			if (!IndirectBufferName)
-				glGenBuffers(1, &IndirectBufferName);
+			CountArray(TotalCommands) = Vertices;
+			TotalVertices += Vertices;
+			TotalCommands++;
 		}
 
-		void Delete()
+		bool IsFull() const { return TotalCommands + 1 >= FirstArray.Num(); }
+
+		void Reset(INT NewFirstVertexOffset = 0, INT NewBaseInstanceOffset = 0)
 		{
-			if (IndirectBufferName)
+			TotalCommands = TotalVertices = 0;
+			FirstVertexOffset = NewFirstVertexOffset;
+			BaseInstanceOffset = NewBaseInstanceOffset;
+		}
+
+		glm::uint GetDrawID() const { return TotalCommands + BaseInstanceOffset; }
+
+		void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
+		{
+			if (glMultiDrawArrays)
 			{
-				glDeleteBuffers(1, &IndirectBufferName);
-				IndirectBufferName = 0;
-			}
-		}
-
-        void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
-        {
-			if (IndirectBufferName && glMultiDrawArraysIndirect)
-			{
-				glBindBuffer(GL_DRAW_INDIRECT_BUFFER, IndirectBufferName);
-				glBufferData(GL_DRAW_INDIRECT_BUFFER,
-				             TotalCommands * sizeof(MultiDrawIndirectCommand),
-				             &CommandBuffer(0),
-				             GL_STREAM_DRAW);
-				glMultiDrawArraysIndirect(Mode, nullptr, TotalCommands, 0);
-				glBindBuffer(GL_DRAW_INDIRECT_BUFFER, 0);
+				glMultiDrawArrays(Mode, &FirstArray(0), &CountArray(0), TotalCommands);
 			}
 			else
 			{
+				// Fallback for ancient hardware
 				for (INT i = 0; i < TotalCommands; ++i)
-					glDrawArrays(Mode, CommandBuffer(i).FirstVertex, CommandBuffer(i).Count);
+					glDrawArrays(Mode, FirstArray(i), CountArray(i));
 			}
-        }
+		}
 
-        struct MultiDrawIndirectCommand
-        {
-            glm::uint Count;
-            glm::uint InstanceCount;
-            glm::uint FirstVertex;
-            glm::uint BaseInstance;
-        };
-        static_assert(sizeof(MultiDrawIndirectCommand) == 16, "Invalid indirect command size");
+		void Cleanup()
+		{
+			// No buffer cleanup needed!
+		}
 
-        TArray<MultiDrawIndirectCommand> CommandBuffer;
-        INT TotalVertices{};
-        INT TotalCommands{};
+	public:
+		// OpenGL strictly expects GLint and GLsizei for glMultiDrawArrays
+		TArray<GLint>   FirstArray;
+		TArray<GLsizei> CountArray;
 
-    private:
-        INT BaseInstanceOffset{};
-        INT FirstVertexOffset{};
-        GLuint IndirectBufferName{};
-    };
+		INT TotalVertices{};
+		INT TotalCommands{};
+		INT BaseInstanceOffset{};
+		INT FirstVertexOffset{};
+	};
 
 	//
 	// Shaders
@@ -1306,7 +1275,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Which options can prompt a recompilation of this shader?
 		ShaderCompilationOptions					RelevantSpecializationOptions;
 
-		MultiDrawIndirectBuffer						DrawBuffer;
+		MultiDrawBuffer								DrawBuffer;
 		const TCHAR*                                ShaderName{};
 		UXOpenGLRenderDevice*                       RenDev{};
         
@@ -1483,8 +1452,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual void MapBuffers()
 		{
-			DrawBuffer.Init();
-
 			if (!VertBuffer.Buffer)
 			{
 				VertBuffer.GenerateVertexBuffer(RenDev);
@@ -1512,7 +1479,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual void UnmapBuffers()
 		{
-			DrawBuffer.Delete();
 			VertBuffer.DeleteBuffer();
 			ParametersBuffer.DeleteBuffer();
 		}

@@ -1825,7 +1825,6 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 	if (RenderFBO)
 	{
 		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
-		glDrawBuffer(GL_COLOR_ATTACHMENT0);
 		glViewport(0, 0, Viewport->SizeX, Viewport->SizeY);
 		RenderFBOBound = TRUE;
 	}
@@ -1888,56 +1887,52 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 	// Unlock and render.
 	check(LockCount == 1);
 
-	if (Blit)
+	SetProgram(No_Prog);
+
+	if (RenderFBOBound)
 	{
-		SetProgram(No_Prog);
-
-		if (RenderFBOBound)
+		if (UseAA && RenderResolvedFBO)
 		{
-			const INT DstW = (Viewport->PhysicalSizeX > 0) ? Viewport->PhysicalSizeX : Viewport->SizeX;
-			const INT DstH = (Viewport->PhysicalSizeY > 0) ? Viewport->PhysicalSizeY : Viewport->SizeY;
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, RenderFBO);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, RenderResolvedFBO);
+			glBlitFramebuffer(0, 0, RenderFBOWidth, RenderFBOHeight,
+				0, 0, RenderFBOWidth, RenderFBOHeight,
+				GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-			if (UseAA && RenderResolvedFBO)
+			if (glInvalidateFramebuffer)
 			{
-				// Resolve MSAA into the single-sample texture for the postprocess pass.
-				glBindFramebuffer(GL_READ_FRAMEBUFFER, RenderFBO);
-				glBindFramebuffer(GL_DRAW_FRAMEBUFFER, RenderResolvedFBO);
-				glBlitFramebuffer(0, 0, RenderFBOWidth, RenderFBOHeight,
-				                  0, 0, RenderFBOWidth, RenderFBOHeight,
-				                  GL_COLOR_BUFFER_BIT, GL_NEAREST);
-
-				// Discard MSAA tile data — lets TBDR GPUs (Apple Silicon) skip
-				// writing the multisample buffer back to memory after the resolve.
-				if (glInvalidateFramebuffer)
-				{
-					static const GLenum DiscardAttachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT };
-					glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 2, DiscardAttachments);
-				}
+				static const GLenum DiscardAttachments[] = { GL_COLOR_ATTACHMENT0, GL_DEPTH_STENCIL_ATTACHMENT };
+				glInvalidateFramebuffer(GL_READ_FRAMEBUFFER, 2, DiscardAttachments);
 			}
-			else if (glInvalidateFramebuffer)
-			{
-				// Non-MSAA: color is still needed for the postprocess pass but
-				// depth is never read again, so let the driver discard it.
-				static const GLenum DiscardAttachments[] = { GL_DEPTH_STENCIL_ATTACHMENT };
-				glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, DiscardAttachments);
-			}
-
-			glBindFramebuffer(GL_FRAMEBUFFER, 0);
-			glDrawBuffer(GL_BACK);
-
-			SetProgram(PostProcess_Prog);
-			static_cast<PostProcessProgram*>(Shaders[PostProcess_Prog])->Draw(RenderColorTexture, DstW, DstH);
-			SetProgram(No_Prog);
-
-			RenderFBOBound = FALSE;
+		}
+		else if (glInvalidateFramebuffer)
+		{
+			static const GLenum DiscardAttachments[] = { GL_DEPTH_STENCIL_ATTACHMENT };
+			glInvalidateFramebuffer(GL_DRAW_FRAMEBUFFER, 1, DiscardAttachments);
 		}
 
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		if (Blit)
+		{
+			SetProgram(PostProcess_Prog);
+			static_cast<PostProcessProgram*>(Shaders[PostProcess_Prog])->Draw(RenderColorTexture, Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
+			SetProgram(No_Prog);
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
 #if !_WIN32
-		SDL_GL_SwapWindow(Window);
+			SDL_GL_SwapWindow(Window);
 #else
-		verify(SwapBuffers(hDC));
+			verify(SwapBuffers(hDC));
 #endif
-	}
+		}
+		else
+		{
+			// We're going to sample from the render FBO to do hit testing, so make sure the correct FBO is bound
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, UseAA && RenderResolvedFBO ? RenderResolvedFBO : RenderFBO);
+		}
+
+		RenderFBOBound = FALSE;
+	}	
 
     // Check for optional frame rate limit
     // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
@@ -1968,8 +1963,6 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #endif
 
 	--LockCount;
-
-	// Hits.
 	UnlockHit(Blit);
 	unguard;
 }
