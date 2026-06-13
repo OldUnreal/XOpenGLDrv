@@ -2125,7 +2125,12 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 
 	MakeCurrent();
 
+	if (RenderFBO)
+		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
 	glReadPixels(0, 0, SizeX, SizeY, GL_RGBA, GL_UNSIGNED_BYTE, Pixels);
+	if (RenderFBO)
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	
 	for (INT i = 0; i<SizeY / 2; i++)
 	{
 		for (INT j = 0; j<SizeX; j++)
@@ -2142,6 +2147,7 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 #else
 		(GammaCorrectScreenshots);
 #endif
+
 
 	//Gamma correct screenshots
 	if (bDoGammaCorrect)
