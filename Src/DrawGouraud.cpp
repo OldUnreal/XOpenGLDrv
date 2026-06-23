@@ -373,7 +373,7 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 #if ENGINE_VERSION==227
 void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 {
-	guard(UOpenGLRenderDevice::PreDrawGouraud);
+	guard(UXOpenGLRenderDevice::PreDrawGouraud);
 
 	if (FogSurf.IsValid())
 		SetDistanceFog(FogSurf);
@@ -385,7 +385,7 @@ void UXOpenGLRenderDevice::PreDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 
 void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 {
-	guard(UOpenGLRenderDevice::PostDrawGouraud);
+	guard(UXOpenGLRenderDevice::PostDrawGouraud);
 	ResetDistanceFog();
 	unguard;
 }

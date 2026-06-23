@@ -538,7 +538,7 @@ bool UXOpenGLRenderDevice::ShaderProgram::CompileShaderFunction(GLuint ShaderFun
 
 bool UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram(GLuint ShaderProgramObject) const
 {
-	guard(UXOpenGLRenderDevice::LinkShader);
+	guard(UXOpenGLRenderDevice::ShaderProgram::LinkShaderProgram);
 	GLint IsLinked = 0;
 	GLint blen = 0;
 	GLsizei slen = 0;

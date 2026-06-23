@@ -143,7 +143,7 @@ UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
 // called when we need to re-upload a part of a texture
 void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, INT UL, INT VL)
 {
-	guard(UOpenGLRenderDevice::UpdateTextureRect);
+	guard(UXOpenGLRenderDevice::UpdateTextureRect);
 
 	if ((Info.NumMips <= 0) || !Info.Mips[0]->DataPtr)
 		return;
@@ -208,7 +208,7 @@ void UXOpenGLRenderDevice::SetNoTexture( INT Multi )
 
 void UXOpenGLRenderDevice::SetSampler(GLuint Sampler, FTextureInfo& Info, UBOOL SkipMipmaps, UBOOL IsLightOrFogMap, UBOOL NoSmooth)
 {
-	guard(UOpenGLRenderDevice::SetSampler);
+	guard(UXOpenGLRenderDevice::SetSampler);
 
 #if ENGINE_VERSION==227
 	if (Info.UClampMode)
@@ -855,7 +855,7 @@ DWORD UXOpenGLRenderDevice::GetPolyFlagsAndDrawFlags(DWORD PolyFlags, DWORD& Dra
 
 void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 {
-	guard(UOpenGLRenderDevice::SetBlend);
+	guard(UXOpenGLRenderDevice::SetBlend);
 	STAT(clockFast(Stats.BlendCycles));
 
 	// For UED selection disable any blending.

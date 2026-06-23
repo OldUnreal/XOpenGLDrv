@@ -117,7 +117,7 @@ void UXOpenGLRenderDevice::LockHit(BYTE* InHitData, INT* InHitSize)
 // Called at the end of UXOpenGLRenderDevice::Unlock().
 void UXOpenGLRenderDevice::UnlockHit(UBOOL Blit)
 {
-	guard(UOpenGLRenderDevice::UnlockHit);
+	guard(UXOpenGLRenderDevice::UnlockHit);
 
 	check(HitStack.Num() == 0);
 
@@ -205,7 +205,7 @@ void UXOpenGLRenderDevice::UnlockHit(UBOOL Blit)
 // Called at the end of UOpenGLRenderDevice::SetSceneNode().
 void UXOpenGLRenderDevice::SetSceneNodeHit(FSceneNode* Frame)
 {
-	guard(UOpenGLRenderDevice::SetSceneNodeHit);
+	guard(UXOpenGLRenderDevice::SetSceneNodeHit);
 
 	// Set clip planes.
 	if (HitTesting())

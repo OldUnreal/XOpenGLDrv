@@ -953,7 +953,7 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 
 void UXOpenGLRenderDevice::MakeCurrent()
 {
-	guard(UOpenGLRenderDevice::MakeCurrent);
+	guard(UXOpenGLRenderDevice::MakeCurrent);
 	#if !_WIN32
 //	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
