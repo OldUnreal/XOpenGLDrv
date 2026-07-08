@@ -954,8 +954,8 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UXOpenGLRenderDevice::MakeCurrent);
-	#if !_WIN32
-//	if (!CurrentGLContext || CurrentGLContext != glContext)
+#if !_WIN32
+	if (!CurrentGLContext || CurrentGLContext != glContext)
 	{
 		bool Result = XOpenGLMakeCurrent(Window, glContext);
 		if (!Result)
@@ -2185,37 +2185,41 @@ void UXOpenGLRenderDevice::Exit()
 	guard(UXOpenGLRenderDevice::Exit);
 	debugf(TEXT("XOpenGL: Exit"));
 
-	MakeCurrent();
-
-	DestroyRenderFBO();
-
-	if (!GIsEditor && !GIsRequestingExit)
-		Flush(0);
-
-	ResetShaders();
-	if (AllContexts.Num() == 0 && SharedBindMap)
+	if (!GIsRequestingExit)
 	{
-		delete SharedBindMap;
-		SharedBindMap = NULL;
+		if (!GIsEditor)
+			Flush(0);
+
+		DestroyRenderFBO();
+
+		ResetShaders();
+		if (AllContexts.Num() == 0 && SharedBindMap)
+		{
+			delete SharedBindMap;
+			SharedBindMap = NULL;
+		}
+
+		// Delete UBOs
+		FrameStateBuffer.DeleteBuffer();
+		LightInfoBuffer.DeleteBuffer();
+		GlobalClipPlaneBuffer.DeleteBuffer();
+		EditorStateBuffer.DeleteBuffer();
+		DistanceFogBuffer.DeleteBuffer();
 	}
+	
+#if !_WIN32
+	CurrentGLContext = NULL;
 
-	// Delete UBOs
-	FrameStateBuffer.DeleteBuffer();
-	LightInfoBuffer.DeleteBuffer();
-	GlobalClipPlaneBuffer.DeleteBuffer();
-	EditorStateBuffer.DeleteBuffer();
-	DistanceFogBuffer.DeleteBuffer();
-
-	#if !_WIN32
-		CurrentGLContext = NULL;
-
+	if (!GIsRequestingExit)
+	{
 		XOpenGLMakeCurrent(Window, NULL);
 		XOpenGLDestroyContext(glContext);
-
-		AllContexts.RemoveItem(glContext);
-	#else
+	}
+	
+	AllContexts.RemoveItem(glContext);
+#else
 	// Shut down this GL context. May fail if window was already destroyed.
-	check(glContext)
+	check(glContext);
 	CurrentGLContext = NULL;
 	wglMakeCurrent(NULL, NULL);
 	wglDeleteContext(glContext);
@@ -2223,7 +2227,7 @@ void UXOpenGLRenderDevice::Exit()
 	glContext = NULL;
 	if (WasFullscreen)
 		ChangeDisplaySettingsW(NULL, 0);
-
+	
 	if (hDC)
 		ReleaseDC(hWnd, hDC);
 	hDC = NULL;
