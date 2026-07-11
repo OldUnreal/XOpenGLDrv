@@ -891,10 +891,22 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 	if (!gladLoadGL())
 		appErrorf(TEXT("XOpenGL: Init failed!"));
 #else
+	int GladStatus;
 	if (OpenGLVersion == GL_ES)
-		gladLoadGLES2Loader((GLADloadproc)SDL_GL_GetProcAddress);
+		GladStatus = gladLoadGLES2Loader((GLADloadproc)SDL_GL_GetProcAddress);
 	else
-		gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
+		GladStatus = gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress);
+	// gladLoad detects the GL version, then loads the version-gated core procs. If that fails (context
+	// too old / core-profile version query failed), the core gl* stay NULL and the next use (Flush ->
+	// SetPermanentState -> glEnable) is a null-call SIGSEGV. Fail the device gracefully so TryRenderDevice
+	// falls back, instead of crashing (mirrors the Windows branch's gladLoadGL() check, minus appErrorf).
+	if (!GladStatus)
+	{
+		GWarn->Logf(TEXT("XOpenGL: gladLoad failed (OpenGL %d.%d unavailable) - failing render device"), SelectedMajorVersion, SelectedMinorVersion);
+		XOpenGLDestroyContext(glContext);
+		glContext = NULL;
+		return FALSE;
+	}
 #endif
 
 	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
@@ -1159,11 +1171,15 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 	CurrentGLContext = NULL;
 #endif
 
-	// (Re)init OpenGL rendering context.
+	// (Re)init OpenGL rendering context. A failed create/proc-load must abort SetRes (else Flush ->
+	// SetPermanentState calls a NULL gl* and crashes) so TryRenderDevice falls back to another device.
 	if (glContext)
 		MakeCurrent();
-	else
-		CreateOpenGLContext(Viewport->GetWindow(), NewColorBytes);
+	else if (!CreateOpenGLContext(Viewport->GetWindow(), NewColorBytes))
+	{
+		debugf(TEXT("XOpenGL: CreateOpenGLContext failed - failing SetRes"));
+		return 0;
+	}
 
 	// Flush textures.
 	Flush(1);
