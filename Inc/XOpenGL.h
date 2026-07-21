@@ -586,6 +586,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	SupportsSSBO;
 	bool	SupportsGLSLInt64;
 	bool	SupportsClipDistance;
+	bool	IsAMD; // stijn: GL_VENDOR identifies this as an AMD/ATI GPU. These GPUs don't like how we use bindless textures in XOpenGLDrv
 
 	//
 	// Framerate Limiter

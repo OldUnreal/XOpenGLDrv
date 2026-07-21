@@ -401,6 +401,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	ActiveProgram = No_Prog;
 	SupportsAMDMemoryInfo = false;
 	SupportsNVIDIAMemoryInfo = false;
+	IsAMD = false;
 	SupportsSwapControl = false;
 	SupportsSwapControlTear = false;
 	SupportsClipDistance = true;
@@ -910,7 +911,11 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 #endif
 
 	Description = appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER));
-	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR)));
+	FString VendorString = appFromAnsi((const ANSICHAR *)glGetString(GL_VENDOR));
+	IsAMD = VendorString.InStr(TEXT("ATI")) != -1 ||
+		VendorString.InStr(TEXT("AMD")) != -1 ||
+		VendorString.InStr(TEXT("Advanced Micro Devices")) != -1;
+	debugf(NAME_Init, TEXT("GL_VENDOR     : %ls"), *VendorString);
 	debugf(NAME_Init, TEXT("GL_RENDERER   : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_RENDERER)));
 	debugf(NAME_Init, TEXT("GL_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_VERSION)));
 	debugf(NAME_Init, TEXT("GL_SHADING_LANGUAGE_VERSION    : %ls"), appFromAnsi((const ANSICHAR *)glGetString(GL_SHADING_LANGUAGE_VERSION)));
