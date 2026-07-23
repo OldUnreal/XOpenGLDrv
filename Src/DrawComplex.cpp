@@ -65,6 +65,37 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (GIsEditor && NextPolyFlags & PF_Selected)
 		DrawFlags |= ShaderDrawFlags::DF_Selected;
 
+	// Figure out which texture layers this specific surface uses, so we can select (or lazily build)
+	// the shader specialization that only contains straight-line code for those layers. See
+	// ShaderProgram::SelectSpecialization.
+#if ENGINE_VERSION==227
+	const bool HasBumpMap = Surface.BumpMap && BumpMaps;
+#else
+	const bool HasBumpMap = BumpMaps && Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap;
+#endif
+	ShaderCompilationOptions RequiredOptions = Shader->CurrentSpecialization->Options;
+	RequiredOptions.UnsetOption(
+		ShaderCompilationOptions::OPT_HasLightMap | ShaderCompilationOptions::OPT_HasFogMap |
+		ShaderCompilationOptions::OPT_HasDetailTexture | ShaderCompilationOptions::OPT_HasMacroTexture |
+		ShaderCompilationOptions::OPT_HasBumpMap | ShaderCompilationOptions::OPT_HasEnvironmentMap |
+		ShaderCompilationOptions::OPT_HasHeightMap);
+	if (Surface.LightMap)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasLightMap);
+	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasFogMap);
+	if (Surface.DetailTexture && DetailTextures)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasDetailTexture);
+	if (Surface.MacroTexture && MacroTextures)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasMacroTexture);
+	if (HasBumpMap)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasBumpMap);
+#if ENGINE_VERSION==227
+	if (Surface.EnvironmentMap && EnvironmentMaps)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasEnvironmentMap);
+	if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasHeightMap);
+#endif
+
 	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
 	// Check if this draw call will change any global state. If so, we want to flush any pending draw calls before we make the changes
@@ -79,6 +110,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		(Surface.EnvironmentMap && EnvironmentMaps && WillTextureStateChange(EnvironmentMapIndex, *Surface.EnvironmentMap, NextPolyFlags)) ||
 		(Surface.HeightMap && WillTextureStateChange(HeightMapIndex, *Surface.HeightMap, NextPolyFlags)) ||
 #endif
+		!(RequiredOptions == Shader->CurrentSpecialization->Options) || // Check if we need a different shader specialization
 		!CanBuffer)
 	{
 		// Dispatch buffered data
@@ -87,6 +119,10 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		// Update global GL state
 		SetBlend(NextPolyFlags);
 	}
+
+	// Switch to the specialization for this surface's texture layers, lazily compiling and caching it
+	// if we haven't built this exact combination before this session
+	Shader->SelectSpecialization(RequiredOptions);
 
 	DrawComplexParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();
 

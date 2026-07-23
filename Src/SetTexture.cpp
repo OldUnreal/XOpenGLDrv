@@ -708,8 +708,16 @@ void UXOpenGLRenderDevice::GenerateTextureAndSampler(FCachedTexture* Bind)
 
 void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FCachedTexture* Bind)
 {
-	glActiveTexture(GL_TEXTURE0 + Multi);
-	glBindTexture(GL_TEXTURE_2D, Bind->Id);
+	// stijn: glBindTextureUnit (GL 4.5 DSA) binds directly to a unit without touching the "active
+	// texture unit" global state, so it saves us the separate glActiveTexture call. Falls back to the
+	// classic active-texture-then-bind path on contexts that don't expose it (GL 3.3 core, GLES, etc).
+	if (glBindTextureUnit)
+		glBindTextureUnit(Multi, Bind->Id);
+	else
+	{
+		glActiveTexture(GL_TEXTURE0 + Multi);
+		glBindTexture(GL_TEXTURE_2D, Bind->Id);
+	}
 	glBindSampler(Multi, Bind->Sampler);
 }
 

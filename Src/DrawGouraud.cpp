@@ -76,12 +76,33 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 	if (GIsEditor && NextPolyFlags & PF_Selected)
 		DrawFlags |= ShaderDrawFlags::DF_Selected;
 
+	// Figure out which texture layers this mesh uses, so we can select (or lazily build) the shader
+	// specialization that only contains straight-line code for those layers. See
+	// ShaderProgram::SelectSpecialization.
+#if ENGINE_VERSION==227
+	const bool HasBumpMap = Info.Texture && Info.Texture->BumpMap && BumpMaps;
+#else
+	const bool HasBumpMap = false;
+#endif
+	ShaderCompilationOptions RequiredOptions = Shader->CurrentSpecialization->Options;
+	RequiredOptions.UnsetOption(
+		ShaderCompilationOptions::OPT_HasDetailTexture |
+		ShaderCompilationOptions::OPT_HasMacroTexture |
+		ShaderCompilationOptions::OPT_HasBumpMap);
+	if (Info.Texture && Info.Texture->DetailTexture && DetailTextures)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasDetailTexture);
+	if (Info.Texture && Info.Texture->MacroTexture && MacroTextures)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasMacroTexture);
+	if (HasBumpMap)
+		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasBumpMap);
+
 	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
 	// Check if the global state will change
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
 		WillTextureStateChange(0, Info, NextPolyFlags) || // Check if the texture will change
 		StoredbNearZ != NoNearZ ||  // Force a flush if we're switching between NearZ and NoNearZ
+		!(RequiredOptions == Shader->CurrentSpecialization->Options) || // Check if we need a different shader specialization
 		!CanBuffer // Check if we have room left in the multi-draw array
 	)
 	{
@@ -98,8 +119,12 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 		{
 			SetProjection(Frame, 1); // TODO/FIXME: Shouldn't this second argument be !NoNearZ ?
 		}
-	}	
-	
+	}
+
+	// Switch to the specialization for this mesh's texture layers, lazily compiling and caching it if
+	// we haven't built this exact combination before this session
+	Shader->SelectSpecialization(RequiredOptions);
+
 	DrawGouraudParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();
 
 	const FLOAT TextureAlpha =

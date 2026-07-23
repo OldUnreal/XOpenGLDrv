@@ -478,6 +478,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD UsePersistentBuffers;
 	BITFIELD UseBufferInvalidation;
 	BITFIELD UseShaderDrawParameters;
+	BITFIELD UseShaderCache;
 
 	// Not really in use...(yet)
 	BITFIELD UseMeshBuffering; //Buffer (Static)Meshes for drawing.
@@ -844,19 +845,19 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 		// Creates a CPU-accessible mapping for this buffer
-		void MapVertexBuffer(bool Persistent, GLuint BufferSize)
+		void MapVertexBuffer(bool Persistent, GLuint BufferSize, bool UseInvalidation = false)
 		{
-			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, VERTEX_BUFFER_USAGE_PATTERN);
+			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, VERTEX_BUFFER_USAGE_PATTERN, UseInvalidation);
 		}
 
-		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN)
+		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN, bool UseInvalidation = false)
 		{
-			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, ExpectedUsage);
+			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, ExpectedUsage, UseInvalidation);
 		}
 
-		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN)
+		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN, bool UseInvalidation = false)
 		{
-			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage);
+			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage, UseInvalidation);
 		}
 
 		// Binds and unbinds the buffer so we can write to it
@@ -926,7 +927,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 				if (Replace)
 					glBufferData(BufferType, Size, Buffer, ExpectedUsage);
 				else
+				{
+					// stijn: we're about to fully overwrite [UnbufferedRegionOffset, UnbufferedRegionOffset+Size),
+					// a range we've never written since the last orphan/Rotate(). If we let the driver know that,
+					// it can skip synchronizing this glBufferSubData call against GPU reads of this range.
+					// This can improve performance on some drivers.
+					if (bUseInvalidation && Size > 0)
+						glInvalidateBufferSubData(BufferObjectName, UnbufferedRegionOffset, Size);
 					glBufferSubData(BufferType, UnbufferedRegionOffset, Size, &Buffer[FirstUnbufferedElemIndex]);
+				}
 			}
 			else
 			{
@@ -1006,7 +1015,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint NextElemIndex{};				// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
 
 	private:
-		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum _ExpectedUsage)
+		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum _ExpectedUsage, bool UseInvalidation = false)
 		{
 			// stijn: NOTE: nvidia persistent buffers seem to be coherent by default!
 			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
@@ -1014,7 +1023,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 			SubBufferSize = BufferSize;
 			BufferType = Target;
 			ExpectedUsage = _ExpectedUsage;
-				
+
+			// Invalidation only makes sense for the non-persistent glBufferSubData path -- persistent
+			// buffers are synchronized explicitly via fences instead (see Lock/Wait)
+			bUseInvalidation = UseInvalidation && !Persistent;
+
 			// Allocate and pin buffers
 			bPersistentBuffer = Persistent;
 			if (bPersistentBuffer)
@@ -1045,7 +1058,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BufferObjectName{};		// OpenGL name of the buffer object
 		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
 		bool   bPersistentBuffer{};     // true if we persistently map this buffer into system RAM
-		GLenum ExpectedUsage{};			// 
+		bool   bUseInvalidation{};      // true if we should hint the driver that partial updates can discard old contents
+		GLenum ExpectedUsage{};			//
 
 		//
 		// Buffer dimensions
@@ -1203,7 +1217,19 @@ class UXOpenGLRenderDevice : public URenderDevice
 			OPT_ClipDistance         = 0x004000,
 
 			// Enabled editor-specific code
-			OPT_Editor				 = 0x008000
+			OPT_Editor				 = 0x008000,
+
+			// Per-drawcall texture types we're actually going to use
+			// in the shader. By specializing the shader for these,
+			// we can avoid branching on non-dynamically uniform expressions.
+			// This is a huge deal for performance on most drivers.
+			OPT_HasLightMap			 = 0x010000,
+			OPT_HasFogMap			 = 0x020000,
+			OPT_HasDetailTexture	 = 0x040000,
+			OPT_HasMacroTexture		 = 0x080000,
+			OPT_HasBumpMap			 = 0x100000,
+			OPT_HasEnvironmentMap	 = 0x200000,
+			OPT_HasHeightMap		 = 0x400000
         };
 
 		ShaderCompilationOptions(DWORD ShaderOptions)
@@ -1219,7 +1245,8 @@ class UXOpenGLRenderDevice : public URenderDevice
         void SetOption(DWORD Option);
         void UnsetOption(DWORD Option);
         bool HasOption(DWORD Option) const;
-        
+        DWORD GetMask() const { return OptionsMask; }
+
         friend DWORD GetTypeHash(const ShaderCompilationOptions& Options)
         {
             return Options.OptionsMask;
@@ -1276,6 +1303,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Which options can prompt a recompilation of this shader?
 		ShaderCompilationOptions					RelevantSpecializationOptions;
 
+		// Every specialization we've compiled or loaded for this shader so far.
+		// We use the specialization options (see the ShaderCompilationOptions enum above)
+		// as the key.
+		TOpenGLMap<DWORD, CompiledShader*>			SpecializationCache;
+
 		MultiDrawBuffer								DrawBuffer;
 		const TCHAR*                                ShaderName{};
 		UXOpenGLRenderDevice*                       RenDev{};
@@ -1311,6 +1343,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Recompile/respecialize the shader after the renderer options change
 		void RecompileShader(ShaderCompilationOptions Options);
 
+		// Makes the specialization matching @Options current, compiling and caching it first if we
+		// haven't built it before. Returns true if this actually changed the active specialization
+		// (i.e., callers that need to flush pending batched draws on a program switch should check this).
+		bool SelectSpecialization(ShaderCompilationOptions Options);
+
 		//
 		// Compilation support
 		//
@@ -1328,8 +1365,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Links the shader program after compiling all of its functions
 		bool LinkShaderProgram(GLuint ShaderProgramObject) const;
 
-		// Completely deletes/unmaps this shader
-		void DeleteShader();
+		// Detaches and deletes the GL program object (and its attached shader stages) for @Shader.
+		// Does not delete @Shader itself -- the caller (usually ClearSpecializationCache) owns that.
+		void DeleteCompiledShader(CompiledShader* Shader);
+
+		// Deletes every specialization we've compiled (including CurrentSpecialization) and empties
+		// the cache. Called when we tear down the shader entirely, or when renderer
+		// options change and invalidate every cached variant.
+		void ClearSpecializationCache();
 
 		// Used to describe the layout of the drawcall parameters		
 		static void EmitDrawCallParametersHeader(const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseSSBO, bool EmitGetters);
@@ -1377,9 +1420,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual ~ShaderProgramImpl()
 		{
-			DeleteShader();
+			ClearSpecializationCache();
 			UnmapBuffers();
-		}		
+		}
 
 		virtual void Flush(bool Rotate)
 		{
@@ -1456,7 +1499,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!VertBuffer.Buffer)
 			{
 				VertBuffer.GenerateVertexBuffer(RenDev);
-				VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize);
+				VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize, RenDev->UseBufferInvalidation);
 				VertBuffer.Bind();
 				CreateInputLayout();
 			}
@@ -1467,13 +1510,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 				{
 					ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1)));
 					ParametersBuffer.GenerateSSBOBuffer(RenDev, ParametersBufferBindingIndex);
-					ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+					ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN, RenDev->UseBufferInvalidation);
 				}
 				else
 				{
 					ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1));
 					ParametersBuffer.GenerateUBOBuffer(RenDev, ParametersBufferBindingIndex);
-					ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+					ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN, RenDev->UseBufferInvalidation);
 				}
 			}
 		}
@@ -1494,6 +1537,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void ResetShaders();
 	void RecompileShaders();
 	void InitShaders();
+
+	// Saves all shaders we've compiled to a cache file so we can load them quickly next time
+	UBOOL SaveShaderCache();
+
+	// Loads all shaders from the cache file
+	UBOOL LoadShaderCache();
 	INT PrevProgram;
 	INT ActiveProgram;
 

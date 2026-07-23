@@ -643,6 +643,7 @@ void UXOpenGLRenderDevice::InitShaders()
 	}
 #endif
 
+	LoadShaderCache();
 	RecompileShaders();
 
 	unguard;
@@ -680,6 +681,145 @@ void UXOpenGLRenderDevice::RecompileShaders()
 		Shader->MapBuffers();
 		Shader->RecompileShader(Options);
 	}
+}
+
+//
+// Shader Cache Support - This is taken almost verbatim from the AntiDrv code.
+//
+
+// We stamp the shader cache with the GL vendor, renderer, version, and the XOpenGL build date.
+// If any of these change, we discard the cache and recompile all shaders from source.
+static FString ShaderCacheBuildDate = __DATE__;
+
+UBOOL UXOpenGLRenderDevice::SaveShaderCache()
+{
+	guard(UXOpenGLRenderDevice::SaveShaderCache);
+#if MACOSX
+	return FALSE;
+#else
+	if (!UseShaderCache || !glGetProgramBinary)
+		return FALSE;
+
+	FArchive* Ar = GFileManager->CreateFileWriter(TEXT("XOpenGLShaderCache.dat"));
+	if (!Ar)
+		return FALSE;
+
+	FString VendorString   = appFromAnsi((const ANSICHAR*)glGetString(GL_VENDOR));
+	FString RendererString = appFromAnsi((const ANSICHAR*)glGetString(GL_RENDERER));
+	FString VersionString  = appFromAnsi((const ANSICHAR*)glGetString(GL_VERSION));
+	*Ar << VendorString << RendererString << VersionString << ShaderCacheBuildDate;
+
+	INT NumEntries = 0;
+	for (const auto Shader : Shaders)
+		if (Shader)
+			NumEntries += Shader->SpecializationCache.Num();
+	*Ar << NumEntries;
+
+	for (INT ProgIndex = 0; ProgIndex < Max_Prog; ++ProgIndex)
+	{
+		if (!Shaders[ProgIndex])
+			continue;
+
+		for (TOpenGLMap<DWORD, CompiledShader*>::TIterator It(Shaders[ProgIndex]->SpecializationCache); It; ++It)
+		{
+			CompiledShader* Specialization = It.Value();
+
+			GLint  BinaryLength = 0;
+			GLenum BinaryFormat = 0;
+			glGetProgramiv(Specialization->ShaderProgramObject, GL_PROGRAM_BINARY_LENGTH, &BinaryLength);
+
+			TArray<BYTE> Binary;
+			Binary.AddZeroed(BinaryLength);
+			glGetProgramBinary(Specialization->ShaderProgramObject, BinaryLength, nullptr, &BinaryFormat, Binary.GetData());
+
+			INT SavedProgIndex = ProgIndex;
+			DWORD OptionsMask = It.Key();
+			INT SavedBinaryFormat = static_cast<INT>(BinaryFormat);
+
+			*Ar << SavedProgIndex << OptionsMask << SavedBinaryFormat << Binary;
+		}
+	}
+
+	delete Ar;
+	return TRUE;
+#endif
+	unguard;
+}
+
+UBOOL UXOpenGLRenderDevice::LoadShaderCache()
+{
+	guard(UXOpenGLRenderDevice::LoadShaderCache);
+#if MACOSX
+	return FALSE;
+#else
+	if (!UseShaderCache || !glProgramBinary)
+		return FALSE;
+
+	FArchive* Ar = GFileManager->CreateFileReader(TEXT("XOpenGLShaderCache.dat"));
+	if (!Ar)
+		return FALSE;
+
+	FString VendorString, RendererString, VersionString, BuildDate;
+	*Ar << VendorString << RendererString << VersionString << BuildDate;
+
+	FString CurrentVendor   = appFromAnsi((const ANSICHAR*)glGetString(GL_VENDOR));
+	FString CurrentRenderer = appFromAnsi((const ANSICHAR*)glGetString(GL_RENDERER));
+	FString CurrentVersion  = appFromAnsi((const ANSICHAR*)glGetString(GL_VERSION));
+
+	if (VendorString != CurrentVendor || RendererString != CurrentRenderer || VersionString != CurrentVersion)
+	{
+		debugf(NAME_Init, TEXT("XOpenGL: Shader cache is for a different driver/GPU/GL version. Discarding it."));
+		delete Ar;
+		return FALSE;
+	}
+
+	if (BuildDate != ShaderCacheBuildDate)
+	{
+		debugf(NAME_Init, TEXT("XOpenGL: Shader cache build date is: %ls (cache) - expected: %ls (client). Discarding it."), *BuildDate, *ShaderCacheBuildDate);
+		delete Ar;
+		return FALSE;
+	}
+
+	INT NumEntries = 0;
+	*Ar << NumEntries;
+
+	INT NumLoaded = 0;
+	for (INT n = 0; n < NumEntries; ++n)
+	{
+		INT ProgIndex = 0;
+		DWORD OptionsMask = 0;
+		INT SavedBinaryFormat = 0;
+		TArray<BYTE> Binary;
+
+		*Ar << ProgIndex << OptionsMask << SavedBinaryFormat << Binary;
+
+		if (ProgIndex < 0 || ProgIndex >= Max_Prog || !Shaders[ProgIndex] || Binary.Num() == 0)
+			continue;
+
+		CompiledShader* Specialization = new CompiledShader;
+		Specialization->Options = ShaderCompilationOptions(OptionsMask);
+		Specialization->ShaderProgramObject = glCreateProgram();
+		glProgramBinary(Specialization->ShaderProgramObject, static_cast<GLenum>(SavedBinaryFormat), Binary.GetData(), Binary.Num());
+
+		GLint Success = GL_FALSE;
+		glGetProgramiv(Specialization->ShaderProgramObject, GL_LINK_STATUS, &Success);
+		if (Success != GL_TRUE)
+		{
+			glDeleteProgram(Specialization->ShaderProgramObject);
+			delete Specialization;
+			continue;
+		}
+
+		Specialization->ShaderName = FString::Printf(TEXT("%ls%ls"), Shaders[ProgIndex]->ShaderName, *Specialization->Options.GetShortString());
+		Shaders[ProgIndex]->SpecializationCache.Set(OptionsMask, Specialization);
+		++NumLoaded;
+	}
+
+	delete Ar;
+	debugf(NAME_Init, TEXT("XOpenGL: Loaded %i cached shader specializations."), NumLoaded);
+	return TRUE;
+#endif
+	unguard;
 }
 
 void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(CompiledShader* Specialization)
@@ -722,21 +862,44 @@ void UXOpenGLRenderDevice::ShaderProgram::RecompileShader(ShaderCompilationOptio
 		return;
 	}
 
-	if (!VertexShaderFunc || !FragmentShaderFunc)
-		return;
+	// Renderer config changed: every specialization we've cached so far (they were all
+	// built against the old config) is now stale, so throw the whole cache away and let per-draw-call
+	// specialization requests lazily rebuild whatever they actually need under the new config.
+	ClearSpecializationCache();
+	SelectSpecialization(Options);
+}
 
-	if (CurrentSpecialization)
+bool UXOpenGLRenderDevice::ShaderProgram::SelectSpecialization(ShaderCompilationOptions Options)
+{
+	if (CurrentSpecialization && CurrentSpecialization->Options == Options)
+		return false;
+
+	if (CompiledShader** Cached = SpecializationCache.Find(Options.GetMask()))
 	{
-		DeleteShader();
-		delete CurrentSpecialization;
+		// Already built this specialization before. Its uniform block bindings and sampler-unit
+		// assignments are program-object state, so they're still exactly as we left them -- just
+		// switch to it, no need to redo BindShaderState.
+		CurrentSpecialization = *Cached;
+		glUseProgram(CurrentSpecialization->ShaderProgramObject);
 	}
-	CurrentSpecialization = new CompiledShader;
-	CurrentSpecialization->Options = Options;
-	CurrentSpecialization->ShaderName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
+	else
+	{
+		if (!VertexShaderFunc || !FragmentShaderFunc)
+			return false;
 
-	check(BuildShaderProgram(CurrentSpecialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
-	glUseProgram(CurrentSpecialization->ShaderProgramObject);
-	BindShaderState(CurrentSpecialization);
+		CompiledShader* NewSpecialization = new CompiledShader;
+		NewSpecialization->Options = Options;
+		NewSpecialization->ShaderName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
+
+		check(BuildShaderProgram(NewSpecialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
+		SpecializationCache.Set(Options.GetMask(), NewSpecialization);
+		CurrentSpecialization = NewSpecialization;
+
+		glUseProgram(CurrentSpecialization->ShaderProgramObject);
+		BindShaderState(CurrentSpecialization);
+	}
+
+	return true;
 }
 
 bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(CompiledShader* Specialization, ShaderWriterFunc VertexShaderFunc, ShaderWriterFunc GeoShaderFunc, ShaderWriterFunc FragmentShaderFunc)
@@ -775,26 +938,32 @@ bool UXOpenGLRenderDevice::ShaderProgram::BuildShaderProgram(CompiledShader* Spe
 	return true;
 }
 
-void UXOpenGLRenderDevice::ShaderProgram::DeleteShader()
+void UXOpenGLRenderDevice::ShaderProgram::DeleteCompiledShader(CompiledShader* Shader)
 {
-	if (!CurrentSpecialization)
+	if (!Shader || !Shader->ShaderProgramObject)
 		return;
 
-	if (!CurrentSpecialization->ShaderProgramObject)
-		return;
+	if (Shader->VertexShaderObject)
+		glDetachShader(Shader->ShaderProgramObject, Shader->VertexShaderObject);
 
-	if (CurrentSpecialization->VertexShaderObject)
-		glDetachShader(CurrentSpecialization->ShaderProgramObject, CurrentSpecialization->VertexShaderObject);
+	if (Shader->GeoShaderObject)
+		glDetachShader(Shader->ShaderProgramObject, Shader->GeoShaderObject);
 
-	if (CurrentSpecialization->GeoShaderObject)
-		glDetachShader(CurrentSpecialization->ShaderProgramObject, CurrentSpecialization->GeoShaderObject);
+	if (Shader->FragmentShaderObject)
+		glDetachShader(Shader->ShaderProgramObject, Shader->FragmentShaderObject);
 
-	if (CurrentSpecialization->FragmentShaderObject)
-		glDetachShader(CurrentSpecialization->ShaderProgramObject, CurrentSpecialization->FragmentShaderObject);
+	glDeleteProgram(Shader->ShaderProgramObject);
+}
 
-	glDeleteProgram(CurrentSpecialization->ShaderProgramObject);
-
-	delete CurrentSpecialization;
+void UXOpenGLRenderDevice::ShaderProgram::ClearSpecializationCache()
+{
+	for (TOpenGLMap<DWORD, CompiledShader*>::TIterator It(SpecializationCache); It; ++It)
+	{
+		DeleteCompiledShader(It.Value());
+		delete It.Value();
+	}
+	SpecializationCache.Empty();
+	CurrentSpecialization = nullptr;
 }
 
 UXOpenGLRenderDevice::ShaderProgram::~ShaderProgram()
@@ -864,7 +1033,14 @@ AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
     ADD_OPTION(OPT_ShaderDrawParameters)
     ADD_OPTION(OPT_ClipDistance)
     ADD_OPTION(OPT_Editor)
-    
+    ADD_OPTION(OPT_HasLightMap)
+    ADD_OPTION(OPT_HasFogMap)
+    ADD_OPTION(OPT_HasDetailTexture)
+    ADD_OPTION(OPT_HasMacroTexture)
+    ADD_OPTION(OPT_HasBumpMap)
+    ADD_OPTION(OPT_HasEnvironmentMap)
+    ADD_OPTION(OPT_HasHeightMap)
+
     if (Result.Len() == 0)
         AddOptionFunc(Result, TEXT("OPT_None"), true);
     return Result;
