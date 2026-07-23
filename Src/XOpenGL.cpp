@@ -243,7 +243,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseBindlessTextures = 1;
 	UseShaderCache = 1;
 #if _WIN32
-	ReduceMouseLag = 1;
+	ReduceMouseLag = 0;
 #endif
 #if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	//UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards // stijn: disabled by default because many AMD drivers choke on it

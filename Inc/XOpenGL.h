@@ -1221,53 +1221,53 @@ class UXOpenGLRenderDevice : public URenderDevice
 		public:
         enum
         {
-            OPT_None				 = 0x000000,
+            OPT_None				 = 0x00000000,
 
 			// Texture types enabled in the renderer config
-			OPT_DetailTextures       = 0x000001,
-			OPT_MacroTextures        = 0x000002,
-			OPT_EnvironmentMaps		 = 0x000004,
-			OPT_BumpMaps			 = 0x000008,
-			OPT_HeightMaps			 = 0x000010,
+			OPT_DetailTextures       = 0x00000001,
+			OPT_MacroTextures        = 0x00000002,
+			OPT_EnvironmentMaps		 = 0x00000004,
+			OPT_BumpMaps			 = 0x00000008,
+			OPT_HeightMaps			 = 0x00000010,
 
 			// Features enabled in the renderer config
-			OPT_DistanceFog			 = 0x000020,
-			OPT_SimulateMultiPass    = 0x000040,
-			OPT_HWLighting           = 0x000080,
+			OPT_DistanceFog			 = 0x00000020,
+			OPT_SimulateMultiPass    = 0x00000040,
+			OPT_HWLighting           = 0x00000080,
 
 			// Hardware/driver capabilities we're using
-			OPT_GLCore               = 0x000100,
-			OPT_GLES                 = 0x000200,
-			OPT_GeometryShaders      = 0x000400,
-			OPT_BindlessTextures     = 0x000800,
-			OPT_PersistentBuffers    = 0x001000,
-			OPT_ShaderDrawParameters = 0x002000,
-			OPT_ClipDistance         = 0x004000,
+			OPT_GLCore               = 0x00000100,
+			OPT_GLES                 = 0x00000200,
+			OPT_GeometryShaders      = 0x00000400,
+			OPT_BindlessTextures     = 0x00000800,
+			OPT_PersistentBuffers    = 0x00001000,
+			OPT_ShaderDrawParameters = 0x00002000,
+			OPT_ClipDistance         = 0x00004000,
 
 			// Enabled editor-specific code
-			OPT_Editor				 = 0x008000,
+			OPT_Editor				 = 0x00008000,
 
 			// Per-drawcall texture types we're actually going to use
 			// in the shader. By specializing the shader for these,
 			// we can avoid branching on non-dynamically uniform expressions.
 			// This is a huge deal for performance on most drivers.
-			OPT_HasLightMap			 = 0x010000,
-			OPT_HasFogMap			 = 0x020000,
-			OPT_HasDetailTexture	 = 0x040000,
-			OPT_HasMacroTexture		 = 0x080000,
-			OPT_HasBumpMap			 = 0x100000,
-			OPT_HasEnvironmentMap	 = 0x200000,
-			OPT_HasHeightMap		 = 0x400000,
+			OPT_HasLightMap			 = 0x00010000,
+			OPT_HasFogMap			 = 0x00020000,
+			OPT_HasDetailTexture	 = 0x00040000,
+			OPT_HasMacroTexture		 = 0x00080000,
+			OPT_HasBumpMap			 = 0x00100000,
+			OPT_HasEnvironmentMap	 = 0x00200000,
+			OPT_HasHeightMap		 = 0x00400000,
 
 			// Per-drawcall poly-flag-derived render modes we're actually going to use in the shader.
 			// Same idea as the OPT_HasXXX texture options above, just for the blend/masking logic
 			// instead of texture layers. Only defined for flags we've verified are actually branched
 			// on somewhere in the shader source.
-			OPT_IsMasked			 = 0x800000,
-			OPT_IsAlphaBlended		 = 0x1000000,
-			OPT_IsModulated			 = 0x2000000,
-			OPT_IsTranslucent		 = 0x4000000,
-			OPT_IsRenderFog			 = 0x8000000,
+			OPT_IsMasked			 = 0x00800000,
+			OPT_IsAlphaBlended		 = 0x01000000,
+			OPT_IsModulated			 = 0x02000000,
+			OPT_IsTranslucent		 = 0x04000000,
+			OPT_IsRenderFog			 = 0x08000000,
 			OPT_IsUnlit				 = 0x10000000
         };
 
