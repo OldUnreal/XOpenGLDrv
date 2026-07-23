@@ -86,14 +86,12 @@ void main(void)
   Out.FogColor = FogColor;
   Out.Normals = vec4(Normals.xyz, 0);
 
-#if OPT_DetailTextures
-  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
-    Out.DetailTexCoords = TexCoords * GetDetailMacroInfo(DrawID).xy;
+#if OPT_DetailTextures && OPT_HasDetailTexture
+  Out.DetailTexCoords = TexCoords * GetDetailMacroInfo(DrawID).xy;
 #endif
 
-#if OPT_MacroTextures
-  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
-    Out.MacroTexCoords = TexCoords * GetDetailMacroInfo(DrawID).zw;
+#if OPT_MacroTextures && OPT_HasMacroTexture
+  Out.MacroTexCoords = TexCoords * GetDetailMacroInfo(DrawID).zw;
 #endif
 
 #if OPT_DistanceFog || OPT_ClipDistance
@@ -103,8 +101,7 @@ void main(void)
 #if OPT_GeometryShaders
   gl_Position = vec4(Coords, 1.0);
 #else 
-# if OPT_BumpMaps
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+# if OPT_BumpMaps && OPT_HasBumpMap
   {
     vec3 T = vec3(1.0, 1.0, 1.0); // Arbitrary.
     vec3 B = vec3(1.0, 1.0, 1.0); // Replace with actual values extracted from mesh generation some day.
@@ -182,12 +179,11 @@ void main(void)
   mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
   mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
-#if OPT_BumpMaps
+#if OPT_BumpMaps && OPT_HasBumpMap
   vec3 Tangent;
   vec3 Bitangent;
   vec3 T;
   vec3 B;
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
   {
     Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
     Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
@@ -204,8 +200,7 @@ void main(void)
 
   for (int i = 0; i < 3; ++i)
   {
-#if OPT_BumpMaps
-    if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+#if OPT_BumpMaps && OPT_HasBumpMap
     {
       vec3 N = normalize(vec3(modelMat * In[i].Normals));
 
@@ -363,8 +358,7 @@ void main(void)
     TotalColor = Color * vec4(LightColor.rgb, 1.0);
   }
 
-#if OPT_DetailTextures
-  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
+#if OPT_DetailTextures && OPT_HasDetailTexture
   {
     float NearZ = In.Coords.z / 512.0;
     float DetailScale = 1.0;
@@ -395,8 +389,7 @@ void main(void)
   }     
 #endif
 
-#if OPT_MacroTextures && !OPT_BumpMaps
-  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
+#if OPT_MacroTextures && !OPT_BumpMaps && OPT_HasMacroTexture
   {
     vec4 MacroTexColor = GetTexel(GetTexHandleHelper(DrawID, MacroTextureIndex), TMUMacro, In.MacroTexCoords);
     vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);
@@ -407,9 +400,8 @@ void main(void)
   }
 #endif
 
-#if OPT_BumpMaps
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
-  {       
+#if OPT_BumpMaps && OPT_HasBumpMap
+  {
     float MinLight = 0.05f;
     vec3 TangentViewDir = normalize(In.TangentViewPos - In.TangentFragPos);
     //normal from normal map

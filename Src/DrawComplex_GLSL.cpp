@@ -110,24 +110,25 @@ void main(void)
   vTexCoords = (MapDot - TexMapPan) * TexMapMult;
 
   // Texture UV Lightmap to fragment
-  if ((DrawFlags & DF_LightMap) == DF_LightMap)
+#if OPT_HasLightMap
   {
     vec2 LightMapMult = GetLightMapUV(DrawID).xy;
     vec2 LightMapPan = GetLightMapUV(DrawID).zw;
     vLightMapCoords = (MapDot - LightMapPan) * LightMapMult;
   }
+#endif
 
   // Texture UV FogMap
-  if ((DrawFlags & DF_FogMap) == DF_FogMap)
+#if OPT_HasFogMap
   {
     vec2 FogMapMult = GetFogMapUV(DrawID).xy;
     vec2 FogMapPan = GetFogMapUV(DrawID).zw;
     vFogMapCoords = (MapDot - FogMapPan) * FogMapMult;
   }
+#endif
 
   // Texture UV DetailTexture
-#if OPT_DetailTextures
-  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
+#if OPT_DetailTextures && OPT_HasDetailTexture
   {
     vec2 DetailMult = GetDetailUV(DrawID).xy;
     vec2 DetailPan = GetDetailUV(DrawID).zw;
@@ -136,8 +137,7 @@ void main(void)
 #endif
 
   // Texture UV Macrotexture
-#if OPT_MacroTextures
-  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
+#if OPT_MacroTextures && OPT_HasMacroTexture
   {
     vec2 MacroMult = GetMacroUV(DrawID).xy;
     vec2 MacroPan = GetMacroUV(DrawID).zw;
@@ -146,8 +146,7 @@ void main(void)
 #endif
 
   // Texture UV EnvironmentMap
-#if OPT_EnvironmentMaps
-  if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
+#if OPT_EnvironmentMaps && OPT_HasEnvironmentMap
   {
     vec2 EnvironmentMapMult = GetEnviroMapUV(DrawID).xy;
     vec2 EnvironmentMapPan = GetEnviroMapUV(DrawID).zw;
@@ -388,8 +387,7 @@ void main(void)
   int NumLights = int(LightData4[0].y);
 #endif
 
-#if OPT_HeightMaps
-  if ((DrawFlags & DF_HeightMap) == DF_HeightMap)
+#if OPT_HeightMaps && OPT_HasHeightMap
   {
     float parallaxHeight = 1.0;
     // get new texture coordinates from Parallax Mapping
@@ -434,7 +432,7 @@ void main(void)
   TotalColor *= LightColor;
 
 #else
-  if ((DrawFlags & DF_LightMap) == DF_LightMap)
+#if OPT_HasLightMap
   {
     LightColor = GetTexel(GetTexHandleHelper(vDrawID, LightMapIndex), TMULightMap, vLightMapCoords);
     // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
@@ -448,9 +446,9 @@ void main(void)
     LightColor.a = 1.0;
   }
 #endif
+#endif
 
-#if OPT_DetailTextures
-  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
+#if OPT_DetailTextures && OPT_HasDetailTexture
   {
     float NearZ = vCoords.z / 512.0;
     float DetailScale = 1.0;
@@ -480,9 +478,8 @@ void main(void)
   }
 #endif
 
-#if OPT_MacroTextures
-  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
-  {    
+#if OPT_MacroTextures && OPT_HasMacroTexture
+  {
     vec4 MacrotexColor = GetTexel(GetTexHandleHelper(vDrawID, MacroTextureIndex), TMUMacro, vMacroTexCoords);
     if ((DrawFlags & DF_Masked) == DF_Masked)
     {
@@ -505,8 +502,7 @@ void main(void)
 #endif
 
 	// BumpMap (Normal Map)
-#if OPT_BumpMaps
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+#if OPT_BumpMaps && OPT_HasBumpMap
   {
     float MinLight = 0.05f;
     
@@ -563,12 +559,12 @@ void main(void)
 
   vec4 FogColor = vec4(0.0);
 
-  if ((DrawFlags & DF_FogMap) == DF_FogMap)
-    FogColor = GetTexel(GetTexHandleHelper(vDrawID, FogMapIndex), TMUFogMap, vFogMapCoords) * 2.0;
+#if OPT_HasFogMap
+  FogColor = GetTexel(GetTexHandleHelper(vDrawID, FogMapIndex), TMUFogMap, vFogMapCoords) * 2.0;
+#endif
 
-#if OPT_EnvironmentMaps
-  if ((DrawFlags & DF_EnvironmentMap) == DF_EnvironmentMap)
-  {    
+#if OPT_EnvironmentMaps && OPT_HasEnvironmentMap
+  {
     vec4 EnvironmentColor = GetTexel(GetTexHandleHelper(vDrawID, EnvironmentMapIndex), TMUEnvironmentMap, vEnvironmentTexCoords);
     if ((DrawFlags & DF_Masked) == DF_Masked)
     {

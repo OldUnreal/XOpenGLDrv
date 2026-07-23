@@ -141,9 +141,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("RefreshRate"), RF_Public)UIntProperty(CPP_PROPERTY(RefreshRate), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("NumAASamples"), RF_Public)UIntProperty(CPP_PROPERTY(NumAASamples), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("DetailMax"), RF_Public)UIntProperty(CPP_PROPERTY(DetailMax), TEXT("Options"), CPF_Config);
-#if UTGLRFRAMELIMIT // now in Engine (for 227 as well).
-	new(GetClass(), TEXT("FrameRateLimit"), RF_Public)UIntProperty(CPP_PROPERTY(FrameRateLimit), TEXT("Options"), CPF_Config);
-#endif
 	new(GetClass(), TEXT("GammaOffsetScreenshots"), RF_Public)UFloatProperty(CPP_PROPERTY(GammaOffsetScreenshots), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("LODBias"), RF_Public)UFloatProperty(CPP_PROPERTY(LODBias), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("MaxAnisotropy"), RF_Public)UFloatProperty(CPP_PROPERTY(MaxAnisotropy), TEXT("Options"), CPF_Config);
@@ -182,6 +179,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseShaderCache"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderCache), TEXT("Options"), CPF_Config);
 	
 	// Debug Options
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
@@ -209,9 +207,6 @@ void UXOpenGLRenderDevice::StaticConstructor()
 
 	// Defaults.
 	RefreshRate = 0;
-#if UTGLRFRAMELIMIT
-	FrameRateLimit = 60;
-#endif
 	NumAASamples = 4;
 	GammaOffsetScreenshots = 0.7f;
 	LODBias = 0.f;
@@ -235,6 +230,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	NoAATiles = 1;
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 	UseBindlessTextures = 1;
+	UseShaderCache = 1;
 #if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	//UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards // stijn: disabled by default because many AMD drivers choke on it
 #endif
@@ -639,11 +635,7 @@ void UXOpenGLRenderDevice::PostEditChange()
 	debugf(NAME_DevGraphics, TEXT("XOpenGL: PostEditChange"));
 
 	MakeCurrent();
-
-	// stijn: We shouldn't re-check extensions here unless we recreate the entire renderer!!
-	//CheckExtensions();
 	RecompileShaders();
-
 	Flush(UsePrecache);
 	unguard;
 }
@@ -734,6 +726,19 @@ void UXOpenGLRenderDevice::SelectGLVersion()
 #else
 		SelectedMajorVersion = 3;
 		SelectedMinorVersion = 3;
+		if (UseShaderCache)
+		{
+			if (!IsSupportedGLVersion(4, 1))
+			{
+				debugf(TEXT("XOpenGL: UseShaderCache is enabled, but this device does not support OpenGL 4.1. We will disable this option"));
+				UseShaderCache = false;
+			}
+			else
+			{
+				SelectedMajorVersion = Max<INT>(4, SelectedMajorVersion);
+				SelectedMinorVersion = Max<INT>(1, SelectedMinorVersion);
+			}
+		}
 		if (UseShaderDrawParameters)
 		{
 			if (!IsSupportedGLVersion(4, 6))
@@ -856,14 +861,14 @@ UBOOL UXOpenGLRenderDevice::CreateOpenGLContext(void* Window, INT NewColorBytes,
 		UseOpenGLDebug = 0;
 	}
 	if (UseOpenGLDebug)
-		ContextFlags = WGL_CONTEXT_CORE_PROFILE_BIT_ARB | WGL_CONTEXT_DEBUG_BIT_ARB;
-	else ContextFlags = WGL_CONTEXT_CORE_PROFILE_BIT_ARB;
+		ContextFlags = WGL_CONTEXT_DEBUG_BIT_ARB;
 
 	INT iContextAttribs[] =
 		{
 			WGL_CONTEXT_MAJOR_VERSION_ARB, SelectedMajorVersion,
 			WGL_CONTEXT_MINOR_VERSION_ARB, SelectedMinorVersion,
 			WGL_CONTEXT_FLAGS_ARB, ContextFlags,
+			WGL_CONTEXT_PROFILE_MASK_ARB, WGL_CONTEXT_CORE_PROFILE_BIT_ARB,
 			0 // End of attributes list
 		};
 	if (!QueryOnly)
@@ -1955,34 +1960,6 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		RenderFBOBound = FALSE;
 	}	
 
-    // Check for optional frame rate limit
-    // The implementation below is plain wrong in many ways, but been working ever since in UTGLR's.
-    // I am not happy with this solution, but it will do the trick for now...
-#if UTGLRFRAMELIMIT
-	if (FrameRateLimit >= 20)
-    {
-		FTime curFrameTimestamp;
-
-		float timeDiff = 0.f;
-		float rcpFrameRateLimit = 0.f;
-
-		curFrameTimestamp = appSeconds();
-		timeDiff = curFrameTimestamp - prevFrameTimestamp;
-		prevFrameTimestamp = curFrameTimestamp;
-
-		rcpFrameRateLimit = 1.0f / FrameRateLimit;
-		if (timeDiff < rcpFrameRateLimit)
-        {
-			float sleepTime;
-
-			sleepTime = rcpFrameRateLimit - timeDiff;
-			appSleep(sleepTime);
-
-			prevFrameTimestamp = appSeconds();
-		}
-    }
-#endif
-
 	--LockCount;
 	UnlockHit(Blit);
 	unguard;
@@ -2227,6 +2204,10 @@ void UXOpenGLRenderDevice::Exit()
 		EditorStateBuffer.DeleteBuffer();
 		DistanceFogBuffer.DeleteBuffer();
 	}
+	else
+	{
+		SaveShaderCache();
+	}
 	
 #if !_WIN32
 	CurrentGLContext = NULL;
@@ -2277,6 +2258,7 @@ void UXOpenGLRenderDevice::Exit()
 #endif
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderCache"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderCache)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBufferInvalidation"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBufferInvalidation)));
