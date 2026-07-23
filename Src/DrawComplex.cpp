@@ -69,47 +69,92 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	// the shader specialization that only contains straight-line code for those layers. See
 	// ShaderProgram::SelectSpecialization.
 #if ENGINE_VERSION==227
-	const bool HasBumpMap = Surface.BumpMap && BumpMaps;
+	const bool HasBumpMapPtr = Surface.BumpMap != nullptr;
+	const bool HasBumpMap = HasBumpMapPtr && BumpMaps;
 #else
-	const bool HasBumpMap = BumpMaps && Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap;
+	const bool HasBumpMapPtr = Surface.Texture && Surface.Texture->Texture && Surface.Texture->Texture->BumpMap;
+	const bool HasBumpMap = BumpMaps && HasBumpMapPtr;
 #endif
-	ShaderCompilationOptions RequiredOptions = Shader->CurrentSpecialization->Options;
-	RequiredOptions.UnsetOption(
+	// The subset of ShaderCompilationOptions bits that vary per-draw for Complex, as opposed to the
+	// renderer-config-derived bits (which only change when RecompileShader runs on a config reload).
+	const DWORD PerDrawOptionsMask =
 		ShaderCompilationOptions::OPT_HasLightMap | ShaderCompilationOptions::OPT_HasFogMap |
 		ShaderCompilationOptions::OPT_HasDetailTexture | ShaderCompilationOptions::OPT_HasMacroTexture |
 		ShaderCompilationOptions::OPT_HasBumpMap | ShaderCompilationOptions::OPT_HasEnvironmentMap |
-		ShaderCompilationOptions::OPT_HasHeightMap);
-	if (Surface.LightMap)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasLightMap);
-	if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasFogMap);
-	if (Surface.DetailTexture && DetailTextures)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasDetailTexture);
-	if (Surface.MacroTexture && MacroTextures)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasMacroTexture);
-	if (HasBumpMap)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasBumpMap);
+		ShaderCompilationOptions::OPT_HasHeightMap |
+		ShaderCompilationOptions::OPT_IsMasked | ShaderCompilationOptions::OPT_IsAlphaBlended |
+		ShaderCompilationOptions::OPT_IsModulated | ShaderCompilationOptions::OPT_IsTranslucent |
+		ShaderCompilationOptions::OPT_IsUnlit;
+
+	// Calculate the per-draw signature for this draw call. This is a bitmask with relevant bits from DrawFlags and the surface's texture layers,
+	// which we can use to detect when a draw call is identical to the last one in terms of what shader specialization it needs.
+	const DWORD PerDrawSignature =
+		(DrawFlags & (ShaderDrawFlags::DF_Masked | ShaderDrawFlags::DF_AlphaBlended | ShaderDrawFlags::DF_Modulated | ShaderDrawFlags::DF_Translucent | ShaderDrawFlags::DF_Unlit)) |
+		(Surface.LightMap ? ShaderCompilationOptions::OPT_HasLightMap : 0) |
+		((Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr) ? ShaderCompilationOptions::OPT_HasFogMap : 0) |
+		(Surface.DetailTexture ? ShaderCompilationOptions::OPT_HasDetailTexture : 0) |
+		(Surface.MacroTexture ? ShaderCompilationOptions::OPT_HasMacroTexture : 0) |
+		(HasBumpMapPtr ? ShaderCompilationOptions::OPT_HasBumpMap : 0)
 #if ENGINE_VERSION==227
-	if (Surface.EnvironmentMap && EnvironmentMaps)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasEnvironmentMap);
-	if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasHeightMap);
+		| (Surface.EnvironmentMap ? ShaderCompilationOptions::OPT_HasEnvironmentMap : 0)
+		| (Surface.HeightMap ? ShaderCompilationOptions::OPT_HasHeightMap : 0)
 #endif
+		;
+
+	// The renderer-config subset of the currently active specialization -- i.e. with the per-draw
+	// bits masked out, so it's stable across specialization switches that only differ in those bits.
+	ShaderCompilationOptions RendererConfigOptions = Shader->CurrentSpecialization->Options;
+	RendererConfigOptions.UnsetOption(PerDrawOptionsMask);
+
+	ShaderCompilationOptions RequiredOptions;
+	if (PerDrawSignature == Shader->LastPerDrawSignature && RendererConfigOptions == Shader->LastRendererConfigOptions)
+	{
+		// Nothing that matters has changed since the last draw call -- reuse what we computed then.
+		RequiredOptions = Shader->LastResolvedOptions;
+	}
+	else
+	{
+		RequiredOptions = RendererConfigOptions; // already has the per-draw bits cleared
+		if (Surface.LightMap)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasLightMap);
+		if (Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasFogMap);
+		if (Surface.DetailTexture && DetailTextures)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasDetailTexture);
+		if (Surface.MacroTexture && MacroTextures)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasMacroTexture);
+		if (HasBumpMap)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasBumpMap);
+#if ENGINE_VERSION==227
+		if (Surface.EnvironmentMap && EnvironmentMaps)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasEnvironmentMap);
+		if (Surface.HeightMap && ParallaxVersion != Parallax_Disabled)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasHeightMap);
+#endif
+		// Polyflag-derived render modes
+		if (DrawFlags & ShaderDrawFlags::DF_Masked)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsMasked);
+		if (DrawFlags & ShaderDrawFlags::DF_AlphaBlended)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsAlphaBlended);
+		if (DrawFlags & ShaderDrawFlags::DF_Modulated)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsModulated);
+		if (DrawFlags & ShaderDrawFlags::DF_Translucent)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsTranslucent);
+		if (DrawFlags & ShaderDrawFlags::DF_Unlit)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsUnlit);
+
+		Shader->LastPerDrawSignature = PerDrawSignature;
+		Shader->LastRendererConfigOptions = RendererConfigOptions;
+		Shader->LastResolvedOptions = RequiredOptions;
+	}
 
 	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
-	// Check if this draw call will change any global state. If so, we want to flush any pending draw calls before we make the changes
+	// Check if this draw call will change global blend state or the shader specialization. If so, we
+	// want to flush any pending draw calls before we make those changes. Per-texture-layer state
+	// changes no longer need to be pre-checked here -- BindTextureAndSampler flushes lazily, exactly
+	// when a texture layer actually needs to be rebound, instead of us predicting it upfront.
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
-		WillTextureStateChange(DiffuseTextureIndex, *Surface.Texture, NextPolyFlags) || // Check if the surface textures will change
-		(Surface.LightMap && WillTextureStateChange(LightMapIndex, *Surface.LightMap, NextPolyFlags)) ||
-		((Surface.FogMap && Surface.FogMap->Mips[0] && Surface.FogMap->Mips[0]->DataPtr) && WillTextureStateChange(FogMapIndex, *Surface.FogMap, NextPolyFlags)) ||
-		(Surface.DetailTexture && DetailTextures && WillTextureStateChange(DetailTextureIndex, *Surface.DetailTexture, NextPolyFlags)) ||
-		(Surface.MacroTexture && MacroTextures && WillTextureStateChange(MacroTextureIndex, *Surface.MacroTexture, NextPolyFlags)) ||
-#if ENGINE_VERSION==227
-		(Surface.BumpMap && BumpMaps && WillTextureStateChange(BumpMapIndex, *Surface.BumpMap, NextPolyFlags)) ||
-		(Surface.EnvironmentMap && EnvironmentMaps && WillTextureStateChange(EnvironmentMapIndex, *Surface.EnvironmentMap, NextPolyFlags)) ||
-		(Surface.HeightMap && WillTextureStateChange(HeightMapIndex, *Surface.HeightMap, NextPolyFlags)) ||
-#endif
 		!(RequiredOptions == Shader->CurrentSpecialization->Options) || // Check if we need a different shader specialization
 		!CanBuffer)
 	{
@@ -124,7 +169,11 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	// if we haven't built this exact combination before this session
 	Shader->SelectSpecialization(RequiredOptions);
 
-	DrawComplexParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();
+	// Stage this draw's parameters in a local, stack-allocated struct rather than fetching the real
+	// ring-buffer slot up front. Setting up textures below can trigger BindTextureAndSampler's lazy
+	// flush partway through, so writing directly into the ring buffer would not be safe.
+	DrawComplexParameters LocalParams{};
+	DrawComplexParameters* DrawCallParams = &LocalParams;
 
 	// Editor Support.
 	if (GIsEditor)
@@ -176,6 +225,11 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	DrawCallParams->YAxis = glm::vec4(Facet.MapCoords.YAxis.X, Facet.MapCoords.YAxis.Y, Facet.MapCoords.YAxis.Z, Facet.MapCoords.YAxis | Facet.MapCoords.Origin);
 	DrawCallParams->ZAxis = glm::vec4(Facet.MapCoords.ZAxis.X, Facet.MapCoords.ZAxis.Y, Facet.MapCoords.ZAxis.Z, 0.0);
 	DrawCallParams->DrawFlags = DrawFlags;
+
+	// Every texture layer is bound now, and any flush that setting them up could possibly have
+	// triggered has already happened -- safe to fetch the real ring-buffer slot and commit our staged
+	// parameters into it in one shot.
+	*Shader->ParametersBuffer.GetCurrentElementPtr() = LocalParams;
 
 	Shader->DrawBuffer.StartDrawCall();
 	auto DrawID = Shader->DrawBuffer.GetDrawID();

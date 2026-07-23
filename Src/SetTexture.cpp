@@ -96,22 +96,6 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	return Result;
 }
 
-BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
-{
-	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
-	GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
-
-	// We need to re-upload a texture we're currently using
-	if (IsTextureDataStale)
-		return TRUE;
-
-	// We will have to evict a TMU => stop batching
-	if (!UsingBindlessTextures && !IsBoundToTMU)
-		return TRUE;
-
-	return FALSE;
-}
-
 #if UNREAL_TOURNAMENT_OLDUNREAL
 UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
 {
@@ -155,11 +139,12 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	if (!Bind)
 		return;
 
-	if (WillTextureStateChange(-1, Info, 0))
-	{
-		// flush buffered data
-		Shaders[ActiveProgram]->Flush(false);
-	}
+	// We're about to re-upload new data into this texture (and, if it's not bindless-resident, also
+	// rebind it to the temporary upload slot below). Either way, any draw calls we've already batched
+	// up but not yet issued were built expecting the OLD contents/binding, so flush them now -- this
+	// has to happen regardless of bindless residency, since a bindless-resident texture's pending
+	// batch dependency is on its *contents*, not on which TMU it's bound to.
+	Shaders[ActiveProgram]->Flush(false);
 
 	// Use TMU 8 as a temporary storage location
 	if (!IsResidentBindlessTexture)
@@ -702,12 +687,25 @@ void UXOpenGLRenderDevice::GenerateTextureAndSampler(FCachedTexture* Bind)
 {
 	glGenTextures(1, &Bind->Id);
 
+	// stijn: glGenTextures only reserves a name -- it doesn't give the texture object a target. Until
+	// it's been bound at least once via the classic glBindTexture, glBindTextureUnit (which
+	// BindTextureAndSampler prefers when available) will fail with GL_INVALID_OPERATION, since that
+	// DSA entry point requires an already-established target instead of creating one. Establish it
+	// here, immediately, regardless of which texture unit happens to be active right now -- the
+	// target association belongs to the texture object, not to whichever unit we touch to set it.
+	glBindTexture(GL_TEXTURE_2D, Bind->Id);
+
 	if (!Bind->Sampler)
 		glGenSamplers(1, &Bind->Sampler);
 }
 
 void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FCachedTexture* Bind)
 {
+	// stijn: callers are responsible for flushing any pending batch before calling this -- see
+	// SetTexture and UpdateTextureRect. We can't reliably decide it here: SetTexture may need a flush
+	// even when it *doesn't* end up calling us (e.g. a bindless-resident texture whose data just went
+	// stale), so the "do we need to flush" decision has to live where that context is available.
+
 	// stijn: glBindTextureUnit (GL 4.5 DSA) binds directly to a unit without touching the "active
 	// texture unit" global state, so it saves us the separate glActiveTexture call. Falls back to the
 	// classic active-texture-then-bind path on contexts that don't expose it (GL 3.3 core, GLES, etc).
@@ -750,6 +748,14 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 		STAT(unclockFast(Stats.BindCycles));
 		return;
 	}
+
+	// stijn: we didn't bail out above, so *something* about this texture is about to change: either
+	// we're binding a different texture to TMU Multi, or we're about to re-upload new data into a
+	// texture that's already bound/resident somewhere (IsTextureDataStale). Either way, any draw calls
+	// we've already batched up but not yet issued were built expecting the OLD binding/contents, so
+	// flush them now, before we touch anything. This covers the bindless-resident-but-stale case too,
+	// which is the one case where we won't end up calling BindTextureAndSampler below at all.
+	Shaders[ActiveProgram]->Flush(false);
 
     // Make current.
 	Tex.CurrentCacheID   = Info.CacheID;

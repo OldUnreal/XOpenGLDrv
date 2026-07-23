@@ -67,25 +67,51 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	bool CanBuffer = false;
 	DrawTileParameters* DrawCallParams = nullptr;
 
+	ShaderProgram* Shader = Shaders[Tile_Prog];
+	const DWORD PerDrawOptionsMask = ShaderCompilationOptions::OPT_IsMasked | ShaderCompilationOptions::OPT_IsAlphaBlended;
+	const DWORD PerDrawSignature = DrawFlags & PerDrawOptionsMask;
+
+	ShaderCompilationOptions RendererConfigOptions = Shader->CurrentSpecialization->Options;
+	RendererConfigOptions.UnsetOption(PerDrawOptionsMask);
+
+	ShaderCompilationOptions RequiredOptions;
+	if (PerDrawSignature == Shader->LastPerDrawSignature && RendererConfigOptions == Shader->LastRendererConfigOptions)
+	{
+		// Nothing that matters has changed since the last draw call -- reuse what we computed then.
+		RequiredOptions = Shader->LastResolvedOptions;
+	}
+	else
+	{
+		RequiredOptions = RendererConfigOptions; // already has the per-draw bits cleared
+		if (DrawFlags & ShaderDrawFlags::DF_Masked)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsMasked);
+		if (DrawFlags & ShaderDrawFlags::DF_AlphaBlended)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsAlphaBlended);
+
+		Shader->LastPerDrawSignature = PerDrawSignature;
+		Shader->LastRendererConfigOptions = RendererConfigOptions;
+		Shader->LastResolvedOptions = RequiredOptions;
+	}
+
 	if (ShaderCore)
 	{
-		CanBuffer = ShaderCore->VertBuffer.CanBuffer(3) && 
+		CanBuffer = ShaderCore->VertBuffer.CanBuffer(3) &&
 			ShaderCore->ParametersBuffer.CanBuffer(1) &&
 			!ShaderCore->DrawBuffer.IsFull();
-		DrawCallParams = ShaderCore->ParametersBuffer.GetCurrentElementPtr();
 	}
 	else
 	{
 		CanBuffer = ShaderES->VertBuffer.CanBuffer(6) &&
 			ShaderES->ParametersBuffer.CanBuffer(1) &&
 			!ShaderES->DrawBuffer.IsFull();
-		DrawCallParams = ShaderES->ParametersBuffer.GetCurrentElementPtr();
-	}	
+	}
 
-	// Check if global GL state will change
-	if (WillBlendStateChange(CurrentBlendPolyFlags, PolyFlags) || 
-		// Check if bound sampler state will change
-		WillTextureStateChange(0, Info, NextPolyFlags) ||
+	// Check if global GL state will change. Bound sampler state no longer needs to be pre-checked
+	// here -- BindTextureAndSampler flushes lazily, exactly when it actually needs to rebind, instead
+	// of us predicting it upfront.
+	if (WillBlendStateChange(CurrentBlendPolyFlags, PolyFlags) ||
+		// Check if we need a different shader specialization
+		!(RequiredOptions == Shader->CurrentSpecialization->Options) ||
 		// Check if we have space to batch more data
 		!CanBuffer
 #if UNREAL_TOURNAMENT_OLDUNREAL
@@ -95,15 +121,9 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 		)
 	{
 		if (ShaderCore)
-		{
 			ShaderCore->Flush(!CanBuffer);
-			DrawCallParams = ShaderCore->ParametersBuffer.GetCurrentElementPtr();
-		}
 		else
-		{
 			ShaderES->Flush(!CanBuffer);
-			DrawCallParams = ShaderES->ParametersBuffer.GetCurrentElementPtr();
-		}
 
 		// Set new GL state
 		SetBlend(PolyFlags); // yes, we use the original polyflags here!
@@ -120,8 +140,11 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 #endif
 	}
 
-	// Bind texture or fetch its bindless handle
-	SetTexture(DiffuseTextureIndex, Info, PolyFlags, 0);	
+	Shader->SelectSpecialization(RequiredOptions);
+
+	SetTexture(DiffuseTextureIndex, Info, PolyFlags, 0);
+
+	DrawCallParams = ShaderCore ? ShaderCore->ParametersBuffer.GetCurrentElementPtr() : ShaderES->ParametersBuffer.GetCurrentElementPtr();
 
 	// Buffer new drawcall parameters
 	const auto& TexInfo = this->TexInfo[DiffuseTextureIndex];

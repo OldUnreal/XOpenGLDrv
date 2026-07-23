@@ -481,17 +481,14 @@ void main(void)
 #if OPT_MacroTextures && OPT_HasMacroTexture
   {
     vec4 MacrotexColor = GetTexel(GetTexHandleHelper(vDrawID, MacroTextureIndex), TMUMacro, vMacroTexCoords);
-    if ((DrawFlags & DF_Masked) == DF_Masked)
-    {
-      if (MacrotexColor.a < 0.5)
-        discard;
-      else MacrotexColor.rgb /= MacrotexColor.a;
-    }
-	else if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
-    {
-      if (MacrotexColor.a < 0.01)
-        discard;
-    }
+#if OPT_IsMasked
+    if (MacrotexColor.a < 0.5)
+      discard;
+    else MacrotexColor.rgb /= MacrotexColor.a;
+#elif OPT_IsAlphaBlended
+    if (MacrotexColor.a < 0.01)
+      discard;
+#endif
 
     vec3 hsvMacroTex = rgb2hsv(MacrotexColor.rgb);
     hsvMacroTex.b += (MacrotexColor.r - 0.1);
@@ -530,8 +527,9 @@ void main(void)
       float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * MinLight);
       float attenuation = NormalLightRadius / (dist + b * dist * dist);
 
-      if ((DrawFlags & DF_Unlit) == DF_Unlit)
-        InLightPos = vec3(1.0, 1.0, 1.0); //no idea whats best here. Arbitrary value based on some tests.
+#if OPT_IsUnlit
+      InLightPos = vec3(1.0, 1.0, 1.0); //no idea whats best here. Arbitrary value based on some tests.
+#endif
 
       if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight) // Do not consider if not in range or in a different zone.
         continue;
@@ -566,38 +564,37 @@ void main(void)
 #if OPT_EnvironmentMaps && OPT_HasEnvironmentMap
   {
     vec4 EnvironmentColor = GetTexel(GetTexHandleHelper(vDrawID, EnvironmentMapIndex), TMUEnvironmentMap, vEnvironmentTexCoords);
-    if ((DrawFlags & DF_Masked) == DF_Masked)
-    {
-      if (EnvironmentColor.a < 0.5)
-        discard;
-      else EnvironmentColor.rgb /= EnvironmentColor.a;
-    }
-    else if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
-    {
-      if (EnvironmentColor.a < 0.01)
-        discard;
-    }
+#if OPT_IsMasked
+    if (EnvironmentColor.a < 0.5)
+      discard;
+    else EnvironmentColor.rgb /= EnvironmentColor.a;
+#elif OPT_IsAlphaBlended
+    if (EnvironmentColor.a < 0.01)
+      discard;
+#endif
 
     TotalColor *= vec4(EnvironmentColor.rgb, 1.0);
   }
 #endif
 
-  if ((DrawFlags & DF_Modulated) != DF_Modulated)
-    TotalColor = TotalColor * LightColor;
+#if !OPT_IsModulated
+  TotalColor = TotalColor * LightColor;
+#endif
 
   TotalColor += FogColor;
 
 #if OPT_DistanceFog
-  // Add DistanceFog, needs to be added after Light has been applied. 
+  // Add DistanceFog, needs to be added after Light has been applied.
   if (DistanceFogMode >= 0)
   {
     vec4 MixColor;
-    if ((DrawFlags & DF_Modulated) == DF_Modulated)
-      MixColor = vec4(0.5, 0.5, 0.5, 0.0);
-    else if ((DrawFlags & DF_Translucent) == DF_Translucent && (DrawFlags & DF_EnvironmentMap) != DF_EnvironmentMap)
-      MixColor = vec4(0.0, 0.0, 0.0, 0.0);
-    else
-      MixColor = DistanceFogColor;
+#if OPT_IsModulated
+    MixColor = vec4(0.5, 0.5, 0.5, 0.0);
+#elif OPT_IsTranslucent && !OPT_HasEnvironmentMap
+    MixColor = vec4(0.0, 0.0, 0.0, 0.0);
+#else
+    MixColor = DistanceFogColor;
+#endif
 
     float FogCoord = abs(vEyeSpacePos.z / vEyeSpacePos.w);
     TotalColor = mix(TotalColor, MixColor, getFogFactor(FogCoord));

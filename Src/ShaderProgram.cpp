@@ -256,17 +256,14 @@ vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
 		Out << R"(
 vec4 ApplyPolyFlags(vec4 Color, uint DrawFlags)
 {
-  if ((DrawFlags & DF_Masked) == DF_Masked)
-  {
-    if (Color.a < 0.5)
-      discard;
-    else Color.rgb /= Color.a;
-  }
-  else if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
-  {
-    if (Color.a < 0.01)
-      discard;
-  }
+#if OPT_IsMasked
+  if (Color.a < 0.5)
+    discard;
+  else Color.rgb /= Color.a;
+#elif OPT_IsAlphaBlended
+  if (Color.a < 0.01)
+    discard;
+#endif
   return Color;
 }
 )";
@@ -1040,6 +1037,12 @@ AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
     ADD_OPTION(OPT_HasBumpMap)
     ADD_OPTION(OPT_HasEnvironmentMap)
     ADD_OPTION(OPT_HasHeightMap)
+    ADD_OPTION(OPT_IsMasked)
+    ADD_OPTION(OPT_IsAlphaBlended)
+    ADD_OPTION(OPT_IsModulated)
+    ADD_OPTION(OPT_IsTranslucent)
+    ADD_OPTION(OPT_IsRenderFog)
+    ADD_OPTION(OPT_IsUnlit)
 
     if (Result.Len() == 0)
         AddOptionFunc(Result, TEXT("OPT_None"), true);
