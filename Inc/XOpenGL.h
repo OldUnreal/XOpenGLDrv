@@ -479,6 +479,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD UseBufferInvalidation;
 	BITFIELD UseShaderDrawParameters;
 	BITFIELD UseShaderCache;
+#if _WIN32
+	BITFIELD ReduceMouseLag; // Present through a low-latency DXGI flip-model swapchain (WGL_NV_DX_interop)
+#endif
 
 	// Not really in use...(yet)
 	BITFIELD UseMeshBuffering; //Buffer (Static)Meshes for drawing.
@@ -518,6 +521,28 @@ class UXOpenGLRenderDevice : public URenderDevice
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
 	static PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB;
 	TArray<FPlane> SupportedDisplayModes;
+
+	// DXGI low-latency swapchain (ReduceMouseLag) via WGL_NV_DX_interop.
+	static PFNWGLDXOPENDEVICENVPROC wglDXOpenDeviceNV;
+	static PFNWGLDXCLOSEDEVICENVPROC wglDXCloseDeviceNV;
+	static PFNWGLDXREGISTEROBJECTNVPROC wglDXRegisterObjectNV;
+	static PFNWGLDXUNREGISTEROBJECTNVPROC wglDXUnregisterObjectNV;
+	static PFNWGLDXLOCKOBJECTSNVPROC wglDXLockObjectsNV;
+	static PFNWGLDXUNLOCKOBJECTSNVPROC wglDXUnlockObjectsNV;
+	static UBOOL SUPPORTS_WGL_NV_DX_interop;
+
+	UBOOL  DXGISupportsTearing;
+	UBOOL  UsingDXGISwapchain;
+	DWORD  DXGISwapChainFlags;
+	void*  pD3D11Device;   // ID3D11Device*
+	void*  pDXGISwapChain; // IDXGISwapChain*
+	HANDLE hDXDevice;      // WGL DX interop device handle
+	HANDLE hDXBackBuffer;  // WGL DX interop backbuffer object handle
+	GLuint DXGIInteropTextureGL;
+	void*  DXGIInteropTextureD3D; // ID3D11Texture2D*
+	GLuint DXGIFramebuffer;
+	INT    DXGIWidth;
+	INT    DXGIHeight;
 #else
 	SDL_GLContext glContext;
 	SDL_Window* Window;
@@ -623,6 +648,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FLOAT StoredGamma;
 	UBOOL StoredOneXBlending;
 	UBOOL StoredActorXBlending;
+#if _WIN32
+	UBOOL StoredUsingDXGISwapchain;
+#endif
 	bool bIsOrtho;
 
 	//
@@ -1616,7 +1644,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::float32 Gamma;
 		glm::float32 LightMapIntensity;		// DrawComplex/OneXBlending
 		glm::float32 LightColorIntensity;	// DrawGouraud/ActorXBlending
-		
+		glm::float32 YScale;			// -1.f when presenting through the DXGI interop swapchain (ReduceMouseLag), 1.f otherwise
+
 	};
 	BufferObject<FrameState> FrameStateBuffer;
 		
@@ -1998,6 +2027,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 	UBOOL CreateOpenGLContext(void* Window, INT NewColorBytes, UBOOL QueryOnly=FALSE);
 	void  UnsetRes();
 	void  SwapControl();
+
+#if _WIN32
+	// DXGI low-latency swapchain (ReduceMouseLag).
+	bool CreateDXGIFramebuffer(INT Width, INT Height, HANDLE hDev, struct ID3D11Device* pDevice, struct IDXGISwapChain* pSwapChain);
+	void InitDXGISwapchain(INT Width, INT Height);
+	void DestroyDXGISwapchain();
+	void ResizeDXGISwapchain(INT Width, INT Height);
+#endif
 
 	void  UpdateRenderFBO(INT Width, INT Height);
 	void  DestroyRenderFBO();
