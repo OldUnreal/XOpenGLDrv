@@ -28,6 +28,14 @@
 
 #ifndef _WIN32
 #include <sys/time.h>
+#else
+#include <d3d11.h>
+#include <dxgi.h>
+#include <dxgi1_5.h>
+#ifndef DXGI_SWAP_EFFECT_FLIP_DISCARD
+#define DXGI_SWAP_EFFECT_FLIP_DISCARD ((DXGI_SWAP_EFFECT)4)
+#endif
+#define XOPENGL_DXGI_FORMAT DXGI_FORMAT_R8G8B8A8_UNORM
 #endif
 
 #if !_WIN32
@@ -180,7 +188,10 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderCache"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderCache), TEXT("Options"), CPF_Config);
-	
+#if _WIN32
+	new(GetClass(), TEXT("ReduceMouseLag"), RF_Public)UBoolProperty(CPP_PROPERTY(ReduceMouseLag), TEXT("Options"), CPF_Config);
+#endif
+
 	// Debug Options
 	new(GetClass(), TEXT("DebugLevel"), RF_Public)UIntProperty(CPP_PROPERTY(DebugLevel), TEXT("DebugOptions"), CPF_Config);
 	new(GetClass(), TEXT("UseOpenGLDebug"), RF_Public)UBoolProperty(CPP_PROPERTY(UseOpenGLDebug), TEXT("DebugOptions"), CPF_Config);	
@@ -231,6 +242,9 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseMeshBuffering = 0; //Buffer (Static)Meshes for drawing.
 	UseBindlessTextures = 1;
 	UseShaderCache = 1;
+#if _WIN32
+	ReduceMouseLag = 1;
+#endif
 #if UNREAL_OLDUNREAL || UNREAL_TOURNAMENT_OLDUNREAL
 	//UseShaderDrawParameters = 1; // setting this to true slightly improves performance on nvidia cards // stijn: disabled by default because many AMD drivers choke on it
 #endif
@@ -1059,6 +1073,25 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 {
 	guard(UXOpenGLRenderDevice::SetRes);
 
+	// WinDrv's fullscreen transition (ResizeViewport) calls Window->MoveWindow() before it
+	// updates its own BlitFlags member. MoveWindow synchronously pumps a WM_SIZE, and that
+	// handler - seeing BlitFlags not yet marked fullscreen - calls back into RenDev->SetRes()
+	// as a nested, re-entrant call while this (real) call is still in progress. Reacting to
+	// that nested call as if it were an independent request corrupts the in-progress
+	// transition (observed as an immediate fullscreen->windowed bounce on Alt+Enter), so just
+	// ignore any SetRes call that arrives while we're already inside one.
+	static UBOOL bReentrant = 0;
+	if (bReentrant)
+	{
+		debugf(TEXT("XOpenGL: Ignoring reentrant SetRes call during an in-progress resolution change"));
+		return 1;
+	}
+	struct FReentrancyGuard
+	{
+		FReentrancyGuard()  { bReentrant = 1; }
+		~FReentrancyGuard() { bReentrant = 0; }
+	} ReentrancyGuard;
+
 	DesiredColorBits = NewColorBytes <= 2 ? 16 : 32;
 	DesiredStencilBits = NewColorBytes <= 2 ? 0 : 8;
 	DesiredDepthBits = NewColorBytes <= 2 ? 16 : 24;
@@ -1190,6 +1223,11 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		debugf(TEXT("XOpenGL: CreateOpenGLContext failed - failing SetRes"));
 		return 0;
 	}
+
+#if _WIN32
+	if (ReduceMouseLag && !UsingDXGISwapchain)
+		InitDXGISwapchain(Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
+#endif
 
 	// Flush textures.
 	Flush(1);
@@ -1503,7 +1541,11 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 	else if (BumpMaps) // stijn: TODO: We need this to prevent lights from jumping around. This indicates there's some problem in Render!
 		UpdateCoords(Frame);
 #endif
-	if (StoredGamma != GetViewportGamma(Viewport) || StoredOneXBlending != OneXBlending || StoredActorXBlending != ActorXBlending)
+	if (StoredGamma != GetViewportGamma(Viewport) || StoredOneXBlending != OneXBlending || StoredActorXBlending != ActorXBlending
+#if _WIN32
+		|| StoredUsingDXGISwapchain != UsingDXGISwapchain
+#endif
+		)
 		SetFrameStateUniforms();
 
 	// Set clip planes.
@@ -1603,6 +1645,15 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 	FrameState->Gamma = StoredGamma;
 	FrameState->LightColorIntensity = ActorXBlending ? 1.f : 1.5f;
 	FrameState->LightMapIntensity = OneXBlending ? 2.f : 4.f;
+#if _WIN32
+	// The DXGI interop backbuffer is read back by D3D with a top-down (D3D) row order,
+	// while we rendered into it with GL's bottom-up convention, so the post-process pass
+	// needs to flip vertically to compensate (mirrors AntiDrv's YScale trick).
+	StoredUsingDXGISwapchain = UsingDXGISwapchain;
+	FrameState->YScale = UsingDXGISwapchain ? -1.f : 1.f;
+#else
+	FrameState->YScale = 1.f;
+#endif
 	FrameStateBuffer.Bind();
 	FrameStateBuffer.BufferData(true);
 }
@@ -1836,6 +1887,334 @@ void UXOpenGLRenderDevice::DestroyRenderFBO()
 	RenderFBOBound  = FALSE;
 }
 
+/*-----------------------------------------------------------------------------
+	DXGI low-latency swapchain (WGL_NV_DX_interop) - ReduceMouseLag.
+-----------------------------------------------------------------------------*/
+
+#if _WIN32
+
+bool UXOpenGLRenderDevice::CreateDXGIFramebuffer(
+	INT             Width,
+	INT             Height,
+	HANDLE          hDev,
+	ID3D11Device*   pDevice,
+	IDXGISwapChain* pSwapChain)
+{
+	//
+	// stijn: we're supposed to be able to attach the DXGI swapchain's back buffer to an OpenGL FBO
+	// as its color attachment, but this does not seem to work on nvidia drivers.
+	// Instead, we'll create a "proxy" texture, use it as a render target, and copy its
+	// contents to the back buffer during present.
+	// This is not ideal, but it works, and it still allows us to reduce input latency
+	// to native d3d11 levels.
+	//
+
+	D3D11_TEXTURE2D_DESC TexDesc = {};
+	TexDesc.Width                = Width;
+	TexDesc.Height               = Height;
+	TexDesc.MipLevels            = 1;
+	TexDesc.ArraySize            = 1;
+	TexDesc.Format               = XOPENGL_DXGI_FORMAT;
+	TexDesc.SampleDesc.Count     = 1;
+	TexDesc.Usage                = D3D11_USAGE_DEFAULT;
+	TexDesc.BindFlags            = D3D11_BIND_RENDER_TARGET;
+	pDevice->CreateTexture2D(&TexDesc, nullptr, (ID3D11Texture2D**)&DXGIInteropTextureD3D);
+
+	// Now create an OpenGL name for this native d3d11 texture
+	glGenTextures(1, &DXGIInteropTextureGL);
+
+	// And register the texture with WGL_NV_DX_interop so we can use it as an FBO attachment
+	HANDLE hBB = wglDXRegisterObjectNV(
+		hDev,
+		DXGIInteropTextureD3D,
+		DXGIInteropTextureGL,
+		GL_TEXTURE_2D,
+		WGL_ACCESS_WRITE_DISCARD_NV);
+
+	if (!hBB)
+	{
+		debugf(TEXT("XOpenGL: wglDXRegisterObjectNV failed. ReduceMouseLag will have no effect."));
+		glDeleteTextures(1, &DXGIInteropTextureGL);
+		DXGIInteropTextureGL = 0;
+		wglDXCloseDeviceNV(hDev);
+		((ID3D11Texture2D*)DXGIInteropTextureD3D)->Release();
+		DXGIInteropTextureD3D = nullptr;
+		pSwapChain->Release();
+		pDevice->Release();
+		return false;
+	}
+
+	// Create the FBO here
+	GLuint FB = 0;
+	glGenFramebuffers(1, &FB);
+
+	// lock the texture so OpenGL can actually see its memory
+	verify(wglDXLockObjectsNV(hDev, 1, &hBB));
+
+	// setup the FBO while the memory is valid
+	glBindFramebuffer(GL_FRAMEBUFFER, FB);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, DXGIInteropTextureGL, 0);
+
+	// Make sure GL draws to the correct color attachment
+	GLenum DrawBuffers[] = { GL_COLOR_ATTACHMENT0 };
+	glDrawBuffers(1, DrawBuffers);
+
+	// force the driver to evaluate and cache the COMPLETE status
+	GLenum FBOStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+	if (FBOStatus != GL_FRAMEBUFFER_COMPLETE)
+		debugf(NAME_Warning, TEXT("XOpenGL: DXGI interop FBO is incomplete! Status: 0x%x"), FBOStatus);
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	// unlock the resource now that the FBO is safely built
+	verify(wglDXUnlockObjectsNV(hDev, 1, &hBB));
+
+	hDXBackBuffer   = hBB;
+	DXGIFramebuffer = FB;
+
+	return true;
+}
+
+void UXOpenGLRenderDevice::InitDXGISwapchain(INT Width, INT Height)
+{
+	guard(UXOpenGLRenderDevice::InitDXGISwapchain);
+
+	if (!SUPPORTS_WGL_NV_DX_interop)
+	{
+		wglDXOpenDeviceNV       = (PFNWGLDXOPENDEVICENVPROC)wglGetProcAddress("wglDXOpenDeviceNV");
+		wglDXCloseDeviceNV      = (PFNWGLDXCLOSEDEVICENVPROC)wglGetProcAddress("wglDXCloseDeviceNV");
+		wglDXRegisterObjectNV   = (PFNWGLDXREGISTEROBJECTNVPROC)wglGetProcAddress("wglDXRegisterObjectNV");
+		wglDXUnregisterObjectNV = (PFNWGLDXUNREGISTEROBJECTNVPROC)wglGetProcAddress("wglDXUnregisterObjectNV");
+		wglDXLockObjectsNV      = (PFNWGLDXLOCKOBJECTSNVPROC)wglGetProcAddress("wglDXLockObjectsNV");
+		wglDXUnlockObjectsNV    = (PFNWGLDXUNLOCKOBJECTSNVPROC)wglGetProcAddress("wglDXUnlockObjectsNV");
+		SUPPORTS_WGL_NV_DX_interop = wglDXOpenDeviceNV && wglDXCloseDeviceNV && wglDXRegisterObjectNV &&
+									 wglDXUnregisterObjectNV && wglDXLockObjectsNV && wglDXUnlockObjectsNV;
+		if (SUPPORTS_WGL_NV_DX_interop)
+			debugf(TEXT("XOpenGL: WGL_NV_DX_interop supported."));
+		else
+			debugf(TEXT("XOpenGL: WGL_NV_DX_interop not supported. ReduceMouseLag will have no effect."));
+	}
+
+	if (!SUPPORTS_WGL_NV_DX_interop)
+		return;
+
+	D3D_FEATURE_LEVEL    FeatureLevel;
+	ID3D11Device*        pDevice  = nullptr;
+	ID3D11DeviceContext* pContext = nullptr;
+
+	UINT DeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+	HRESULT hr = D3D11CreateDevice(
+		nullptr,
+		D3D_DRIVER_TYPE_HARDWARE,
+		nullptr,
+		DeviceFlags,
+		nullptr,
+		0,
+		D3D11_SDK_VERSION,
+		&pDevice,
+		&FeatureLevel,
+		&pContext);
+
+	if (FAILED(hr))
+	{
+		debugf(TEXT("XOpenGL: D3D11CreateDevice failed (0x%08X). ReduceMouseLag will have no effect."), hr);
+		return;
+	}
+	pContext->Release();
+
+	// Reduce GPU queue depth to 1 frame for lower input latency.
+	IDXGIDevice1* pDXGIDevice1 = nullptr;
+	if (SUCCEEDED(pDevice->QueryInterface(__uuidof(IDXGIDevice1), (void**)&pDXGIDevice1)))
+	{
+		pDXGIDevice1->SetMaximumFrameLatency(1);
+		pDXGIDevice1->Release();
+	}
+
+	// Walk up to the DXGI factory that created the adapter.
+	IDXGIDevice*  pDXGIDev = nullptr;
+	IDXGIAdapter* pAdapter = nullptr;
+	IDXGIFactory* pFactory = nullptr;
+	pDevice->QueryInterface(__uuidof(IDXGIDevice), (void**)&pDXGIDev);
+	pDXGIDev->GetAdapter(&pAdapter);
+	pAdapter->GetParent(__uuidof(IDXGIFactory), (void**)&pFactory);
+	pAdapter->Release();
+	pDXGIDev->Release();
+
+	// We manage windowed<->borderless-fullscreen transitions ourselves (see WinViewport.cpp,
+	// which just restyles/resizes the same HWND). Without this, DXGI's own window-change
+	// monitoring can decide to intervene when it sees the window grow to cover the whole
+	// monitor, which fights with our explicit ResizeDXGISwapchain/ResizeBuffers calls and
+	// leaves the swapchain in a broken state after a windowed->fullscreen transition.
+	pFactory->MakeWindowAssociation(hWnd, DXGI_MWA_NO_ALT_ENTER | DXGI_MWA_NO_WINDOW_CHANGES);
+
+	// Check if we can disable vsync-based presentation and use tearing instead.
+	IDXGIFactory5* Factory5;
+	if (SUCCEEDED(pFactory->QueryInterface(__uuidof(IDXGIFactory5), (void**)&Factory5)))
+	{
+		Factory5->CheckFeatureSupport(
+			DXGI_FEATURE_PRESENT_ALLOW_TEARING,
+			&DXGISupportsTearing,
+			sizeof(DXGISupportsTearing));
+		Factory5->Release();
+	}
+
+	// Try flip-discard (Windows 10+) first, fall back to blit-discard.
+	DXGI_SWAP_CHAIN_DESC Desc = {};
+	Desc.BufferDesc.Width     = Width;
+	Desc.BufferDesc.Height    = Height;
+	Desc.BufferDesc.Format    = XOPENGL_DXGI_FORMAT;
+	Desc.SampleDesc.Count     = 1;
+	Desc.BufferUsage          = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+	Desc.OutputWindow         = hWnd;
+	Desc.Windowed             = TRUE;
+	Desc.SwapEffect           = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	Desc.BufferCount          = 2;
+	Desc.Flags                = DXGISupportsTearing ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
+	DXGISwapChainFlags        = Desc.Flags;
+
+	IDXGISwapChain* pSwapChain = nullptr;
+	hr                         = pFactory->CreateSwapChain(pDevice, &Desc, &pSwapChain);
+	if (FAILED(hr))
+	{
+		Desc.SwapEffect  = DXGI_SWAP_EFFECT_DISCARD;
+		Desc.BufferCount = 1;
+		hr               = pFactory->CreateSwapChain(pDevice, &Desc, &pSwapChain);
+	}
+	pFactory->Release();
+
+	if (FAILED(hr))
+	{
+		debugf(TEXT("XOpenGL: DXGI swapchain creation failed (0x%08X). ReduceMouseLag will have no effect."), hr);
+		pDevice->Release();
+		return;
+	}
+
+	// Open the D3D11 device for WGL interop.
+	HANDLE hDev = wglDXOpenDeviceNV(pDevice);
+	if (!hDev)
+	{
+		debugf(TEXT("XOpenGL: wglDXOpenDeviceNV failed. ReduceMouseLag will have no effect."));
+		pSwapChain->Release();
+		pDevice->Release();
+		return;
+	}
+
+	if (CreateDXGIFramebuffer(Width, Height, hDev, pDevice, pSwapChain))
+	{
+		pD3D11Device       = pDevice;
+		pDXGISwapChain     = pSwapChain;
+		hDXDevice          = hDev;
+		DXGIWidth          = Width;
+		DXGIHeight         = Height;
+		UsingDXGISwapchain = 1;
+
+		debugf(TEXT("XOpenGL: DXGI swapchain initialized for ReduceMouseLag (%dx%d)."), Width, Height);
+	}
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::DestroyDXGISwapchain()
+{
+	guard(UXOpenGLRenderDevice::DestroyDXGISwapchain);
+
+	if (!UsingDXGISwapchain)
+		return;
+
+	if (hDXBackBuffer)
+	{
+		wglDXUnregisterObjectNV(hDXDevice, hDXBackBuffer);
+		hDXBackBuffer = nullptr;
+	}
+	if (DXGIFramebuffer)
+	{
+		glDeleteFramebuffers(1, &DXGIFramebuffer);
+		DXGIFramebuffer = 0;
+	}
+	if (DXGIInteropTextureGL)
+	{
+		glDeleteTextures(1, &DXGIInteropTextureGL);
+		DXGIInteropTextureGL = 0;
+	}
+	if (DXGIInteropTextureD3D)
+	{
+		((ID3D11Texture2D*)DXGIInteropTextureD3D)->Release();
+		DXGIInteropTextureD3D = nullptr;
+	}
+	if (hDXDevice)
+	{
+		wglDXCloseDeviceNV(hDXDevice);
+		hDXDevice = nullptr;
+	}
+	if (pDXGISwapChain)
+	{
+		((IDXGISwapChain*)pDXGISwapChain)->SetFullscreenState(FALSE, nullptr);
+		((IDXGISwapChain*)pDXGISwapChain)->Release();
+		pDXGISwapChain = nullptr;
+	}
+	if (pD3D11Device)
+	{
+		ID3D11DeviceContext* pContext = nullptr;
+		((ID3D11Device*)pD3D11Device)->GetImmediateContext(&pContext);
+		if (pContext)
+		{
+			pContext->ClearState();
+			pContext->Flush();
+			pContext->Release();
+		}
+
+		((ID3D11Device*)pD3D11Device)->Release();
+		pD3D11Device = nullptr;
+	}
+
+	UsingDXGISwapchain = 0;
+
+	unguard;
+}
+
+void UXOpenGLRenderDevice::ResizeDXGISwapchain(INT Width, INT Height)
+{
+	guard(UXOpenGLRenderDevice::ResizeDXGISwapchain);
+
+	if (!UsingDXGISwapchain || (Width == DXGIWidth && Height == DXGIHeight) || Width <= 0 || Height <= 0)
+		return;
+
+	// Unregister the old backbuffer from the interop layer.
+	wglDXUnregisterObjectNV(hDXDevice, hDXBackBuffer);
+	hDXBackBuffer = nullptr;
+	glDeleteFramebuffers(1, &DXGIFramebuffer);
+	glDeleteTextures(1, &DXGIInteropTextureGL);
+	DXGIFramebuffer      = 0;
+	DXGIInteropTextureGL = 0;
+	if (DXGIInteropTextureD3D)
+	{
+		((ID3D11Texture2D*)DXGIInteropTextureD3D)->Release();
+		DXGIInteropTextureD3D = nullptr;
+	}
+
+	HRESULT hr = ((IDXGISwapChain*)pDXGISwapChain)
+		->ResizeBuffers(0, Width, Height, XOPENGL_DXGI_FORMAT, DXGISwapChainFlags);
+	if (FAILED(hr))
+	{
+		debugf(TEXT("XOpenGL: DXGI ResizeBuffers failed (0x%08X). Disabling ReduceMouseLag."), hr);
+		DestroyDXGISwapchain();
+		return;
+	}
+
+	if (CreateDXGIFramebuffer(Width, Height, hDXDevice, (ID3D11Device*)pD3D11Device, (IDXGISwapChain*)pDXGISwapChain))
+	{
+		DXGIWidth  = Width;
+		DXGIHeight = Height;
+
+		debugf(TEXT("XOpenGL: Resized DXGI swapchain (%dx%d)"), Width, Height);
+	}
+
+	unguard;
+}
+
+#endif // _WIN32
+
 static INT LockCount = 0;
 void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
@@ -1843,7 +2222,7 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	check(LockCount == 0);
 	++LockCount;
-	
+
 	MakeCurrent();
 
 	RenderFBOBound = FALSE;
@@ -1940,7 +2319,20 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		if (Blit)
 		{
+#if _WIN32
+			if (UsingDXGISwapchain)
+			{
+				ResizeDXGISwapchain(Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
+				if (UsingDXGISwapchain) // ResizeDXGISwapchain may have disabled it on failure
+					verify(wglDXLockObjectsNV(hDXDevice, 1, &hDXBackBuffer));
+			}
+#endif
+
 			SetProgram(PostProcess_Prog);
+#if _WIN32
+			if (UsingDXGISwapchain)
+				glBindFramebuffer(GL_FRAMEBUFFER, DXGIFramebuffer);
+#endif
 			static_cast<PostProcessProgram*>(Shaders[PostProcess_Prog])->Draw(RenderColorTexture, Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
 			SetProgram(No_Prog);
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -1948,7 +2340,48 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #if !_WIN32
 			SDL_GL_SwapWindow(Window);
 #else
-			verify(SwapBuffers(hDC));
+			if (UsingDXGISwapchain)
+			{
+				// Make the D3D device's back buffer see what we just rendered, then present it
+				// through the low-latency DXGI flip-model swapchain instead of wglSwapBuffers.
+				glFlush();
+				verify(wglDXUnlockObjectsNV(hDXDevice, 1, &hDXBackBuffer));
+				glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+				ID3D11Texture2D* pBackBuf = nullptr;
+				HRESULT hrGetBuffer = ((IDXGISwapChain*)pDXGISwapChain)->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&pBackBuf);
+				if (FAILED(hrGetBuffer))
+					debugf(NAME_Warning, TEXT("XOpenGL: DXGI GetBuffer failed (0x%08X)"), hrGetBuffer);
+
+				ID3D11DeviceContext* pDXContext = nullptr;
+				((ID3D11Device*)pD3D11Device)->GetImmediateContext(&pDXContext);
+
+				if (pDXContext && pBackBuf && DXGIInteropTextureD3D)
+				{
+					pDXContext->CopyResource(pBackBuf, (ID3D11Texture2D*)DXGIInteropTextureD3D);
+					pDXContext->Release();
+				}
+				if (pBackBuf)
+					pBackBuf->Release();
+
+				UINT PresentFlags = 0;
+				UINT SyncInterval = UseVSync != VS_Off ? 1 : 0;
+
+				// Only allow tearing if VSync is off, the hardware supports it, and we're not
+				// in (borderless) fullscreen. DXGI appears to reject DXGI_PRESENT_ALLOW_TEARING
+				// with DXGI_ERROR_INVALID_CALL once our window exactly covers its output, even
+				// though we never call SetFullscreenState(TRUE) ourselves (we stay Windowed=TRUE
+				// the whole time) - this was producing a Present failure on every frame (a frozen
+				// screen) right after a windowed->fullscreen transition.
+				if (SyncInterval == 0 && DXGISupportsTearing && !WasFullscreen)
+					PresentFlags |= DXGI_PRESENT_ALLOW_TEARING;
+
+				HRESULT hrPresent = ((IDXGISwapChain*)pDXGISwapChain)->Present(SyncInterval, PresentFlags);
+				if (FAILED(hrPresent))
+					debugf(NAME_Warning, TEXT("XOpenGL: DXGI Present failed (0x%08X)"), hrPresent);
+			}
+			else
+				verify(SwapBuffers(hDC));
 #endif
 		}
 		else
@@ -2189,6 +2622,9 @@ void UXOpenGLRenderDevice::Exit()
 			Flush(0);
 
 		DestroyRenderFBO();
+#if _WIN32
+		DestroyDXGISwapchain();
+#endif
 
 		ResetShaders();
 		if (AllContexts.Num() == 0 && SharedBindMap)
@@ -2259,6 +2695,9 @@ void UXOpenGLRenderDevice::Exit()
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBindlessTextures"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBindlessTextures)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderDrawParameters"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderDrawParameters)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseShaderCache"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseShaderCache)));
+#if _WIN32
+	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("ReduceMouseLag"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(ReduceMouseLag)));
+#endif
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UsePersistentBuffers"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UsePersistentBuffers)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("GenerateMipMaps"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(GenerateMipMaps)));
 	GConfig->SetString(TEXT("XOpenGLDrv.XOpenGLRenderDevice"), TEXT("UseBufferInvalidation"), *FString::Printf(TEXT("%ls"), *GetTrueFalse(UseBufferInvalidation)));
@@ -2495,6 +2934,13 @@ TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
 PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
 PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
 PFNWGLGETEXTENSIONSSTRINGARBPROC UXOpenGLRenderDevice::wglGetExtensionsStringARB = nullptr;
+PFNWGLDXOPENDEVICENVPROC UXOpenGLRenderDevice::wglDXOpenDeviceNV = nullptr;
+PFNWGLDXCLOSEDEVICENVPROC UXOpenGLRenderDevice::wglDXCloseDeviceNV = nullptr;
+PFNWGLDXREGISTEROBJECTNVPROC UXOpenGLRenderDevice::wglDXRegisterObjectNV = nullptr;
+PFNWGLDXUNREGISTEROBJECTNVPROC UXOpenGLRenderDevice::wglDXUnregisterObjectNV = nullptr;
+PFNWGLDXLOCKOBJECTSNVPROC UXOpenGLRenderDevice::wglDXLockObjectsNV = nullptr;
+PFNWGLDXUNLOCKOBJECTSNVPROC UXOpenGLRenderDevice::wglDXUnlockObjectsNV = nullptr;
+UBOOL UXOpenGLRenderDevice::SUPPORTS_WGL_NV_DX_interop = 0;
 #endif
 INT	  UXOpenGLRenderDevice::LogLevel = 0;
 DWORD UXOpenGLRenderDevice::ComposeSize = 0;

@@ -149,7 +149,8 @@ layout(std140) uniform FrameState
   mat4 FrameUncoords;
   float Gamma;
   float LightMapIntensity;
-  float LightColorIntensity;  
+  float LightColorIntensity;
+  float YScale;
 };
 )";
 
