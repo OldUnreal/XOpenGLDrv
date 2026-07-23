@@ -1229,7 +1229,18 @@ class UXOpenGLRenderDevice : public URenderDevice
 			OPT_HasMacroTexture		 = 0x080000,
 			OPT_HasBumpMap			 = 0x100000,
 			OPT_HasEnvironmentMap	 = 0x200000,
-			OPT_HasHeightMap		 = 0x400000
+			OPT_HasHeightMap		 = 0x400000,
+
+			// Per-drawcall poly-flag-derived render modes we're actually going to use in the shader.
+			// Same idea as the OPT_HasXXX texture options above, just for the blend/masking logic
+			// instead of texture layers. Only defined for flags we've verified are actually branched
+			// on somewhere in the shader source.
+			OPT_IsMasked			 = 0x800000,
+			OPT_IsAlphaBlended		 = 0x1000000,
+			OPT_IsModulated			 = 0x2000000,
+			OPT_IsTranslucent		 = 0x4000000,
+			OPT_IsRenderFog			 = 0x8000000,
+			OPT_IsUnlit				 = 0x10000000
         };
 
 		ShaderCompilationOptions(DWORD ShaderOptions)
@@ -1307,6 +1318,21 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// We use the specialization options (see the ShaderCompilationOptions enum above)
 		// as the key.
 		TOpenGLMap<DWORD, CompiledShader*>			SpecializationCache;
+
+		// Lets each shader's draw path (DrawComplexSurface, PrepareGouraudCall, DrawTile, ...) skip
+		// rebuilding its RequiredOptions from scratch on every draw call. A cache hit requires BOTH:
+		//   - LastPerDrawSignature: a cheap DWORD fingerprint of the per-draw inputs (which texture
+		//     layers are present on this surface/mesh/tile, and which poly-flag-derived render modes
+		//     apply) that determine the per-draw bits of the specialization.
+		//   - LastRendererConfigOptions: the renderer-config-derived subset of the specialization's
+		//     Options -- i.e. CurrentSpecialization->Options with the per-draw bits masked out. This
+		//     only changes when RecompileShader runs (see SetOptionsForRendererConfig), never as a
+		//     side effect of switching specializations for per-draw reasons.
+		// On a hit, LastResolvedOptions (the full renderer-config + per-draw Options we computed last
+		// time) is reused directly instead of being rebuilt.
+		DWORD										LastPerDrawSignature{ 0xFFFFFFFFu };
+		ShaderCompilationOptions					LastRendererConfigOptions{ 0xFFFFFFFFu };
+		ShaderCompilationOptions					LastResolvedOptions;
 
 		MultiDrawBuffer								DrawBuffer;
 		const TCHAR*                                ShaderName{};
@@ -2013,7 +2039,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Textures/Sampler Management
 	//
 	static BOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
 	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias);
 	void  SetNoTexture(INT Multi);

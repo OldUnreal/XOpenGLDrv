@@ -80,27 +80,69 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 	// specialization that only contains straight-line code for those layers. See
 	// ShaderProgram::SelectSpecialization.
 #if ENGINE_VERSION==227
-	const bool HasBumpMap = Info.Texture && Info.Texture->BumpMap && BumpMaps;
+	const bool HasBumpMapPtr = Info.Texture && Info.Texture->BumpMap;
+	const bool HasBumpMap = HasBumpMapPtr && BumpMaps;
 #else
+	const bool HasBumpMapPtr = false;
 	const bool HasBumpMap = false;
 #endif
-	ShaderCompilationOptions RequiredOptions = Shader->CurrentSpecialization->Options;
-	RequiredOptions.UnsetOption(
+	const DWORD PerDrawOptionsMask =
 		ShaderCompilationOptions::OPT_HasDetailTexture |
 		ShaderCompilationOptions::OPT_HasMacroTexture |
-		ShaderCompilationOptions::OPT_HasBumpMap);
-	if (Info.Texture && Info.Texture->DetailTexture && DetailTextures)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasDetailTexture);
-	if (Info.Texture && Info.Texture->MacroTexture && MacroTextures)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasMacroTexture);
-	if (HasBumpMap)
-		RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasBumpMap);
+		ShaderCompilationOptions::OPT_HasBumpMap |
+		ShaderCompilationOptions::OPT_IsMasked | ShaderCompilationOptions::OPT_IsAlphaBlended |
+		ShaderCompilationOptions::OPT_IsModulated | ShaderCompilationOptions::OPT_IsRenderFog |
+		ShaderCompilationOptions::OPT_IsTranslucent | ShaderCompilationOptions::OPT_IsUnlit;
+
+	const DWORD PerDrawSignature =
+		(DrawFlags & (ShaderDrawFlags::DF_Masked | ShaderDrawFlags::DF_AlphaBlended | ShaderDrawFlags::DF_Modulated | ShaderDrawFlags::DF_RenderFog | ShaderDrawFlags::DF_Translucent | ShaderDrawFlags::DF_Unlit)) |
+		((Info.Texture && Info.Texture->DetailTexture) ? ShaderCompilationOptions::OPT_HasDetailTexture : 0) |
+		((Info.Texture && Info.Texture->MacroTexture) ? ShaderCompilationOptions::OPT_HasMacroTexture : 0) |
+		(HasBumpMapPtr ? ShaderCompilationOptions::OPT_HasBumpMap : 0);
+
+	ShaderCompilationOptions RendererConfigOptions = Shader->CurrentSpecialization->Options;
+	RendererConfigOptions.UnsetOption(PerDrawOptionsMask);
+
+	ShaderCompilationOptions RequiredOptions;
+	if (PerDrawSignature == Shader->LastPerDrawSignature && RendererConfigOptions == Shader->LastRendererConfigOptions)
+	{
+		// Nothing that matters has changed since the last draw call -- reuse what we computed then.
+		RequiredOptions = Shader->LastResolvedOptions;
+	}
+	else
+	{
+		RequiredOptions = RendererConfigOptions; // already has the per-draw bits cleared
+		if (Info.Texture && Info.Texture->DetailTexture && DetailTextures)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasDetailTexture);
+		if (Info.Texture && Info.Texture->MacroTexture && MacroTextures)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasMacroTexture);
+		if (HasBumpMap)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_HasBumpMap);
+		if (DrawFlags & ShaderDrawFlags::DF_Masked)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsMasked);
+		if (DrawFlags & ShaderDrawFlags::DF_AlphaBlended)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsAlphaBlended);
+		if (DrawFlags & ShaderDrawFlags::DF_Modulated)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsModulated);
+		if (DrawFlags & ShaderDrawFlags::DF_RenderFog)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsRenderFog);
+		if (DrawFlags & ShaderDrawFlags::DF_Translucent)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsTranslucent);
+		if (DrawFlags & ShaderDrawFlags::DF_Unlit)
+			RequiredOptions.SetOption(ShaderCompilationOptions::OPT_IsUnlit);
+
+		Shader->LastPerDrawSignature = PerDrawSignature;
+		Shader->LastRendererConfigOptions = RendererConfigOptions;
+		Shader->LastResolvedOptions = RequiredOptions;
+	}
 
 	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
 
-	// Check if the global state will change
+	// Check if global blend state or the shader specialization will change. If so, we want to flush
+	// any pending draw calls before we make those changes. The texture itself no longer needs to be
+	// pre-checked here -- BindTextureAndSampler flushes lazily, exactly when it actually needs to
+	// rebind, instead of us predicting it upfront.
 	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
-		WillTextureStateChange(0, Info, NextPolyFlags) || // Check if the texture will change
 		StoredbNearZ != NoNearZ ||  // Force a flush if we're switching between NearZ and NoNearZ
 		!(RequiredOptions == Shader->CurrentSpecialization->Options) || // Check if we need a different shader specialization
 		!CanBuffer // Check if we have room left in the multi-draw array
@@ -121,11 +163,10 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 		}
 	}
 
-	// Switch to the specialization for this mesh's texture layers, lazily compiling and caching it if
-	// we haven't built this exact combination before this session
 	Shader->SelectSpecialization(RequiredOptions);
 
-	DrawGouraudParameters* DrawCallParams = Shader->ParametersBuffer.GetCurrentElementPtr();
+	DrawGouraudParameters LocalParams{};
+	DrawGouraudParameters* DrawCallParams = &LocalParams;
 
 	const FLOAT TextureAlpha =
 #if ENGINE_VERSION==227
@@ -166,6 +207,12 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 	}
 
 	DrawCallParams->DrawFlags = DrawFlags;
+
+	// Every texture layer is bound now, and any flush that setting them up could possibly have
+	// triggered has already happened -- safe to fetch the real ring-buffer slot and commit our staged
+	// parameters into it in one shot.
+	*Shader->ParametersBuffer.GetCurrentElementPtr() = LocalParams;
+
 	return DrawFlags;
 }
 
