@@ -687,35 +687,14 @@ void UXOpenGLRenderDevice::GenerateTextureAndSampler(FCachedTexture* Bind)
 {
 	glGenTextures(1, &Bind->Id);
 
-	// stijn: glGenTextures only reserves a name -- it doesn't give the texture object a target. Until
-	// it's been bound at least once via the classic glBindTexture, glBindTextureUnit (which
-	// BindTextureAndSampler prefers when available) will fail with GL_INVALID_OPERATION, since that
-	// DSA entry point requires an already-established target instead of creating one. Establish it
-	// here, immediately, regardless of which texture unit happens to be active right now -- the
-	// target association belongs to the texture object, not to whichever unit we touch to set it.
-	glBindTexture(GL_TEXTURE_2D, Bind->Id);
-
 	if (!Bind->Sampler)
 		glGenSamplers(1, &Bind->Sampler);
 }
 
 void UXOpenGLRenderDevice::BindTextureAndSampler(INT Multi, FCachedTexture* Bind)
 {
-	// stijn: callers are responsible for flushing any pending batch before calling this -- see
-	// SetTexture and UpdateTextureRect. We can't reliably decide it here: SetTexture may need a flush
-	// even when it *doesn't* end up calling us (e.g. a bindless-resident texture whose data just went
-	// stale), so the "do we need to flush" decision has to live where that context is available.
-
-	// stijn: glBindTextureUnit (GL 4.5 DSA) binds directly to a unit without touching the "active
-	// texture unit" global state, so it saves us the separate glActiveTexture call. Falls back to the
-	// classic active-texture-then-bind path on contexts that don't expose it (GL 3.3 core, GLES, etc).
-	if (glBindTextureUnit)
-		glBindTextureUnit(Multi, Bind->Id);
-	else
-	{
-		glActiveTexture(GL_TEXTURE0 + Multi);
-		glBindTexture(GL_TEXTURE_2D, Bind->Id);
-	}
+	glActiveTexture(GL_TEXTURE0 + Multi);
+	glBindTexture(GL_TEXTURE_2D, Bind->Id);
 	glBindSampler(Multi, Bind->Sampler);
 }
 
