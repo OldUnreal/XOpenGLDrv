@@ -69,7 +69,7 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 
 	ShaderProgram* Shader = Shaders[Tile_Prog];
 	const DWORD PerDrawOptionsMask = ShaderCompilationOptions::OPT_IsMasked | ShaderCompilationOptions::OPT_IsAlphaBlended;
-	const DWORD PerDrawSignature = DrawFlags & PerDrawOptionsMask;
+	const DWORD PerDrawSignature = DrawFlags & (ShaderDrawFlags::DF_Masked | ShaderDrawFlags::DF_AlphaBlended);
 
 	ShaderCompilationOptions RendererConfigOptions = Shader->CurrentSpecialization->Options;
 	RendererConfigOptions.UnsetOption(PerDrawOptionsMask);
