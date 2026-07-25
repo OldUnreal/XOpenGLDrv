@@ -478,6 +478,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD UsePersistentBuffers;
 	BITFIELD UseBufferInvalidation;
 	BITFIELD UseShaderDrawParameters;
+	BITFIELD UseShaderCache;
+#if _WIN32
+	BITFIELD ReduceMouseLag; // Present through a low-latency DXGI flip-model swapchain (WGL_NV_DX_interop)
+#endif
 
 	// Not really in use...(yet)
 	BITFIELD UseMeshBuffering; //Buffer (Static)Meshes for drawing.
@@ -517,6 +521,28 @@ class UXOpenGLRenderDevice : public URenderDevice
     static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB;
 	static PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB;
 	TArray<FPlane> SupportedDisplayModes;
+
+	// DXGI low-latency swapchain (ReduceMouseLag) via WGL_NV_DX_interop.
+	static PFNWGLDXOPENDEVICENVPROC wglDXOpenDeviceNV;
+	static PFNWGLDXCLOSEDEVICENVPROC wglDXCloseDeviceNV;
+	static PFNWGLDXREGISTEROBJECTNVPROC wglDXRegisterObjectNV;
+	static PFNWGLDXUNREGISTEROBJECTNVPROC wglDXUnregisterObjectNV;
+	static PFNWGLDXLOCKOBJECTSNVPROC wglDXLockObjectsNV;
+	static PFNWGLDXUNLOCKOBJECTSNVPROC wglDXUnlockObjectsNV;
+	static UBOOL SUPPORTS_WGL_NV_DX_interop;
+
+	UBOOL  DXGISupportsTearing;
+	UBOOL  UsingDXGISwapchain;
+	DWORD  DXGISwapChainFlags;
+	void*  pD3D11Device;   // ID3D11Device*
+	void*  pDXGISwapChain; // IDXGISwapChain*
+	HANDLE hDXDevice;      // WGL DX interop device handle
+	HANDLE hDXBackBuffer;  // WGL DX interop backbuffer object handle
+	GLuint DXGIInteropTextureGL;
+	void*  DXGIInteropTextureD3D; // ID3D11Texture2D*
+	GLuint DXGIFramebuffer;
+	INT    DXGIWidth;
+	INT    DXGIHeight;
 #else
 	SDL_GLContext glContext;
 	SDL_Window* Window;
@@ -622,6 +648,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 	FLOAT StoredGamma;
 	UBOOL StoredOneXBlending;
 	UBOOL StoredActorXBlending;
+#if _WIN32
+	UBOOL StoredUsingDXGISwapchain;
+#endif
 	bool bIsOrtho;
 
 	//
@@ -844,19 +873,19 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 		// Creates a CPU-accessible mapping for this buffer
-		void MapVertexBuffer(bool Persistent, GLuint BufferSize)
+		void MapVertexBuffer(bool Persistent, GLuint BufferSize, bool UseInvalidation = false)
 		{
-			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, VERTEX_BUFFER_USAGE_PATTERN);
+			MapBuffer(GL_ARRAY_BUFFER, Persistent, BufferSize, VERTEX_BUFFER_USAGE_PATTERN, UseInvalidation);
 		}
 
-		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN)
+		void MapSSBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN, bool UseInvalidation = false)
 		{
-			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, ExpectedUsage);
+			MapBuffer(GL_SHADER_STORAGE_BUFFER, Persistent, BufferSize, ExpectedUsage, UseInvalidation);
 		}
 
-		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN)
+		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN, bool UseInvalidation = false)
 		{
-			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage);
+			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage, UseInvalidation);
 		}
 
 		// Binds and unbinds the buffer so we can write to it
@@ -926,7 +955,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 				if (Replace)
 					glBufferData(BufferType, Size, Buffer, ExpectedUsage);
 				else
+				{
+					// stijn: we're about to fully overwrite [UnbufferedRegionOffset, UnbufferedRegionOffset+Size),
+					// a range we've never written since the last orphan/Rotate(). If we let the driver know that,
+					// it can skip synchronizing this glBufferSubData call against GPU reads of this range.
+					// This can improve performance on some drivers.
+					if (bUseInvalidation && Size > 0)
+						glInvalidateBufferSubData(BufferObjectName, UnbufferedRegionOffset, Size);
 					glBufferSubData(BufferType, UnbufferedRegionOffset, Size, &Buffer[FirstUnbufferedElemIndex]);
+				}
 			}
 			else
 			{
@@ -1006,7 +1043,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint NextElemIndex{};				// Index of the next buffer element we're going to write within the currently active sub-buffer (relative to the start of the sub-buffer)
 
 	private:
-		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum _ExpectedUsage)
+		void MapBuffer(GLenum Target, bool Persistent, GLuint BufferSize, GLenum _ExpectedUsage, bool UseInvalidation = false)
 		{
 			// stijn: NOTE: nvidia persistent buffers seem to be coherent by default!
 			constexpr GLbitfield PersistentBufferFlags = GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT;
@@ -1014,7 +1051,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 			SubBufferSize = BufferSize;
 			BufferType = Target;
 			ExpectedUsage = _ExpectedUsage;
-				
+
+			// Invalidation only makes sense for the non-persistent glBufferSubData path -- persistent
+			// buffers are synchronized explicitly via fences instead (see Lock/Wait)
+			bUseInvalidation = UseInvalidation && !Persistent;
+
 			// Allocate and pin buffers
 			bPersistentBuffer = Persistent;
 			if (bPersistentBuffer)
@@ -1045,7 +1086,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BufferObjectName{};		// OpenGL name of the buffer object
 		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
 		bool   bPersistentBuffer{};     // true if we persistently map this buffer into system RAM
-		GLenum ExpectedUsage{};			// 
+		bool   bUseInvalidation{};      // true if we should hint the driver that partial updates can discard old contents
+		GLenum ExpectedUsage{};			//
 
 		//
 		// Buffer dimensions
@@ -1179,31 +1221,54 @@ class UXOpenGLRenderDevice : public URenderDevice
 		public:
         enum
         {
-            OPT_None				 = 0x000000,
+            OPT_None				 = 0x00000000,
 
 			// Texture types enabled in the renderer config
-			OPT_DetailTextures       = 0x000001,
-			OPT_MacroTextures        = 0x000002,
-			OPT_EnvironmentMaps		 = 0x000004,
-			OPT_BumpMaps			 = 0x000008,
-			OPT_HeightMaps			 = 0x000010,
+			OPT_DetailTextures       = 0x00000001,
+			OPT_MacroTextures        = 0x00000002,
+			OPT_EnvironmentMaps		 = 0x00000004,
+			OPT_BumpMaps			 = 0x00000008,
+			OPT_HeightMaps			 = 0x00000010,
 
 			// Features enabled in the renderer config
-			OPT_DistanceFog			 = 0x000020,
-			OPT_SimulateMultiPass    = 0x000040,
-			OPT_HWLighting           = 0x000080,
+			OPT_DistanceFog			 = 0x00000020,
+			OPT_SimulateMultiPass    = 0x00000040,
+			OPT_HWLighting           = 0x00000080,
 
 			// Hardware/driver capabilities we're using
-			OPT_GLCore               = 0x000100,
-			OPT_GLES                 = 0x000200,
-			OPT_GeometryShaders      = 0x000400,
-			OPT_BindlessTextures     = 0x000800,
-			OPT_PersistentBuffers    = 0x001000,
-			OPT_ShaderDrawParameters = 0x002000,
-			OPT_ClipDistance         = 0x004000,
+			OPT_GLCore               = 0x00000100,
+			OPT_GLES                 = 0x00000200,
+			OPT_GeometryShaders      = 0x00000400,
+			OPT_BindlessTextures     = 0x00000800,
+			OPT_PersistentBuffers    = 0x00001000,
+			OPT_ShaderDrawParameters = 0x00002000,
+			OPT_ClipDistance         = 0x00004000,
 
 			// Enabled editor-specific code
-			OPT_Editor				 = 0x008000
+			OPT_Editor				 = 0x00008000,
+
+			// Per-drawcall texture types we're actually going to use
+			// in the shader. By specializing the shader for these,
+			// we can avoid branching on non-dynamically uniform expressions.
+			// This is a huge deal for performance on most drivers.
+			OPT_HasLightMap			 = 0x00010000,
+			OPT_HasFogMap			 = 0x00020000,
+			OPT_HasDetailTexture	 = 0x00040000,
+			OPT_HasMacroTexture		 = 0x00080000,
+			OPT_HasBumpMap			 = 0x00100000,
+			OPT_HasEnvironmentMap	 = 0x00200000,
+			OPT_HasHeightMap		 = 0x00400000,
+
+			// Per-drawcall poly-flag-derived render modes we're actually going to use in the shader.
+			// Same idea as the OPT_HasXXX texture options above, just for the blend/masking logic
+			// instead of texture layers. Only defined for flags we've verified are actually branched
+			// on somewhere in the shader source.
+			OPT_IsMasked			 = 0x00800000,
+			OPT_IsAlphaBlended		 = 0x01000000,
+			OPT_IsModulated			 = 0x02000000,
+			OPT_IsTranslucent		 = 0x04000000,
+			OPT_IsRenderFog			 = 0x08000000,
+			OPT_IsUnlit				 = 0x10000000
         };
 
 		ShaderCompilationOptions(DWORD ShaderOptions)
@@ -1219,7 +1284,8 @@ class UXOpenGLRenderDevice : public URenderDevice
         void SetOption(DWORD Option);
         void UnsetOption(DWORD Option);
         bool HasOption(DWORD Option) const;
-        
+        DWORD GetMask() const { return OptionsMask; }
+
         friend DWORD GetTypeHash(const ShaderCompilationOptions& Options)
         {
             return Options.OptionsMask;
@@ -1276,6 +1342,26 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Which options can prompt a recompilation of this shader?
 		ShaderCompilationOptions					RelevantSpecializationOptions;
 
+		// Every specialization we've compiled or loaded for this shader so far.
+		// We use the specialization options (see the ShaderCompilationOptions enum above)
+		// as the key.
+		TOpenGLMap<DWORD, CompiledShader*>			SpecializationCache;
+
+		// Lets each shader's draw path (DrawComplexSurface, PrepareGouraudCall, DrawTile, ...) skip
+		// rebuilding its RequiredOptions from scratch on every draw call. A cache hit requires BOTH:
+		//   - LastPerDrawSignature: a cheap DWORD fingerprint of the per-draw inputs (which texture
+		//     layers are present on this surface/mesh/tile, and which poly-flag-derived render modes
+		//     apply) that determine the per-draw bits of the specialization.
+		//   - LastRendererConfigOptions: the renderer-config-derived subset of the specialization's
+		//     Options -- i.e. CurrentSpecialization->Options with the per-draw bits masked out. This
+		//     only changes when RecompileShader runs (see SetOptionsForRendererConfig), never as a
+		//     side effect of switching specializations for per-draw reasons.
+		// On a hit, LastResolvedOptions (the full renderer-config + per-draw Options we computed last
+		// time) is reused directly instead of being rebuilt.
+		DWORD										LastPerDrawSignature{ 0xFFFFFFFFu };
+		ShaderCompilationOptions					LastRendererConfigOptions{ 0xFFFFFFFFu };
+		ShaderCompilationOptions					LastResolvedOptions;
+
 		MultiDrawBuffer								DrawBuffer;
 		const TCHAR*                                ShaderName{};
 		UXOpenGLRenderDevice*                       RenDev{};
@@ -1311,6 +1397,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Recompile/respecialize the shader after the renderer options change
 		void RecompileShader(ShaderCompilationOptions Options);
 
+		// Makes the specialization matching @Options current, compiling and caching it first if we
+		// haven't built it before. Returns true if this actually changed the active specialization
+		// (i.e., callers that need to flush pending batched draws on a program switch should check this).
+		bool SelectSpecialization(ShaderCompilationOptions Options);
+
 		//
 		// Compilation support
 		//
@@ -1328,8 +1419,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// Links the shader program after compiling all of its functions
 		bool LinkShaderProgram(GLuint ShaderProgramObject) const;
 
-		// Completely deletes/unmaps this shader
-		void DeleteShader();
+		// Detaches and deletes the GL program object (and its attached shader stages) for @Shader.
+		// Does not delete @Shader itself -- the caller (usually ClearSpecializationCache) owns that.
+		void DeleteCompiledShader(CompiledShader* Shader);
+
+		// Deletes every specialization we've compiled (including CurrentSpecialization) and empties
+		// the cache. Called when we tear down the shader entirely, or when renderer
+		// options change and invalidate every cached variant.
+		void ClearSpecializationCache();
 
 		// Used to describe the layout of the drawcall parameters		
 		static void EmitDrawCallParametersHeader(const DrawCallParameterInfo* Info, FShaderWriterX& Out, ShaderProgram* Program, INT BufferBindingIndex, bool UseSSBO, bool EmitGetters);
@@ -1377,9 +1474,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		virtual ~ShaderProgramImpl()
 		{
-			DeleteShader();
+			ClearSpecializationCache();
 			UnmapBuffers();
-		}		
+		}
 
 		virtual void Flush(bool Rotate)
 		{
@@ -1401,13 +1498,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 				memcpy(&DrawCallParams, In, sizeof(DrawCallParamsType));
 			}
 
+			// We might have to rebind the parameters buffer here because things like PushClipPlane and
+			// PopClipPlane can temporarily bind another UBO.
+			ParametersBuffer.Bind();
+
 			if (HavePendingData)
 			{
 				VertBuffer.BufferData(false);
 
-				// We might have to rebind the parameters buffer here because things like PushClipPlane and
-				// PopClipPlane can temporarily bind another UBO.
-				ParametersBuffer.Bind();
 				ParametersBuffer.BufferData(false);
 
 				// Issue the draw call
@@ -1456,7 +1554,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!VertBuffer.Buffer)
 			{
 				VertBuffer.GenerateVertexBuffer(RenDev);
-				VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize);
+				VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize, RenDev->UseBufferInvalidation);
 				VertBuffer.Bind();
 				CreateInputLayout();
 			}
@@ -1467,13 +1565,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 				{
 					ParametersBufferSize = Min<INT>(ParametersBufferSize, (RenDev->MaxSSBOBlockSize / sizeof(DrawCallParams) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1)));
 					ParametersBuffer.GenerateSSBOBuffer(RenDev, ParametersBufferBindingIndex);
-					ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+					ParametersBuffer.MapSSBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN, RenDev->UseBufferInvalidation);
 				}
 				else
 				{
 					ParametersBufferSize = Min<INT>(ParametersBufferSize, GetMaximumUniformBufferSize(ParametersInfo) / (RenDev->UsingPersistentBuffers ? NUMBUFFERS : 1));
 					ParametersBuffer.GenerateUBOBuffer(RenDev, ParametersBufferBindingIndex);
-					ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN);
+					ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN, RenDev->UseBufferInvalidation);
 				}
 			}
 		}
@@ -1494,6 +1592,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void ResetShaders();
 	void RecompileShaders();
 	void InitShaders();
+
+	// Saves all shaders we've compiled to a cache file so we can load them quickly next time
+	UBOOL SaveShaderCache();
+
+	// Loads all shaders from the cache file
+	UBOOL LoadShaderCache();
 	INT PrevProgram;
 	INT ActiveProgram;
 
@@ -1541,7 +1645,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::float32 Gamma;
 		glm::float32 LightMapIntensity;		// DrawComplex/OneXBlending
 		glm::float32 LightColorIntensity;	// DrawGouraud/ActorXBlending
-		
+		glm::float32 YScale;			// -1.f when presenting through the DXGI interop swapchain (ReduceMouseLag), 1.f otherwise
+
 	};
 	BufferObject<FrameState> FrameStateBuffer;
 		
@@ -1924,6 +2029,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  UnsetRes();
 	void  SwapControl();
 
+#if _WIN32
+	// DXGI low-latency swapchain (ReduceMouseLag).
+	bool CreateDXGIFramebuffer(INT Width, INT Height, HANDLE hDev, struct ID3D11Device* pDevice, struct IDXGISwapChain* pSwapChain);
+	void InitDXGISwapchain(INT Width, INT Height);
+	void DestroyDXGISwapchain();
+	void ResizeDXGISwapchain(INT Width, INT Height);
+#endif
+
 	void  UpdateRenderFBO(INT Width, INT Height);
 	void  DestroyRenderFBO();
 
@@ -1964,7 +2077,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Textures/Sampler Management
 	//
 	static BOOL WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags);
-	BOOL  WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags);
 	FCachedTexture* GetCachedTextureInfo(INT Multi, FTextureInfo& Info, DWORD PolyFlags, BOOL& IsResidentBindlessTexture, BOOL& IsBoundToTMU, BOOL& IsTextureDataStale, BOOL ShouldResetStaleState);
 	void  SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyFlags, FLOAT PanBias);
 	void  SetNoTexture(INT Multi);

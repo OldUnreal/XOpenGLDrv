@@ -26,7 +26,7 @@ void main()
   float x   = (gl_VertexID & 1) != 0 ? 1.0 : -1.0;
   float y   = (gl_VertexID & 2) != 0 ? 1.0 : -1.0;
   BlitUV    = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);
-  gl_Position = vec4(x, y, 0.0, 1.0);
+  gl_Position = vec4(x, y * YScale, 0.0, 1.0);
   vDrawID   = 0u;
 }
 )";

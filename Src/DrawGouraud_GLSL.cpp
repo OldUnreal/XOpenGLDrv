@@ -86,14 +86,12 @@ void main(void)
   Out.FogColor = FogColor;
   Out.Normals = vec4(Normals.xyz, 0);
 
-#if OPT_DetailTextures
-  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
-    Out.DetailTexCoords = TexCoords * GetDetailMacroInfo(DrawID).xy;
+#if OPT_DetailTextures && OPT_HasDetailTexture
+  Out.DetailTexCoords = TexCoords * GetDetailMacroInfo(DrawID).xy;
 #endif
 
-#if OPT_MacroTextures
-  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
-    Out.MacroTexCoords = TexCoords * GetDetailMacroInfo(DrawID).zw;
+#if OPT_MacroTextures && OPT_HasMacroTexture
+  Out.MacroTexCoords = TexCoords * GetDetailMacroInfo(DrawID).zw;
 #endif
 
 #if OPT_DistanceFog || OPT_ClipDistance
@@ -103,8 +101,7 @@ void main(void)
 #if OPT_GeometryShaders
   gl_Position = vec4(Coords, 1.0);
 #else 
-# if OPT_BumpMaps
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+# if OPT_BumpMaps && OPT_HasBumpMap
   {
     vec3 T = vec3(1.0, 1.0, 1.0); // Arbitrary.
     vec3 B = vec3(1.0, 1.0, 1.0); // Replace with actual values extracted from mesh generation some day.
@@ -182,12 +179,11 @@ void main(void)
   mat3 InFrameCoords = mat3(FrameCoords[1].xyz, FrameCoords[2].xyz, FrameCoords[3].xyz); // TransformPointBy...
   mat3 InFrameUncoords = mat3(FrameUncoords[1].xyz, FrameUncoords[2].xyz, FrameUncoords[3].xyz);
 
-#if OPT_BumpMaps
+#if OPT_BumpMaps && OPT_HasBumpMap
   vec3 Tangent;
   vec3 Bitangent;
   vec3 T;
   vec3 B;
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
   {
     Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
     Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
@@ -204,8 +200,7 @@ void main(void)
 
   for (int i = 0; i < 3; ++i)
   {
-#if OPT_BumpMaps
-    if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
+#if OPT_BumpMaps && OPT_HasBumpMap
     {
       vec3 N = normalize(vec3(modelMat * In[i].Normals));
 
@@ -299,8 +294,9 @@ void main(void)
   Color *= GetDiffuseInfo(DrawID).z; // Diffuse factor.
   Color.a *= GetDiffuseInfo(DrawID).w; // Alpha.
 
-  if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended)
-    Color.a *= In.LightColor.a;
+#if OPT_IsAlphaBlended
+  Color.a *= In.LightColor.a;
+#endif
 
   Color = ApplyPolyFlags(Color, DrawFlags);
   vec4 LightColor;
@@ -334,37 +330,34 @@ void main(void)
   LightColor = In.LightColor;
 #endif
 
-  if ((DrawFlags & DF_RenderFog) == DF_RenderFog)
+#if OPT_IsRenderFog
+#if OPT_IsModulated
   {
-    if ((DrawFlags & DF_Modulated) == DF_Modulated)
-    {
-      // Compute delta to modulation identity.
-      vec3 Delta = vec3(0.5) - Color.xyz;
-      // Reduce delta by (squared) fog intensity.
-      //Delta *= 1.0 - sqrt(In.FogColor.a);
-      Delta *= 1.0 - In.FogColor.a;
-      Delta *= vec3(1.0) - In.FogColor.rgb;
-      TotalColor = vec4(vec3(0.5) - Delta, Color.a);
-    }
-    else
-    {
-      Color *= LightColor;
-      //TotalColor=mix(Color, vec4(In.FogColor.xyz,1.0), In.FogColor.w);
-      TotalColor.rgb = Color.rgb * (1.0 - In.FogColor.a) + In.FogColor.rgb;
-      TotalColor.a = Color.a;
-    }
+    // Compute delta to modulation identity.
+    vec3 Delta = vec3(0.5) - Color.xyz;
+    // Reduce delta by (squared) fog intensity.
+    //Delta *= 1.0 - sqrt(In.FogColor.a);
+    Delta *= 1.0 - In.FogColor.a;
+    Delta *= vec3(1.0) - In.FogColor.rgb;
+    TotalColor = vec4(vec3(0.5) - Delta, Color.a);
   }
-  else if ((DrawFlags & DF_Modulated) == DF_Modulated)
+#else
   {
-    TotalColor = Color;
+    Color *= LightColor;
+    //TotalColor=mix(Color, vec4(In.FogColor.xyz,1.0), In.FogColor.w);
+    TotalColor.rgb = Color.rgb * (1.0 - In.FogColor.a) + In.FogColor.rgb;
+    TotalColor.a = Color.a;
   }
-  else
-  {
-    TotalColor = Color * vec4(LightColor.rgb, 1.0);
-  }
+#endif
+#else
+#if OPT_IsModulated
+  TotalColor = Color;
+#else
+  TotalColor = Color * vec4(LightColor.rgb, 1.0);
+#endif
+#endif
 
-#if OPT_DetailTextures
-  if ((DrawFlags & DF_DetailTexture) == DF_DetailTexture)
+#if OPT_DetailTextures && OPT_HasDetailTexture
   {
     float NearZ = In.Coords.z / 512.0;
     float DetailScale = 1.0;
@@ -395,8 +388,7 @@ void main(void)
   }     
 #endif
 
-#if OPT_MacroTextures && !OPT_BumpMaps
-  if ((DrawFlags & DF_MacroTexture) == DF_MacroTexture)
+#if OPT_MacroTextures && !OPT_BumpMaps && OPT_HasMacroTexture
   {
     vec4 MacroTexColor = GetTexel(GetTexHandleHelper(DrawID, MacroTextureIndex), TMUMacro, In.MacroTexCoords);
     vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);
@@ -407,9 +399,8 @@ void main(void)
   }
 #endif
 
-#if OPT_BumpMaps
-  if ((DrawFlags & DF_BumpMap) == DF_BumpMap)
-  {       
+#if OPT_BumpMaps && OPT_HasBumpMap
+  {
     float MinLight = 0.05f;
     vec3 TangentViewDir = normalize(In.TangentViewPos - In.TangentFragPos);
     //normal from normal map
@@ -433,8 +424,9 @@ void main(void)
       float b = NormalLightRadius / (NormalLightRadius * NormalLightRadius * MinLight);
       float attenuation = NormalLightRadius / (dist + b * dist * dist);
 
-      if ((DrawFlags & DF_Unlit) == DF_Unlit)
-        InLightPos = vec3(1.0, 1.0, 1.0); // no idea whats best here. Arbitrary value based on some tests.
+#if OPT_IsUnlit
+      InLightPos = vec3(1.0, 1.0, 1.0); // no idea whats best here. Arbitrary value based on some tests.
+#endif
 
       if ((NormalLightRadius == 0.0 || (dist > NormalLightRadius) || (bZoneNormalLight && (LightData4[i].z != LightData4[i].w))) && !bSunlight) // Do not consider if not in range or in a different zone.
         continue;
@@ -461,12 +453,15 @@ void main(void)
   if (DistanceFogMode >= 0)
   {
     vec4 MixColor;
-    if ((DrawFlags & DF_Modulated) == DF_Modulated)
-      MixColor = vec4(0.5, 0.5, 0.5, 0.0);
-    else if ((DrawFlags & DF_Translucent) == DF_Translucent && (DrawFlags & DF_EnvironmentMap) != DF_EnvironmentMap)
-      MixColor = vec4(0.0, 0.0, 0.0, 0.0);
-    else
-      MixColor = DistanceFogColor;
+#if OPT_IsModulated
+    MixColor = vec4(0.5, 0.5, 0.5, 0.0);
+#elif OPT_IsTranslucent
+    // stijn: Gouraud meshes have no environment-map support, so unlike Complex's version of this
+    // check, we don't need to also exclude environment-mapped surfaces here.
+    MixColor = vec4(0.0, 0.0, 0.0, 0.0);
+#else
+    MixColor = DistanceFogColor;
+#endif
 
     float FogCoord = abs(In.EyeSpacePos.z / In.EyeSpacePos.w);
     TotalColor = mix(TotalColor, MixColor, getFogFactor(FogCoord));
@@ -505,8 +500,10 @@ void main(void)
       TotalColor.a = 0.51;
   }
 
-  if ((DrawFlags & DF_AlphaBlended) == DF_AlphaBlended && DrawColor.a > 0.0)
+#if OPT_IsAlphaBlended
+  if (DrawColor.a > 0.0)
     TotalColor.a *= DrawColor.a;
+#endif
 
   // HitSelection, Zoneview etc.
   if (bool(HitTesting))

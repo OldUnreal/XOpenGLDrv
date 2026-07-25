@@ -96,22 +96,6 @@ UXOpenGLRenderDevice::GetCachedTextureInfo
 	return Result;
 }
 
-BOOL UXOpenGLRenderDevice::WillTextureStateChange(INT Multi, FTextureInfo& Info, DWORD PolyFlags)
-{
-	BOOL IsResidentBindlessTexture = FALSE, IsBoundToTMU = FALSE, IsTextureDataStale = FALSE;
-	GetCachedTextureInfo(Multi, Info, PolyFlags, IsResidentBindlessTexture, IsBoundToTMU, IsTextureDataStale, FALSE);
-
-	// We need to re-upload a texture we're currently using
-	if (IsTextureDataStale)
-		return TRUE;
-
-	// We will have to evict a TMU => stop batching
-	if (!UsingBindlessTextures && !IsBoundToTMU)
-		return TRUE;
-
-	return FALSE;
-}
-
 #if UNREAL_TOURNAMENT_OLDUNREAL
 UBOOL UXOpenGLRenderDevice::SupportsTextureFormat(ETextureFormat Format)
 {
@@ -155,11 +139,12 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	if (!Bind)
 		return;
 
-	if (WillTextureStateChange(-1, Info, 0))
-	{
-		// flush buffered data
-		Shaders[ActiveProgram]->Flush(false);
-	}
+	// We're about to re-upload new data into this texture (and, if it's not bindless-resident, also
+	// rebind it to the temporary upload slot below). Either way, any draw calls we've already batched
+	// up but not yet issued were built expecting the OLD contents/binding, so flush them now -- this
+	// has to happen regardless of bindless residency, since a bindless-resident texture's pending
+	// batch dependency is on its *contents*, not on which TMU it's bound to.
+	Shaders[ActiveProgram]->Flush(false);
 
 	// Use TMU 8 as a temporary storage location
 	if (!IsResidentBindlessTexture)
@@ -742,6 +727,14 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 		STAT(unclockFast(Stats.BindCycles));
 		return;
 	}
+
+	// stijn: we didn't bail out above, so *something* about this texture is about to change: either
+	// we're binding a different texture to TMU Multi, or we're about to re-upload new data into a
+	// texture that's already bound/resident somewhere (IsTextureDataStale). Either way, any draw calls
+	// we've already batched up but not yet issued were built expecting the OLD binding/contents, so
+	// flush them now, before we touch anything. This covers the bindless-resident-but-stale case too,
+	// which is the one case where we won't end up calling BindTextureAndSampler below at all.
+	Shaders[ActiveProgram]->Flush(false);
 
     // Make current.
 	Tex.CurrentCacheID   = Info.CacheID;
