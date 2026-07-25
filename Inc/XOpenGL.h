@@ -1498,13 +1498,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 				memcpy(&DrawCallParams, In, sizeof(DrawCallParamsType));
 			}
 
+			// We might have to rebind the parameters buffer here because things like PushClipPlane and
+			// PopClipPlane can temporarily bind another UBO.
+			ParametersBuffer.Bind();
+
 			if (HavePendingData)
 			{
 				VertBuffer.BufferData(false);
 
-				// We might have to rebind the parameters buffer here because things like PushClipPlane and
-				// PopClipPlane can temporarily bind another UBO.
-				ParametersBuffer.Bind();
 				ParametersBuffer.BufferData(false);
 
 				// Issue the draw call
