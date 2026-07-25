@@ -29,12 +29,14 @@
 #ifndef _WIN32
 #include <sys/time.h>
 #else
-#include <d3d11.h>
-#include <dxgi.h>
-#include <dxgi1_5.h>
-#ifndef DXGI_SWAP_EFFECT_FLIP_DISCARD
-#define DXGI_SWAP_EFFECT_FLIP_DISCARD ((DXGI_SWAP_EFFECT)4)
-#endif
+# if !defined(_USING_V110_SDK71_)
+#  include <d3d11.h>
+#  include <dxgi.h>
+#  include <dxgi1_5.h>
+#  ifndef DXGI_SWAP_EFFECT_FLIP_DISCARD
+#   define DXGI_SWAP_EFFECT_FLIP_DISCARD ((DXGI_SWAP_EFFECT)4)
+#  endif
+# endif
 #define XOPENGL_DXGI_FORMAT DXGI_FORMAT_R8G8B8A8_UNORM
 #endif
 
@@ -1224,7 +1226,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		return 0;
 	}
 
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 	if (ReduceMouseLag && !UsingDXGISwapchain)
 		InitDXGISwapchain(Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
 #endif
@@ -1542,7 +1544,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		UpdateCoords(Frame);
 #endif
 	if (StoredGamma != GetViewportGamma(Viewport) || StoredOneXBlending != OneXBlending || StoredActorXBlending != ActorXBlending
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 		|| StoredUsingDXGISwapchain != UsingDXGISwapchain
 #endif
 		)
@@ -1645,7 +1647,7 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 	FrameState->Gamma = StoredGamma;
 	FrameState->LightColorIntensity = ActorXBlending ? 1.f : 1.5f;
 	FrameState->LightMapIntensity = OneXBlending ? 2.f : 4.f;
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 	// The DXGI interop backbuffer is read back by D3D with a top-down (D3D) row order,
 	// while we rendered into it with GL's bottom-up convention, so the post-process pass
 	// needs to flip vertically to compensate (mirrors AntiDrv's YScale trick).
@@ -1903,7 +1905,7 @@ void UXOpenGLRenderDevice::DestroyRenderFBO()
 	DXGI low-latency swapchain (WGL_NV_DX_interop) - ReduceMouseLag.
 -----------------------------------------------------------------------------*/
 
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 
 bool UXOpenGLRenderDevice::CreateDXGIFramebuffer(
 	INT             Width,
@@ -2340,7 +2342,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		if (Blit)
 		{
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 			if (UsingDXGISwapchain)
 			{
 				ResizeDXGISwapchain(Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
@@ -2350,7 +2352,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #endif
 
 			SetProgram(PostProcess_Prog);
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 			if (UsingDXGISwapchain)
 				glBindFramebuffer(GL_FRAMEBUFFER, DXGIFramebuffer);
 #endif
@@ -2360,7 +2362,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 
 #if !_WIN32
 			SDL_GL_SwapWindow(Window);
-#else
+#elif !defined(_USING_V110_SDK71_)
 			if (UsingDXGISwapchain)
 			{
 				// Make the D3D device's back buffer see what we just rendered, then present it
@@ -2647,7 +2649,7 @@ void UXOpenGLRenderDevice::Exit()
 			Flush(0);
 
 		DestroyRenderFBO();
-#if _WIN32
+#if _WIN32 && !defined(_USING_V110_SDK71_)
 		DestroyDXGISwapchain();
 #endif
 
@@ -2959,6 +2961,7 @@ TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
 PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
 PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
 PFNWGLGETEXTENSIONSSTRINGARBPROC UXOpenGLRenderDevice::wglGetExtensionsStringARB = nullptr;
+# if !defined(_USING_V110_SDK71_)
 PFNWGLDXOPENDEVICENVPROC UXOpenGLRenderDevice::wglDXOpenDeviceNV = nullptr;
 PFNWGLDXCLOSEDEVICENVPROC UXOpenGLRenderDevice::wglDXCloseDeviceNV = nullptr;
 PFNWGLDXREGISTEROBJECTNVPROC UXOpenGLRenderDevice::wglDXRegisterObjectNV = nullptr;
@@ -2966,6 +2969,7 @@ PFNWGLDXUNREGISTEROBJECTNVPROC UXOpenGLRenderDevice::wglDXUnregisterObjectNV = n
 PFNWGLDXLOCKOBJECTSNVPROC UXOpenGLRenderDevice::wglDXLockObjectsNV = nullptr;
 PFNWGLDXUNLOCKOBJECTSNVPROC UXOpenGLRenderDevice::wglDXUnlockObjectsNV = nullptr;
 UBOOL UXOpenGLRenderDevice::SUPPORTS_WGL_NV_DX_interop = 0;
+# endif
 #endif
 INT	  UXOpenGLRenderDevice::LogLevel = 0;
 DWORD UXOpenGLRenderDevice::ComposeSize = 0;
