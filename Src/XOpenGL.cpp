@@ -1831,9 +1831,20 @@ void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
 
 		// Single-sample resolve FBO: RenderColorTexture as the only attachment.
 		// glBlitFramebuffer resolves MSAA into this at the end of each frame.
+		// It also gets its own depth/stencil attachment so hit testing can render directly into
+		// it instead of into the multisampled RenderFBO -- resolving MSAA averages neighboring
+		// subsamples together, which corrupts the exact, unblended "ID colors" hit testing relies
+		// on at almost every pixel along a thin or diagonal edge. A color-only blit never touches
+		// this attachment, so it doesn't interfere with the normal MSAA resolve path.
 		glGenFramebuffers(1, &RenderResolvedFBO);
 		glBindFramebuffer(GL_FRAMEBUFFER, RenderResolvedFBO);
 		glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, RenderColorTexture, 0);
+
+		glGenRenderbuffers(1, &RenderResolvedDepthAttachment);
+		glBindRenderbuffer(GL_RENDERBUFFER, RenderResolvedDepthAttachment);
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, Width, Height);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RenderResolvedDepthAttachment);
+		glBindRenderbuffer(GL_RENDERBUFFER, 0);
 
 		Status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1877,7 +1888,8 @@ void UXOpenGLRenderDevice::UpdateRenderFBO(INT Width, INT Height)
 
 void UXOpenGLRenderDevice::DestroyRenderFBO()
 {
-	if (RenderDepthAttachment) { glDeleteRenderbuffers(1, &RenderDepthAttachment); RenderDepthAttachment = 0; }
+	if (RenderDepthAttachment)         { glDeleteRenderbuffers(1, &RenderDepthAttachment);         RenderDepthAttachment = 0; }
+	if (RenderResolvedDepthAttachment) { glDeleteRenderbuffers(1, &RenderResolvedDepthAttachment); RenderResolvedDepthAttachment = 0; }
 	if (RenderColorMSAA)       { glDeleteRenderbuffers(1, &RenderColorMSAA);       RenderColorMSAA = 0; }
 	if (RenderColorTexture)    { glDeleteTextures(1, &RenderColorTexture);         RenderColorTexture = 0; }
 	if (RenderResolvedFBO)     { glDeleteFramebuffers(1, &RenderResolvedFBO);      RenderResolvedFBO = 0; }
@@ -2227,9 +2239,16 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 
 	RenderFBOBound = FALSE;
 	UpdateRenderFBO(Viewport->SizeX, Viewport->SizeY);
-	if (RenderFBO)
+
+	// stijn: hit testing decodes exact per-pixel "ID colors" to figure out which object was
+	// clicked. Resolving MSAA averages neighboring subsamples together, which corrupts almost
+	// every pixel along a thin or diagonal edge (i.e. nearly the whole line, for a diagonal one).
+	// Render hit-test frames directly into the single-sample resolved FBO instead of the
+	// multisampled one, so there's no resolve step to blend hit colors together.
+	const GLuint FBOToBind = (InHitData && UseAA && RenderResolvedFBO) ? RenderResolvedFBO : RenderFBO;
+	if (FBOToBind)
 	{
-		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
+		glBindFramebuffer(GL_FRAMEBUFFER, FBOToBind);
 		glViewport(0, 0, Viewport->SizeX, Viewport->SizeY);
 		RenderFBOBound = TRUE;
 	}
@@ -2296,7 +2315,9 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 
 	if (RenderFBOBound)
 	{
-		if (UseAA && RenderResolvedFBO)
+		// stijn: hit-test frames were rendered directly into their target FBO (see Lock()), so
+		// there's nothing to resolve -- just discard the depth/stencil we don't need to keep.
+		if (!HitTesting() && UseAA && RenderResolvedFBO)
 		{
 			glBindFramebuffer(GL_READ_FRAMEBUFFER, RenderFBO);
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, RenderResolvedFBO);
