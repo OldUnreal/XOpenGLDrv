@@ -269,7 +269,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	UseVSync = VS_Adaptive;
 #endif
 	
-#if UNREAL_TOURNAMENT_OLDUNREAL
+#if UNREAL_TOURNAMENT_OLDUNREAL || UNREAL_OLDUNREAL
 	DetailMax = 2;
 #endif
 
@@ -2146,10 +2146,14 @@ void UXOpenGLRenderDevice::ReadPixels(FColor* Pixels)
 
 	MakeCurrent();
 
-	if (RenderFBO)
-		glBindFramebuffer(GL_FRAMEBUFFER, RenderFBO);
+	// stijn: RenderFBO is multisampled when UseAA is on, and glReadPixels can't read from a
+	// multisample framebuffer directly -- use the already-resolved copy in that case, just like
+	// the present/blit path does.
+	const GLuint ReadFBO = UseAA && RenderResolvedFBO ? RenderResolvedFBO : RenderFBO;
+	if (ReadFBO)
+		glBindFramebuffer(GL_FRAMEBUFFER, ReadFBO);
 	glReadPixels(0, 0, SizeX, SizeY, GL_RGBA, GL_UNSIGNED_BYTE, Pixels);
-	if (RenderFBO)
+	if (ReadFBO)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	
 	for (INT i = 0; i<SizeY / 2; i++)
