@@ -508,10 +508,19 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 
 	EnvironmentMaps = 0; //not yet implemented.
 
+#if _WIN32
+	// SharedBindMap assumes GL texture IDs are valid across every viewport's context --
+	// true here because CreateOpenGLContext() actually calls wglShareLists() below.
 	if (ShareLists && !SharedBindMap)
 		SharedBindMap = new TOpenGLMap<QWORD, UXOpenGLRenderDevice::FCachedTexture>;
 
 	BindMap = ShareLists ? SharedBindMap : &LocalBindMap;
+#else
+	// stijn: context sharing is not implemented for non-Windows targets right
+	// now, so we need to make sure we don't use another viewport's texture
+	// handles accidentally.
+	BindMap = &LocalBindMap;
+#endif
 
 	// Initialize process-wide GL state
 #if _WIN32
@@ -993,7 +1002,14 @@ void UXOpenGLRenderDevice::MakeCurrent()
 {
 	guard(UXOpenGLRenderDevice::MakeCurrent);
 #if !_WIN32
-	if (!CurrentGLContext || CurrentGLContext != glContext)
+	// stijn: don't decide whether to skip the real MakeCurrent call based on our own
+	// cached CurrentGLContext. Other SDL windows in this process (e.g., a SoftDrv
+	// viewport doing SDL_GetWindowSurface/SDL_UpdateWindowSurface) can change the actual
+	// current GL context out from under us without going through this function. If we
+	// trust the stale cache, we wrongly skip re-binding and end up issuing GL calls
+	// against no/the wrong context, so nothing gets drawn. Ask SDL what's ACTUALLY
+	// current instead.
+	if (SDL_GL_GetCurrentContext() != glContext)
 	{
 		bool Result = XOpenGLMakeCurrent(Window, glContext);
 		if (!Result)
@@ -2645,6 +2661,12 @@ void UXOpenGLRenderDevice::Exit()
 
 	if (!GIsRequestingExit)
 	{
+		// stijn: Viewport switching in the renderer can make us call
+		// RenDev->Exit outside of Lock/Unlock.  That means we need to
+		// explicitly make our context current here. Otherwise, We will happily
+		// stomp on whatever context was last active...
+		MakeCurrent();
+
 		if (!GIsEditor)
 			Flush(0);
 
