@@ -841,6 +841,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return &Buffer[SubBufferOffset + NextElemIndex];
 		}
 
+		// Absolute index (i.e. relative to the whole buffer object, not just the currently active
+		// sub-buffer) of the element we're currently writing. This is the value a MultiDrawBuffer's
+		// StartDrawCall needs, and it's what a vertex's DrawID must equal to correctly index this
+		// buffer's contents from the GLSL side -- see MultiDrawBuffer::StartDrawCall.
+		GLuint CurrentAbsolutePosition() const
+		{
+			return SubBufferOffset + NextElemIndex;
+		}
+
 		T* GetLastElementPtr()
 		{
 			return &Buffer[SubBufferOffset + SubBufferSize - 1];
@@ -1124,7 +1133,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 			CountArray.AddZeroed(MaxMultiDraw);
 		}
 
-		void StartDrawCall() { FirstArray(TotalCommands) = TotalVertices + FirstVertexOffset; }
+		// @AbsoluteFirstVertex must be the absolute position (SubBufferOffset + NextElemIndex) of
+		// the shared VertBuffer at the moment this draw's vertices are about to be written --
+		// callers no longer get this for free from internal relative counters, because multiple
+		// MultiDrawBuffers can now interleave writes into the same shared VertBuffer/ParametersBuffer
+		// (see MultiSpecializationShaderProgramImpl), and a relative counter would go stale the
+		// instant another MultiDrawBuffer's writes advanced the shared cursor in between.
+		void StartDrawCall(GLint AbsoluteFirstVertex) { FirstArray(TotalCommands) = AbsoluteFirstVertex; }
 
 		void EndDrawCall(INT Vertices)
 		{
@@ -1135,14 +1150,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		bool IsFull() const { return TotalCommands + 1 >= FirstArray.Num(); }
 
-		void Reset(INT NewFirstVertexOffset = 0, INT NewBaseInstanceOffset = 0)
+		void Reset()
 		{
 			TotalCommands = TotalVertices = 0;
-			FirstVertexOffset = NewFirstVertexOffset;
-			BaseInstanceOffset = NewBaseInstanceOffset;
 		}
-
-		glm::uint GetDrawID() const { return TotalCommands + BaseInstanceOffset; }
 
 		void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
 		{
@@ -1170,8 +1181,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		INT TotalVertices{};
 		INT TotalCommands{};
-		INT BaseInstanceOffset{};
-		INT FirstVertexOffset{};
 	};
 
 	//
@@ -1406,6 +1415,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// (i.e., callers that need to flush pending batched draws on a program switch should check this).
 		bool SelectSpecialization(ShaderCompilationOptions Options);
 
+		// Looks up (or lazily compiles and caches) the specialization matching @Options, WITHOUT
+		// making it current -- no CurrentSpecialization/glUseProgram side effect on a cache hit.
+		// A fresh compile still needs a transient glUseProgram+BindShaderState (BindShaderState's
+		// uniform/sampler calls aren't DSA and implicitly target whatever's currently bound), but
+		// that only happens once per specialization per session, not on every lookup. Used by
+		// MultiSpecializationShaderProgramImpl to resolve a specialization for buffering without
+		// switching the GL program away from whatever's actually being drawn right now. Returns
+		// nullptr if this shader has no vertex/fragment shader functions to build with.
+		CompiledShader* GetOrBuildSpecialization(ShaderCompilationOptions Options);
+
 		//
 		// Compilation support
 		//
@@ -1459,6 +1478,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		// Dispatches buffered data. If @Rotate is true, we switch to a different (part of a) vertex and parameters buffer before returning
 		virtual void Flush(bool Rotate = false) = 0;
+
+		// Does this program have any buffered-but-undrawn data pending right now? Default is "my
+		// single DrawBuffer has commands in it"; MultiSpecializationShaderProgramImpl overrides
+		// this to check its whole pool of pending specialization batches instead.
+		virtual bool HasPendingData() const { return DrawBuffer.TotalCommands > 0; }
 	};
 
 	// Base class for shader implementations
@@ -1532,12 +1556,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 				VertBuffer.Rotate(true);
 			}
 
-			// Reset the multidraw buffer. Note that the Rotate() calls above might simply switch to an
-			// unused part of the same SSBO/VBO we were already using, so we need to make sure the draw
-			// buffer checks which offsets we're going to start from next
-			DrawBuffer.Reset(
-				VertBuffer.SubBufferOffset + VertBuffer.NextElemIndex,
-				ParametersBuffer.SubBufferOffset + ParametersBuffer.NextElemIndex);
+			// Reset the multidraw buffer. Absolute buffer positions for the next draw calls are
+			// computed fresh at write time (see MultiDrawBuffer::StartDrawCall), so there's no
+			// baseline to recompute here even though Rotate() above might have switched to an
+			// unused part of the same SSBO/VBO we were already using.
+			DrawBuffer.Reset();
 		}
 
 		virtual void ActivateShader()
@@ -1590,6 +1613,187 @@ class UXOpenGLRenderDevice : public URenderDevice
 		DrawCallParamsType                          DrawCallParams;
 		BufferObject<DrawCallParamsType>            ParametersBuffer;
 		BufferObject<VertexType>                    VertBuffer;
+	};
+
+	// Extends ShaderProgramImpl to let ONE shader accumulate pending draws for MULTIPLE
+	// specializations (different compiled GLSL variants of the same shader, resolved via
+	// GetOrBuildSpecialization) at once, all writing into the same shared VertBuffer/
+	// ParametersBuffer -- vertex format and DrawCallParameters layout are identical across every
+	// specialization of a given shader (see EmitDrawCallParametersHeader), so this is safe. Used
+	// by DrawComplexProgram/DrawGouraudProgram so a run of draws that keeps switching between a
+	// handful of specializations (e.g. lightmapped vs. non-lightmapped BSP faces) doesn't force a
+	// flush on every switch -- only when something (blend state, non-opaque draw order, capacity)
+	// actually requires it. See DrawComplexSurface/PrepareGouraudCall for the call-site logic.
+	template
+	<
+		typename VertexType,
+		typename DrawCallParamsType
+	>
+		class MultiSpecializationShaderProgramImpl : public ShaderProgramImpl<VertexType, DrawCallParamsType>
+	{
+	public:
+		using Base = ShaderProgramImpl<VertexType, DrawCallParamsType>;
+
+		MultiSpecializationShaderProgramImpl(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
+			: Base(Name, RenDev)
+		{
+		}
+
+		// A specialization's pending, not-yet-drawn draw calls. Multiple of these can be alive at
+		// once, all referencing the same shared VertBuffer/ParametersBuffer -- only the {First,
+		// Count} command list is per-batch.
+		struct SpecializationBatch
+		{
+			CompiledShader* Specialization{};
+			// Deliberately much smaller than MultiDrawBuffer's 1024-entry default: this cap exists
+			// so a single specialization being drawn a lot in a row still gets flushed sometimes
+			// (freeing GPU-visible memory pressure and giving other pending batches a chance to
+			// draw), not because we expect it to matter for typical scenes.
+			MultiDrawBuffer DrawBuffer{ 128 };
+		};
+
+		static constexpr INT PoolSize = 8;
+		SpecializationBatch PendingBatches[PoolSize];
+
+		// The batch most recently selected for writing. Mirrors how CurrentSpecialization already
+		// works as a member rather than a threaded-through return value. IMPORTANT: any code path
+		// that calls Flush() must call SelectBatch() again afterward before writing more data --
+		// Flush() clears every batch's Specialization field, so ActiveBatch after a flush points
+		// at valid but logically-empty memory, not the batch the caller thinks it's still writing.
+		SpecializationBatch* ActiveBatch{};
+
+		// Finds (or creates) the batch for @Specialization and makes it ActiveBatch. If every pool
+		// slot is already claimed by a different specialization, evicts whichever one has the
+		// fewest pending draws (cheapest to give up) via a narrow single-batch drain, rather than
+		// flushing every other batch's accumulated work too.
+		SpecializationBatch* SelectBatch(CompiledShader* Specialization)
+		{
+			for (auto& B : PendingBatches)
+				if (B.Specialization == Specialization)
+					return ActiveBatch = &B;
+
+			for (auto& B : PendingBatches)
+				if (!B.Specialization)
+				{
+					B.Specialization = Specialization;
+					return ActiveBatch = &B;
+				}
+
+			SpecializationBatch* Victim = &PendingBatches[0];
+			for (auto& B : PendingBatches)
+				if (B.DrawBuffer.TotalCommands < Victim->DrawBuffer.TotalCommands)
+					Victim = &B;
+
+			FlushOneBatch(Victim);
+			Victim->Specialization = Specialization;
+			return ActiveBatch = Victim;
+		}
+
+		virtual bool HasPendingData() const override
+		{
+			for (auto& B : PendingBatches)
+				if (B.DrawBuffer.TotalCommands > 0)
+					return true;
+			return false;
+		}
+
+		virtual void Flush(bool Rotate) override
+		{
+			const bool HavePendingData = HasPendingData();
+
+			if (!HavePendingData && !Rotate)
+				return;
+
+			// stijn: since we always replace the entire buffer (with glBufferData), it is better to just rotate after every flush on these platforms
+#if MACOSX || __LINUX_ARM__ || __LINUX_ARM64__
+			Rotate = true;
+#endif
+
+			if (Rotate)
+			{
+				// Back up the parameters of the last draw call so we can write them into the first
+				// slot of the parameters buffer after rotating
+				auto In = this->ParametersBuffer.GetElementPtr(static_cast<GLuint>((this->ParametersBuffer.Size() > 0) ? (this->ParametersBuffer.Size() - 1) : 0));
+				memcpy(&this->DrawCallParams, In, sizeof(DrawCallParamsType));
+			}
+
+			// We might have to rebind the parameters buffer here because things like PushClipPlane
+			// and PopClipPlane can temporarily bind another UBO.
+			this->ParametersBuffer.Bind();
+
+			if (HavePendingData)
+			{
+				this->VertBuffer.BufferData(false);
+				this->ParametersBuffer.BufferData(false);
+
+				// Issue one draw call per pending specialization batch
+				for (auto& B : PendingBatches)
+				{
+					if (B.DrawBuffer.TotalCommands == 0)
+						continue;
+
+					glUseProgram(B.Specialization->ShaderProgramObject);
+					B.DrawBuffer.Draw(this->DrawMode, this->RenDev);
+				}
+
+				// Restore whatever this shader's "current" specialization actually is, so callers
+				// that expect glUseProgram(CurrentSpecialization) to still be bound aren't surprised.
+				if (this->CurrentSpecialization)
+					glUseProgram(this->CurrentSpecialization->ShaderProgramObject);
+			}
+
+			if (Rotate)
+			{
+				// Now switch to a different parameters and vertex buffers so we don't stomp on
+				// the data the GPU is using
+				this->ParametersBuffer.Lock();
+				this->ParametersBuffer.Rotate(true);
+
+				// Make sure the new parameters buffer starts with the drawcall parameters of the
+				// call latest drawcall
+				auto Out = this->ParametersBuffer.GetCurrentElementPtr();
+				memcpy(Out, &this->DrawCallParams, sizeof(DrawCallParamsType));
+
+				this->VertBuffer.Lock();
+				this->VertBuffer.Rotate(true);
+			}
+
+			// Every batch's data has either just been drawn or belonged to an empty slot -- free
+			// them all so the pool is ready for whatever specializations come next.
+			for (auto& B : PendingBatches)
+			{
+				B.DrawBuffer.Reset();
+				B.Specialization = nullptr;
+			}
+			ActiveBatch = nullptr;
+		}
+
+	private:
+		// Drains one specific batch's own pending draws (its {First,Count} list only) without
+		// touching the shared VertBuffer/ParametersBuffer's rotation -- used when the pool is full
+		// and we need to free up exactly one slot, not when the shared buffers themselves are out
+		// of room (that's handled by the normal Flush(true) path).
+		void FlushOneBatch(SpecializationBatch* Batch)
+		{
+			if (Batch->DrawBuffer.TotalCommands == 0)
+			{
+				Batch->Specialization = nullptr;
+				return;
+			}
+
+			this->ParametersBuffer.Bind();
+			this->VertBuffer.BufferData(false);
+			this->ParametersBuffer.BufferData(false);
+
+			glUseProgram(Batch->Specialization->ShaderProgramObject);
+			Batch->DrawBuffer.Draw(this->DrawMode, this->RenDev);
+
+			if (this->CurrentSpecialization)
+				glUseProgram(this->CurrentSpecialization->ShaderProgramObject);
+
+			Batch->DrawBuffer.Reset();
+			Batch->Specialization = nullptr;
+		}
 	};
 
 	ShaderProgram* Shaders[Max_Prog]{};
@@ -1884,7 +2088,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// DrawGouraud Shader
 	//
-	class DrawGouraudProgram : public ShaderProgramImpl<DrawGouraudVertex, DrawGouraudParameters>
+	class DrawGouraudProgram : public MultiSpecializationShaderProgramImpl<DrawGouraudVertex, DrawGouraudParameters>
 	{
 	public:
 		DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
@@ -1903,7 +2107,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	//
 	// DrawComplex Shader
 	//
-	class DrawComplexProgram : public ShaderProgramImpl<DrawComplexVertex, DrawComplexParameters>
+	class DrawComplexProgram : public MultiSpecializationShaderProgramImpl<DrawComplexVertex, DrawComplexParameters>
 	{
 	public:
 		DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
@@ -2071,6 +2275,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  SetProjection(FSceneNode* Frame, UBOOL bNearZ);
 	void  SetPermanentState();
 	void  SetProgram(INT CurrentProgram);
+
+	// Complex_Prog and Gouraud_Prog independently batch opaque BSP surfaces and mesh triangles
+	// into their own ring buffers and don't force a flush on every switch between them (see
+	// SetProgram) -- draw order between two depth-tested opaque batches doesn't affect the final
+	// image. Because of that, either one may be holding undrained data while the other is
+	// active, so anything that mutates state undrained draws could depend on (shared UBOs,
+	// texture bindings, blend state) -- or that needs to pin draw order against non-opaque draws
+	// -- must drain the relevant program(s) first using these helpers instead of assuming
+	// Shaders[ActiveProgram] is the only one that could have pending data.
+	void  FlushInactiveBatchedProgram(INT ProgramIndex);
+	void  FlushBatchedPrograms();
 #if UNREAL_OLDUNREAL
 	void  SetDistanceFog(FFogSurf& Surf);
 #endif

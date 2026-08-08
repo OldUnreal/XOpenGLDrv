@@ -669,6 +669,12 @@ void UXOpenGLRenderDevice::ResetShaders()
 
 void UXOpenGLRenderDevice::RecompileShaders()
 {
+	// Complex_Prog/Gouraud_Prog may be holding pooled specialization batches whose
+	// CompiledShader* pointers are about to be invalidated by ClearSpecializationCache() below
+	// (called from RecompileShader on a relevant config change) -- drain them first, or a
+	// pending batch could dereference a freed CompiledShader the next time it flushes.
+	FlushBatchedPrograms();
+
 	ShaderCompilationOptions Options;
 	Options.SetOptionsForRendererConfig(this);
 	for (const auto Shader : Shaders)
@@ -867,36 +873,48 @@ void UXOpenGLRenderDevice::ShaderProgram::RecompileShader(ShaderCompilationOptio
 	SelectSpecialization(Options);
 }
 
+UXOpenGLRenderDevice::CompiledShader* UXOpenGLRenderDevice::ShaderProgram::GetOrBuildSpecialization(ShaderCompilationOptions Options)
+{
+	if (CompiledShader** Cached = SpecializationCache.Find(Options.GetMask()))
+	{
+		// Already built this specialization before. Its uniform block bindings and sampler-unit
+		// assignments are program-object state, so they're still exactly as we left them -- no
+		// GL calls needed on a cache hit.
+		return *Cached;
+	}
+
+	if (!VertexShaderFunc || !FragmentShaderFunc)
+		return nullptr;
+
+	CompiledShader* NewSpecialization = new CompiledShader;
+	NewSpecialization->Options = Options;
+	NewSpecialization->ShaderName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
+
+	check(BuildShaderProgram(NewSpecialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
+	SpecializationCache.Set(Options.GetMask(), NewSpecialization);
+
+	// BindShaderState's uniform block/sampler-unit calls aren't DSA and implicitly target
+	// whatever GL program is currently bound, so a fresh compile needs this transient bind --
+	// but it's a one-time cost per specialization, not per draw, and callers that just want to
+	// resolve a specialization without switching to it don't need to restore the previous
+	// binding afterward (Flush()/ActivateShader() always resync it before it's relied on again).
+	glUseProgram(NewSpecialization->ShaderProgramObject);
+	BindShaderState(NewSpecialization);
+
+	return NewSpecialization;
+}
+
 bool UXOpenGLRenderDevice::ShaderProgram::SelectSpecialization(ShaderCompilationOptions Options)
 {
 	if (CurrentSpecialization && CurrentSpecialization->Options == Options)
 		return false;
 
-	if (CompiledShader** Cached = SpecializationCache.Find(Options.GetMask()))
-	{
-		// Already built this specialization before. Its uniform block bindings and sampler-unit
-		// assignments are program-object state, so they're still exactly as we left them -- just
-		// switch to it, no need to redo BindShaderState.
-		CurrentSpecialization = *Cached;
-		glUseProgram(CurrentSpecialization->ShaderProgramObject);
-	}
-	else
-	{
-		if (!VertexShaderFunc || !FragmentShaderFunc)
-			return false;
+	CompiledShader* NewSpecialization = GetOrBuildSpecialization(Options);
+	if (!NewSpecialization)
+		return false;
 
-		CompiledShader* NewSpecialization = new CompiledShader;
-		NewSpecialization->Options = Options;
-		NewSpecialization->ShaderName = FString::Printf(TEXT("%ls%ls"), ShaderName, *Options.GetShortString());
-
-		check(BuildShaderProgram(NewSpecialization, VertexShaderFunc, GeoShaderFunc, FragmentShaderFunc));
-		SpecializationCache.Set(Options.GetMask(), NewSpecialization);
-		CurrentSpecialization = NewSpecialization;
-
-		glUseProgram(CurrentSpecialization->ShaderProgramObject);
-		BindShaderState(CurrentSpecialization);
-	}
-
+	CurrentSpecialization = NewSpecialization;
+	glUseProgram(CurrentSpecialization->ShaderProgramObject);
 	return true;
 }
 

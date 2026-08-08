@@ -74,9 +74,9 @@ void UXOpenGLRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD Lin
 
 	Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
-	Shader->DrawBuffer.StartDrawCall();
+	Shader->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
-	const auto DrawID = Shader->DrawBuffer.GetDrawID();
+	const auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 	(Out  )->Coords = glm::vec3(RFX2 * P1.Z * (P1.X - Frame->FX2), RFY2 * P1.Z * (P1.Y - Frame->FY2), P1.Z);
 	(Out++)->DrawID = DrawID;
 	(Out  )->Coords = glm::vec3(RFX2 * P2.Z * (P2.X - Frame->FX2), RFY2 * P2.Z * (P2.Y - Frame->FY2), P2.Z);
@@ -135,9 +135,9 @@ void UXOpenGLRenderDevice::Draw3DLine( FSceneNode* Frame, FPlane Color, DWORD Li
 
 		Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
-		Shader->DrawBuffer.StartDrawCall();
+		Shader->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 		auto Out = Shader->VertBuffer.GetCurrentElementPtr();
-		const auto DrawID = Shader->DrawBuffer.GetDrawID();
+		const auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 		(Out  )->Coords = glm::vec3(P1.X, P1.Y, P1.Z);
 		(Out++)->DrawID = DrawID;
 		(Out  )->Coords = glm::vec3(P2.X, P2.Y, P2.Z);
@@ -181,9 +181,9 @@ void UXOpenGLRenderDevice::Draw2DPoint( FSceneNode* Frame, FPlane Color, DWORD L
 
 	Shader->ParametersBuffer.GetCurrentElementPtr()->DrawColor = DrawColor;
 
-	Shader->DrawBuffer.StartDrawCall();
+	Shader->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
-	const auto DrawID = Shader->DrawBuffer.GetDrawID();
+	const auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 	(Out  )->Coords = glm::vec3(RFX2 * Z * (X1 - Frame->FX2 - 0.5f), RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
 	(Out++)->DrawID = DrawID;
 	(Out  )->Coords = glm::vec3(RFX2 * Z * (X2 - Frame->FX2 + 0.5f), RFY2 * Z * (Y1 - Frame->FY2 - 0.5f), Z);
@@ -233,9 +233,9 @@ void UXOpenGLRenderDevice::EndFlash()
 		const FLOAT RFX2 = 2.f * RProjZ / Viewport->SizeX;
 		const FLOAT RFY2 = 2.f * RProjZ * Aspect / Viewport->SizeY;
 
-		Shader->DrawBuffer.StartDrawCall();
+		Shader->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 		auto Out = Shader->VertBuffer.GetCurrentElementPtr();
-		const auto DrawID = Shader->DrawBuffer.GetDrawID();
+		const auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 		(Out  )->Coords = glm::vec3(RFX2 * (-Viewport->SizeX / 2.0), RFY2 * (-Viewport->SizeY / 2.0), 1.f);
 		(Out++)->DrawID = DrawID;
 		(Out  )->Coords = glm::vec3(RFX2 * (+Viewport->SizeX / 2.0), RFY2 * (-Viewport->SizeY / 2.0), 1.f);
