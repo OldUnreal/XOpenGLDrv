@@ -36,6 +36,10 @@ static void FixCacheID(FTextureInfo& Info, DWORD PolyFlags)
 	{
 		Info.CacheID |= MASKED_TEXTURE_TAG;
 	}
+	else
+	{
+		Info.CacheID &= ~MASKED_TEXTURE_TAG;
+	}
 }
 
 UXOpenGLRenderDevice::FCachedTexture*
