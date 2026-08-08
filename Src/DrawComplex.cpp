@@ -67,7 +67,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 	// Figure out which texture layers this specific surface uses, so we can select (or lazily build)
 	// the shader specialization that only contains straight-line code for those layers. See
-	// ShaderProgram::SelectSpecialization.
+	// ShaderProgram::GetOrBuildSpecialization.
 #if ENGINE_VERSION==227
 	const bool HasBumpMapPtr = Surface.BumpMap != nullptr;
 	const bool HasBumpMap = HasBumpMapPtr && BumpMaps;
@@ -148,26 +148,41 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Shader->LastResolvedOptions = RequiredOptions;
 	}
 
-	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
+	// Resolve (lazily compiling if needed) the specialization this surface needs, and select its
+	// pending batch -- WITHOUT switching the GL program away from whatever's actually bound right
+	// now. Complex_Prog no longer flushes just because a different specialization is needed: draws
+	// for many specializations can be buffered at once (see MultiSpecializationShaderProgramImpl)
+	// and only get drawn when something else requires it.
+	CompiledShader* Specialization = Shader->GetOrBuildSpecialization(RequiredOptions);
+	auto* Batch = Shader->SelectBatch(Specialization);
 
-	// Check if this draw call will change global blend state or the shader specialization. If so, we
-	// want to flush any pending draw calls before we make those changes. Per-texture-layer state
-	// changes no longer need to be pre-checked here -- BindTextureAndSampler flushes lazily, exactly
-	// when a texture layer actually needs to be rebound, instead of us predicting it upfront.
-	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
-		!(RequiredOptions == Shader->CurrentSpecialization->Options) || // Check if we need a different shader specialization
-		!CanBuffer)
+	const bool NeedRotate = !Shader->ParametersBuffer.CanBuffer(1); // shared buffer genuinely exhausted
+	const bool CanBuffer = !Batch->DrawBuffer.IsFull() && !NeedRotate;
+
+	// Flush OUR OWN pending batches if the blend mode is about to change or we're out of room
+	// (this batch's own draw-call list is full, or the shared buffer itself is). Per-texture-layer
+	// state changes no longer need to be pre-checked here -- BindTextureAndSampler flushes lazily,
+	// exactly when a texture layer actually needs to be rebound, instead of us predicting it upfront.
+	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || !CanBuffer)
 	{
 		// Dispatch buffered data
-		Shader->Flush(!CanBuffer);
-
-		// Update global GL state
-		SetBlend(NextPolyFlags);
+		Shader->Flush(NeedRotate); // only rotate if the shared buffer specifically needs it
+		Batch = Shader->SelectBatch(Specialization); // re-acquire: Flush() cleared every batch
 	}
 
-	// Switch to the specialization for this surface's texture layers, lazily compiling and caching it
-	// if we haven't built this exact combination before this session
-	Shader->SelectSpecialization(RequiredOptions);
+	// Independently of whether we just flushed ourselves: Gouraud_Prog batches on its own schedule
+	// and isn't drained just because we're drawing here (see SetProgram). If the blend state is
+	// changing, or this surface itself is non-opaque, any pending Gouraud draws need to be
+	// on-screen before we touch shared blend state or lose track of draw order relative to them --
+	// this must run before SetBlend below (under the OLD blend state) and unconditionally, not
+	// nested inside the block above, or a translucent surface whose only difference from the
+	// previous draw is specialization would skip it.
+	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || !(NextPolyFlags & PF_Occlude))
+		FlushInactiveBatchedProgram(Gouraud_Prog);
+
+	// Update global GL state, now that anything that needed the OLD state is on-screen
+	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags))
+		SetBlend(NextPolyFlags);
 
 	// Stage this draw's parameters in a local, stack-allocated struct rather than fetching the real
 	// ring-buffer slot up front. Setting up textures below can trigger BindTextureAndSampler's lazy
@@ -231,8 +246,14 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	// parameters into it in one shot.
 	*Shader->ParametersBuffer.GetCurrentElementPtr() = LocalParams;
 
-	Shader->DrawBuffer.StartDrawCall();
-	auto DrawID = Shader->DrawBuffer.GetDrawID();
+	// Re-acquire our batch: a lazy flush from BindTextureAndSampler above (triggered by SetTexture/
+	// UpdateTextureRect needing to rebind or re-upload a texture) would have cleared every pending
+	// batch, including the one we picked earlier -- this is a cheap cache-hit lookup when that
+	// didn't happen, and correctly re-claims a fresh slot when it did.
+	Batch = Shader->SelectBatch(Specialization);
+
+	Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
+	auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 
 	INT FacetVertexCount = 0;
 	for (FSavedPoly* Poly = Facet.Polys; Poly; Poly = Poly->Next)
@@ -243,11 +264,12 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 		if (!Shader->VertBuffer.CanBuffer((NumPts - 2) * 3))
 		{
-			Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
+			Batch->DrawBuffer.EndDrawCall(FacetVertexCount);
 			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 			Shader->Flush(true);
-			Shader->DrawBuffer.StartDrawCall();
-			DrawID = Shader->DrawBuffer.GetDrawID();
+			Batch = Shader->SelectBatch(Specialization); // re-acquire: Flush() cleared every batch
+			Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
+			DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 
 			// just in case...
 			if ((NumPts - 2) * 3 >= Shader->VertexBufferSize)
@@ -278,7 +300,7 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Shader->VertBuffer.Advance((NumPts - 2) * 3);
 	}
 
-	Shader->DrawBuffer.EndDrawCall(FacetVertexCount);
+	Batch->DrawBuffer.EndDrawCall(FacetVertexCount);
 	Shader->ParametersBuffer.Advance(1);
 
 #if ENGINE_VERSION!=227
@@ -301,7 +323,7 @@ void UXOpenGLRenderDevice::DrawPass(FSceneNode* Frame, INT Pass) {}
 -----------------------------------------------------------------------------*/
 
 UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
-	: ShaderProgramImpl(Name, RenDev)
+	: MultiSpecializationShaderProgramImpl(Name, RenDev)
 {
 	VertexBufferSize				= DRAWCOMPLEX_SIZE * 12;
 	ParametersBufferSize			= DRAWCOMPLEX_SIZE;

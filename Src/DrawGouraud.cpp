@@ -78,7 +78,7 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 
 	// Figure out which texture layers this mesh uses, so we can select (or lazily build) the shader
 	// specialization that only contains straight-line code for those layers. See
-	// ShaderProgram::SelectSpecialization.
+	// ShaderProgram::GetOrBuildSpecialization.
 #if ENGINE_VERSION==227
 	const bool HasBumpMapPtr = Info.Texture && Info.Texture->BumpMap;
 	const bool HasBumpMap = HasBumpMapPtr && BumpMaps;
@@ -136,34 +136,55 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 		Shader->LastResolvedOptions = RequiredOptions;
 	}
 
-	const bool CanBuffer = !Shader->DrawBuffer.IsFull() && Shader->ParametersBuffer.CanBuffer(1);
+	// Resolve (lazily compiling if needed) the specialization this mesh needs, and select its
+	// pending batch -- WITHOUT switching the GL program away from whatever's actually bound right
+	// now. Gouraud_Prog no longer flushes just because a different specialization is needed: draws
+	// for many specializations can be buffered at once (see MultiSpecializationShaderProgramImpl)
+	// and only get drawn when something else requires it.
+	CompiledShader* Specialization = Shader->GetOrBuildSpecialization(RequiredOptions);
+	auto* Batch = Shader->SelectBatch(Specialization);
 
-	// Check if global blend state or the shader specialization will change. If so, we want to flush
-	// any pending draw calls before we make those changes. The texture itself no longer needs to be
-	// pre-checked here -- BindTextureAndSampler flushes lazily, exactly when it actually needs to
-	// rebind, instead of us predicting it upfront.
-	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || // Check if the blending mode will change
-		StoredbNearZ != NoNearZ ||  // Force a flush if we're switching between NearZ and NoNearZ
-		!(RequiredOptions == Shader->CurrentSpecialization->Options) || // Check if we need a different shader specialization
-		!CanBuffer // Check if we have room left in the multi-draw array
-	)
+	const bool NeedRotate = !Shader->ParametersBuffer.CanBuffer(1); // shared buffer genuinely exhausted
+	const bool CanBuffer = !Batch->DrawBuffer.IsFull() && !NeedRotate;
+	const bool BlendWillChange = WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags);
+	const bool OwnFlushNeeded = BlendWillChange || StoredbNearZ != NoNearZ || !CanBuffer;
+	const bool NeedsProjectionChange = NoNearZ &&
+		(StoredFovAngle != Frame->Viewport->Actor->FovAngle ||
+			StoredFX != Frame->FX ||
+			StoredFY != Frame->FY ||
+			!StoredbNearZ);
+
+	// Flush OUR OWN pending batches: blend change, near-Z mode toggling, or we're out of room
+	// (this batch's own draw-call list is full, or the shared buffer itself is). Specialization
+	// changes alone no longer trigger this. The texture itself no longer needs to be pre-checked
+	// here -- BindTextureAndSampler flushes lazily, exactly when it actually needs to rebind,
+	// instead of us predicting it upfront.
+	if (OwnFlushNeeded)
 	{
-		// Dispatch buffered data
-		Shader->Flush(!CanBuffer);
-
-		SetBlend(NextPolyFlags);
-
-		if (NoNearZ &&
-			(StoredFovAngle != Frame->Viewport->Actor->FovAngle ||
-				StoredFX != Frame->FX ||
-				StoredFY != Frame->FY ||
-				!StoredbNearZ))
-		{
-			SetProjection(Frame, 1); // TODO/FIXME: Shouldn't this second argument be !NoNearZ ?
-		}
+		Shader->Flush(NeedRotate); // only rotate if the shared buffer specifically needs it
+		Batch = Shader->SelectBatch(Specialization); // re-acquire: Flush() cleared every batch
 	}
 
-	Shader->SelectSpecialization(RequiredOptions);
+	// Independently of whether we just flushed ourselves: Complex_Prog batches on its own schedule
+	// and isn't drained just because we're drawing here (see SetProgram). If the blend state is
+	// changing, the projection is about to change, or this mesh itself is non-opaque, any pending
+	// Complex draws need to be on-screen before we touch shared blend/projection state or lose
+	// track of draw order relative to them -- this must run before SetBlend/SetProjection below
+	// (under the OLD state) and unconditionally, not nested inside the block above, or a
+	// translucent mesh whose only difference from the previous draw is specialization would skip it.
+	if (BlendWillChange || NeedsProjectionChange || !(NextPolyFlags & PF_Occlude))
+		FlushInactiveBatchedProgram(Complex_Prog);
+
+	// Update global GL state, now that anything that needed the OLD state is on-screen. Gated on
+	// OwnFlushNeeded to match the original nesting (blend/near-Z toggle/capacity only -- a pure
+	// specialization change was never a reason to touch projection either).
+	if (OwnFlushNeeded && BlendWillChange)
+		SetBlend(NextPolyFlags);
+
+	if (OwnFlushNeeded && NeedsProjectionChange)
+	{
+		SetProjection(Frame, 1); // TODO/FIXME: Shouldn't this second argument be !NoNearZ ?
+	}
 
 	DrawGouraudParameters LocalParams{};
 	DrawGouraudParameters* DrawCallParams = &LocalParams;
@@ -212,6 +233,13 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 	// triggered has already happened -- safe to fetch the real ring-buffer slot and commit our staged
 	// parameters into it in one shot.
 	*Shader->ParametersBuffer.GetCurrentElementPtr() = LocalParams;
+
+	// Re-acquire our batch: a lazy flush from BindTextureAndSampler above (triggered by SetTexture/
+	// SetTextureHelper needing to rebind or re-upload a texture) would have cleared every pending
+	// batch, including the one we picked earlier -- this is a cheap cache-hit lookup when that
+	// didn't happen, and correctly re-claims a fresh slot when it did. Our callers read
+	// Shader->ActiveBatch (set by SelectBatch) rather than a return value from this function.
+	Shader->SelectBatch(Specialization);
 
 	return DrawFlags;
 }
@@ -276,9 +304,12 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 
 	DWORD DrawFlags = PrepareGouraudCall(Frame, Info, PolyFlags);
 
-	Shader->DrawBuffer.StartDrawCall();
+	// PrepareGouraudCall resolved and stashed the batch for this mesh's specialization in
+	// Shader->ActiveBatch rather than returning it directly.
+	auto* Batch = Shader->ActiveBatch;
+	Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
-	const auto DrawID = Shader->DrawBuffer.GetDrawID();
+	const auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 
 	// Unfan and buffer
 	for (INT i = 0; i < InVertexCount; i++)
@@ -288,7 +319,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 		BufferVert(Out++, Pts[i + 2], DrawID);
 	}
 
-	Shader->DrawBuffer.EndDrawCall(OutVertexCount);
+	Batch->DrawBuffer.EndDrawCall(OutVertexCount);
 	Shader->VertBuffer.Advance(OutVertexCount);
 	Shader->ParametersBuffer.Advance(1);
 
@@ -324,10 +355,17 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	DWORD DrawFlags = PrepareGouraudCall(Frame, Info, PolyFlags);
 
-	Shader->DrawBuffer.StartDrawCall();
+	// PrepareGouraudCall resolved and stashed the batch for this mesh's specialization in
+	// Shader->ActiveBatch rather than returning it directly. Save the specialization itself too,
+	// since the mid-loop overflow-split below needs to re-acquire a batch for it after a flush
+	// clears Shader->ActiveBatch.
+	auto* Batch = Shader->ActiveBatch;
+	CompiledShader* Specialization = Batch->Specialization;
+
+	Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
 	auto End = Shader->VertBuffer.GetLastElementPtr();
-	auto DrawID = Shader->DrawBuffer.GetDrawID();
+	auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 
 	INT PolyListSize = 0;
 	for (INT i = 0; i < NumPts; i++)
@@ -336,17 +374,18 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		// need to split the mesh up into separate drawcalls
 		if ((i % 3 == 0) && (Out + 2 > End))
 		{
-			Shader->DrawBuffer.EndDrawCall(PolyListSize);
+			Batch->DrawBuffer.EndDrawCall(PolyListSize);
 			Shader->VertBuffer.Advance(PolyListSize);
 			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 
 			Shader->Flush(true);
 			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
+			Batch = Shader->SelectBatch(Specialization); // re-acquire: Flush() cleared every batch
 
-			Shader->DrawBuffer.StartDrawCall();
+			Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 			Out = Shader->VertBuffer.GetCurrentElementPtr();
 			End = Shader->VertBuffer.GetLastElementPtr();
-			DrawID = Shader->DrawBuffer.GetDrawID();
+			DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 
 			PolyListSize = 0;
 		}
@@ -355,7 +394,7 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		PolyListSize++;
 	}
 
-	Shader->DrawBuffer.EndDrawCall(PolyListSize);
+	Batch->DrawBuffer.EndDrawCall(PolyListSize);
 	Shader->VertBuffer.Advance(PolyListSize);
 	Shader->ParametersBuffer.Advance(1);
 
@@ -468,7 +507,7 @@ void UXOpenGLRenderDevice::PostDrawGouraud(FSceneNode* Frame, FFogSurf& FogSurf)
 -----------------------------------------------------------------------------*/
 
 UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev)
-	: ShaderProgramImpl(Name, RenDev)
+	: MultiSpecializationShaderProgramImpl(Name, RenDev)
 {
 	VertexBufferSize				= DRAWGOURAUDPOLY_SIZE * 12;
 	ParametersBufferSize			= DRAWGOURAUDPOLY_SIZE;

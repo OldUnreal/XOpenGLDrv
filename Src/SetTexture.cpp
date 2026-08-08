@@ -143,8 +143,10 @@ void UXOpenGLRenderDevice::UpdateTextureRect(FTextureInfo& Info, INT U, INT V, I
 	// rebind it to the temporary upload slot below). Either way, any draw calls we've already batched
 	// up but not yet issued were built expecting the OLD contents/binding, so flush them now -- this
 	// has to happen regardless of bindless residency, since a bindless-resident texture's pending
-	// batch dependency is on its *contents*, not on which TMU it's bound to.
-	Shaders[ActiveProgram]->Flush(false);
+	// batch dependency is on its *contents*, not on which TMU it's bound to. Complex_Prog and
+	// Gouraud_Prog can each independently have pending draws referencing this texture, so both need
+	// draining here, not just whichever one is currently active.
+	FlushBatchedPrograms();
 
 	// Use TMU 8 as a temporary storage location
 	if (!IsResidentBindlessTexture)
@@ -734,7 +736,10 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	// we've already batched up but not yet issued were built expecting the OLD binding/contents, so
 	// flush them now, before we touch anything. This covers the bindless-resident-but-stale case too,
 	// which is the one case where we won't end up calling BindTextureAndSampler below at all.
-	Shaders[ActiveProgram]->Flush(false);
+	// Complex_Prog and Gouraud_Prog both funnel through this same function using the same texture
+	// index constants, so either one can independently have pending draws depending on the old
+	// binding/contents -- drain both, not just whichever one is currently active.
+	FlushBatchedPrograms();
 
     // Make current.
 	Tex.CurrentCacheID   = Info.CacheID;

@@ -1760,7 +1760,7 @@ BYTE UXOpenGLRenderDevice::PushClipPlane(const FPlane& Plane)
 	if (NumClipPlanes == MaxClippingPlanes)
 		return 2;
 
-	Shaders[ActiveProgram]->Flush(false);
+	FlushBatchedPrograms();
 
 	glEnable(GL_CLIP_DISTANCE0 + NumClipPlanes);
 
@@ -1783,7 +1783,7 @@ BYTE UXOpenGLRenderDevice::PopClipPlane()
 	if (NumClipPlanes == 0)
 		return 2;
 
-	Shaders[ActiveProgram]->Flush(false);
+	FlushBatchedPrograms();
 
 	--NumClipPlanes;
 	glDisable(GL_CLIP_DISTANCE0 + NumClipPlanes);
@@ -2519,8 +2519,29 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 
 	if (ActiveProgram != NextProgram)
 	{
-		// Flush the old program
-		Shaders[ActiveProgram]->DeactivateShader();
+		const bool OldIsBatchedPair = (ActiveProgram == Complex_Prog || ActiveProgram == Gouraud_Prog);
+		const bool NewIsBatchedPair = (NextProgram   == Complex_Prog || NextProgram   == Gouraud_Prog);
+
+		if (OldIsBatchedPair && NewIsBatchedPair)
+		{
+			// Switching between our two batched-opaque programs: leave the outgoing one's buffer
+			// as-is instead of flushing it here. It'll get drawn later, either when it fills up,
+			// its specialization changes, or something requires its draw order to be pinned
+			// against the other program's pending data (see DrawComplexSurface/PrepareGouraudCall).
+		}
+		else if (OldIsBatchedPair)
+		{
+			// Leaving the batched pair (e.g. to draw a HUD tile or start post-processing): either
+			// Complex_Prog or Gouraud_Prog may be holding undrained data accumulated across
+			// earlier switches within the pair, not just whichever of them was actually active --
+			// drain both before we move on.
+			FlushBatchedPrograms();
+		}
+		else
+		{
+			// Flush the old program
+			Shaders[ActiveProgram]->DeactivateShader();
+		}
 
 		// Switch and initialize the new program
 		PrevProgram = ActiveProgram;
@@ -2532,12 +2553,42 @@ void UXOpenGLRenderDevice::SetProgram(INT NextProgram)
 	unguard;
 }
 
+void UXOpenGLRenderDevice::FlushInactiveBatchedProgram(INT ProgramIndex)
+{
+	if (ProgramIndex == ActiveProgram)
+		return;
+
+	ShaderProgram* Program = Shaders[ProgramIndex];
+	if (!Program || !Program->HasPendingData())
+		return;
+
+	// Temporarily bind this program's own buffers/GL program so its draw call comes out right
+	Program->ActivateShader();
+	Program->Flush(false);
+
+	// Restore whatever program is genuinely active right now, so the caller can keep
+	// buffering/drawing into it normally afterward
+	Shaders[ActiveProgram]->ActivateShader();
+}
+
+void UXOpenGLRenderDevice::FlushBatchedPrograms()
+{
+	// Only Complex_Prog and Gouraud_Prog are ever allowed to hold data while they aren't the
+	// active program (see SetProgram), so this loop is a no-op for every other shader -- but
+	// looping generically here means this stays correct without changes if that set ever grows.
+	for (INT i = 0; i < Max_Prog; ++i)
+		if (i != ActiveProgram)
+			FlushInactiveBatchedProgram(i);
+
+	Shaders[ActiveProgram]->Flush(false);
+}
+
 #if ENGINE_VERSION==227
 void UXOpenGLRenderDevice::SetDistanceFog(FFogSurf& Surf)
 {
 	// Stop batching
-	Shaders[ActiveProgram]->Flush(false);
-	
+	FlushBatchedPrograms();
+
 	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
 	DistanceFogInfo->FogColor = glm::vec4(Surf.FogColor.X, Surf.FogColor.Y, Surf.FogColor.Z, Surf.FogColor.W);
 	DistanceFogInfo->FogStart = Surf.FogDistanceStart;
@@ -2555,7 +2606,7 @@ void UXOpenGLRenderDevice::ResetDistanceFog()
 	auto DistanceFogInfo = DistanceFogBuffer.GetElementPtr(0);
 	if (DistanceFogInfo->FogMode != -1)
 	{
-		Shaders[ActiveProgram]->Flush(false);
+		FlushBatchedPrograms();
 		DistanceFogInfo->FogMode = -1;
 		DistanceFogBuffer.Bind();
 		DistanceFogBuffer.BufferData(true);
@@ -2567,8 +2618,8 @@ void UXOpenGLRenderDevice::ClearZ(FSceneNode* Frame)
 {
 	guard(UXOpenGLRenderDevice::ClearZ);
 
-	Shaders[ActiveProgram]->Flush(false);
-	
+	FlushBatchedPrograms();
+
 	// stijn: you have a serious problem in Engine/Render if you need this SetSceneNode call here!
 #if !MACOSX
 	SetSceneNode(Frame);

@@ -162,10 +162,10 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	// Buffer the tile
 	if (ShaderES)
 	{
-		ShaderES->DrawBuffer.StartDrawCall();
+		ShaderES->DrawBuffer.StartDrawCall(ShaderES->VertBuffer.CurrentAbsolutePosition());
 		// ES doesn't have geo shaders so we manually emit two triangles here
 		auto Out = ShaderES->VertBuffer.GetCurrentElementPtr();
-		const auto DrawID = ShaderES->DrawBuffer.GetDrawID();
+		const auto DrawID = ShaderES->ParametersBuffer.CurrentAbsolutePosition();
 
 		// Vertex 0
 		Out[0].Coords = glm::vec3(RFX2 * Z * (X - Frame->FX2), RFY2 * Z * (Y - Frame->FY2), Z);
@@ -211,10 +211,10 @@ void UXOpenGLRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT
 	}
 	else
 	{
-		ShaderCore->DrawBuffer.StartDrawCall();
+		ShaderCore->DrawBuffer.StartDrawCall(ShaderCore->VertBuffer.CurrentAbsolutePosition());
 		// Our Core geo shader emits the triangles. We only need to pass the tile origin and dimensions
 		auto Out = ShaderCore->VertBuffer.GetCurrentElementPtr();
-		const auto DrawID = ShaderCore->DrawBuffer.GetDrawID();
+		const auto DrawID = ShaderCore->ParametersBuffer.CurrentAbsolutePosition();
 
 		Out->Coords = glm::vec3(X, Y, Z);
 		Out->TexCoords0 = glm::vec4(RFX2, RFY2, Frame->FX2, Frame->FY2);
