@@ -816,11 +816,13 @@ DWORD UXOpenGLRenderDevice::GetPolyFlagsAndDrawFlags(DWORD PolyFlags, DWORD& Dra
 	else if (RemoveOccludeIfSolid)
 		PolyFlags &= ~PF_Occlude;
 	// stijn: The skybox in zp01-umssakuracrashsite has PF_Translucent|PF_Masked. If we strip off PF_Masked here, the skybox renders incorrectly
+	// TODO: stijn: reevaluate this. I think we needed this because we didn't select the masked version of the texture when
+	// TODO: stijn: we rendered PF_Translucent (but D3D9Drv did)
 	//else if (PolyFlags & (PF_Translucent | PF_AlphaBlend))
 	//	PolyFlags &= ~PF_Masked;
 
 	// fast path. If no relevant polyflags have changed since our previous query, then just return the same ShaderOptions as last time
-	const DWORD RelevantPolyFlags = (PF_Modulated | PF_RenderFog | PF_Masked | PF_Straight_AlphaBlend | PF_Premultiplied_AlphaBlend | PF_Unlit | PF_Translucent | PF_Environment);
+	constexpr DWORD RelevantPolyFlags = (PF_Modulated | PF_RenderFog | PF_Masked | PF_Straight_AlphaBlend | PF_Premultiplied_AlphaBlend | PF_Unlit | PF_Translucent | PF_Environment);
 	if ((CachedPolyFlags & RelevantPolyFlags) ^ (PolyFlags & RelevantPolyFlags))
 	{
 		DrawFlags = ShaderDrawFlags::DF_None;
@@ -869,16 +871,15 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 
 	// Check to disable culling or other frontface if needed (or more other affecting states yet). Perhaps should add own RenderFlags if so.
 	DWORD Xor = CurrentBlendPolyFlags ^ PolyFlags;
+#if UNREAL_OLDUNREAL
 	if (Xor & (PF_TwoSided | PF_RenderHint))
 	{
-#if ENGINE_VERSION==227
 		if (PolyFlags & PF_TwoSided)
 			glDisable(GL_CULL_FACE);
 		else
 			glEnable(GL_CULL_FACE);
-#endif
-		CurrentBlendPolyFlags = PolyFlags;
 	}
+#endif
 
 	// Detect changes in the blending modes.
 	if (Xor & (PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog))
@@ -938,16 +939,21 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 			else
 				glDepthMask(GL_FALSE);
 		}
-		CurrentBlendPolyFlags = PolyFlags;
 	}
+
+	CurrentBlendPolyFlags = PolyFlags;
+
 	STAT(unclockFast(Stats.BlendCycles));
 	unguard;
 }
 
 BOOL UXOpenGLRenderDevice::WillBlendStateChange(DWORD OldPolyFlags, DWORD NewPolyFlags)
 {
-	// stijn: returns true if the polyflag switch will cause a change in the blending mode
-	return ((OldPolyFlags ^ NewPolyFlags) & (PF_TwoSided | PF_RenderHint | PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog | PF_Selected)) ? TRUE : FALSE;
+	DWORD Mask = PF_Translucent | PF_Modulated | PF_Invisible | PF_AlphaBlend | PF_Occlude | PF_Highlighted | PF_RenderFog | PF_Selected;
+#if UNREAL_OLDUNREAL // stijn: We don't support PF_TwoSided in UT
+	Mask |= PF_TwoSided | PF_RenderHint;
+#endif
+	return ((OldPolyFlags ^ NewPolyFlags) & Mask) ? TRUE : FALSE;
 }
 
 constexpr GLenum ModeList[] = { GL_LESS, GL_EQUAL, GL_LEQUAL, GL_GREATER, GL_GEQUAL, GL_NOTEQUAL, GL_ALWAYS };

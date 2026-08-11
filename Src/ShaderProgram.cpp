@@ -257,7 +257,19 @@ vec4 GetTexel(uvec2 BindlessTexHandle, sampler2D BoundSampler, vec2 TexCoords)
 		Out << R"(
 vec4 ApplyPolyFlags(vec4 Color, uint DrawFlags)
 {
-#if OPT_IsMasked
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_Masked))
+  {
+    if (Color.a < 0.5)
+      discard;
+    else Color.rgb /= Color.a;
+  }
+  else if (bool(DrawFlags & DF_AlphaBlended))
+  {
+    if (Color.a < 0.01)
+      discard;
+  }
+#elif OPT_IsMasked
   if (Color.a < 0.5)
     discard;
   else Color.rgb /= Color.a;
@@ -1062,6 +1074,7 @@ AddOptionFunc(Result, L ## #x, (OptionsMask & x) ? true : false);
     ADD_OPTION(OPT_IsTranslucent)
     ADD_OPTION(OPT_IsRenderFog)
     ADD_OPTION(OPT_IsUnlit)
+    ADD_OPTION(OPT_RuntimeTextureLayers)
 
     if (Result.Len() == 0)
         AddOptionFunc(Result, TEXT("OPT_None"), true);

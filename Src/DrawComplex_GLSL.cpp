@@ -112,45 +112,80 @@ void main(void)
   // Texture UV Lightmap to fragment
 #if OPT_HasLightMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_LightMap))
+    {
+#endif
     vec2 LightMapMult = GetLightMapUV(DrawID).xy;
     vec2 LightMapPan = GetLightMapUV(DrawID).zw;
     vLightMapCoords = (MapDot - LightMapPan) * LightMapMult;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
   // Texture UV FogMap
 #if OPT_HasFogMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_FogMap))
+    {
+#endif
     vec2 FogMapMult = GetFogMapUV(DrawID).xy;
     vec2 FogMapPan = GetFogMapUV(DrawID).zw;
     vFogMapCoords = (MapDot - FogMapPan) * FogMapMult;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
   // Texture UV DetailTexture
 #if OPT_DetailTextures && OPT_HasDetailTexture
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_DetailTexture))
+    {
+#endif
     vec2 DetailMult = GetDetailUV(DrawID).xy;
     vec2 DetailPan = GetDetailUV(DrawID).zw;
     vDetailTexCoords = (MapDot - DetailPan) * DetailMult;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
   // Texture UV Macrotexture
 #if OPT_MacroTextures && OPT_HasMacroTexture
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_MacroTexture))
+    {
+#endif
     vec2 MacroMult = GetMacroUV(DrawID).xy;
     vec2 MacroPan = GetMacroUV(DrawID).zw;
     vMacroTexCoords = (MapDot - MacroPan) * MacroMult;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
   // Texture UV EnvironmentMap
 #if OPT_EnvironmentMaps && OPT_HasEnvironmentMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_EnvironmentMap))
+    {
+#endif
     vec2 EnvironmentMapMult = GetEnviroMapUV(DrawID).xy;
     vec2 EnvironmentMapPan = GetEnviroMapUV(DrawID).zw;
     vEnvironmentTexCoords = (MapDot - EnvironmentMapPan) * EnvironmentMapMult;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
@@ -389,11 +424,18 @@ void main(void)
 
 #if OPT_HeightMaps && OPT_HasHeightMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_HeightMap))
+    {
+#endif
     float parallaxHeight = 1.0;
     // get new texture coordinates from Parallax Mapping
     texCoords = ParallaxMapping(vTexCoords, TangentViewDir, GetTexHandleHelper(vDrawID, HeightMapIndex), parallaxHeight);
     //if(texCoords.x > 1.0 || texCoords.y > 1.0 || texCoords.x < 0.0 || texCoords.y < 0.0)
     //discard; // texCoords = vTexCoords;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
@@ -434,6 +476,10 @@ void main(void)
 #else
 #if OPT_HasLightMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_LightMap))
+    {
+#endif
     LightColor = GetTexel(GetTexHandleHelper(vDrawID, LightMapIndex), TMULightMap, vLightMapCoords);
     // Fetch lightmap texel. Data in LightMap is in 0..127/255 range, which needs to be scaled to 0..2 range.
     LightColor.rgb =
@@ -444,12 +490,19 @@ void main(void)
 # endif
 	  * (LightMapIntensity * 255.0 / 127.0);
     LightColor.a = 1.0;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 #endif
 
 #if OPT_DetailTextures && OPT_HasDetailTexture
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_DetailTexture))
+    {
+#endif
     float NearZ = vCoords.z / 512.0;
     float DetailScale = 1.0;
     float bNear;
@@ -475,13 +528,32 @@ void main(void)
         TotalColor.rgb *= DetailTexColor.rgb;
       }
     }
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
 #if OPT_MacroTextures && OPT_HasMacroTexture
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_MacroTexture))
+    {
+#endif
     vec4 MacrotexColor = GetTexel(GetTexHandleHelper(vDrawID, MacroTextureIndex), TMUMacro, vMacroTexCoords);
-#if OPT_IsMasked
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_Masked))
+    {
+      if (MacrotexColor.a < 0.5)
+        discard;
+      else MacrotexColor.rgb /= MacrotexColor.a;
+    }
+    else if (bool(DrawFlags & DF_AlphaBlended))
+    {
+      if (MacrotexColor.a < 0.01)
+        discard;
+    }
+#elif OPT_IsMasked
     if (MacrotexColor.a < 0.5)
       discard;
     else MacrotexColor.rgb /= MacrotexColor.a;
@@ -495,12 +567,19 @@ void main(void)
     hsvMacroTex = hsv2rgb(hsvMacroTex);
     MacrotexColor = vec4(hsvMacroTex, 1.0);
     TotalColor *= MacrotexColor;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
 	// BumpMap (Normal Map)
 #if OPT_BumpMaps && OPT_HasBumpMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_BumpMap))
+    {
+#endif
     float MinLight = 0.05f;
     
     //normal from normal map
@@ -552,19 +631,41 @@ void main(void)
       TotalBumpColor += (ambient + diffuse + specular) * attenuation;
     }
     TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
   vec4 FogColor = vec4(0.0);
 
 #if OPT_HasFogMap
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_FogMap))
+#endif
   FogColor = GetTexel(GetTexHandleHelper(vDrawID, FogMapIndex), TMUFogMap, vFogMapCoords) * 2.0;
 #endif
 
 #if OPT_EnvironmentMaps && OPT_HasEnvironmentMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_EnvironmentMap))
+    {
+#endif
     vec4 EnvironmentColor = GetTexel(GetTexHandleHelper(vDrawID, EnvironmentMapIndex), TMUEnvironmentMap, vEnvironmentTexCoords);
-#if OPT_IsMasked
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_Masked))
+    {
+      if (EnvironmentColor.a < 0.5)
+        discard;
+      else EnvironmentColor.rgb /= EnvironmentColor.a;
+    }
+    else if (bool(DrawFlags & DF_AlphaBlended))
+    {
+      if (EnvironmentColor.a < 0.01)
+        discard;
+    }
+#elif OPT_IsMasked
     if (EnvironmentColor.a < 0.5)
       discard;
     else EnvironmentColor.rgb /= EnvironmentColor.a;
@@ -574,6 +675,9 @@ void main(void)
 #endif
 
     TotalColor *= vec4(EnvironmentColor.rgb, 1.0);
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
@@ -590,8 +694,14 @@ void main(void)
     vec4 MixColor;
 #if OPT_IsModulated
     MixColor = vec4(0.5, 0.5, 0.5, 0.0);
-#elif OPT_IsTranslucent && !OPT_HasEnvironmentMap
+#elif OPT_IsTranslucent
+#if OPT_RuntimeTextureLayers
+    MixColor = bool(DrawFlags & DF_EnvironmentMap) ? DistanceFogColor : vec4(0.0, 0.0, 0.0, 0.0);
+#elif !OPT_HasEnvironmentMap
     MixColor = vec4(0.0, 0.0, 0.0, 0.0);
+#else
+    MixColor = DistanceFogColor;
+#endif
 #else
     MixColor = DistanceFogColor;
 #endif
