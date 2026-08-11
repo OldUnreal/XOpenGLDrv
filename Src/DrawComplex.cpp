@@ -52,7 +52,9 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	if (NoDrawComplexSurface)
 		return;
 
-	auto Shader = dynamic_cast<DrawComplexProgram*>(Shaders[Complex_Prog]);
+	// Shaders[Complex_Prog] is always constructed as exactly DrawComplexProgram (ShaderProgram.cpp,
+	// InitShaders) -- static_cast is safe and avoids a per-draw RTTI lookup.
+	auto Shader = static_cast<DrawComplexProgram*>(Shaders[Complex_Prog]);
 
     STAT(clockFast(Stats.ComplexCycles));
 	SetProgram(Complex_Prog);
@@ -263,7 +265,17 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Surface.Texture->Texture->BumpMap->Lock(Shader->BumpMapInfo, FTime(), 0, this);
 # endif
 #endif
-		SetTextureHelper(this, BumpMapIndex, FTEXTURE_GET(Shader->BumpMapInfo), PF_None, DrawFlags, ShaderDrawFlags::DF_BumpMap, 0.0, nullptr, &DrawCallParams->BumpMapInfo, DrawCallParams->TexHandles);
+		// This handle write is unconditional (runs whenever a real bump map is present, in every
+		// engine version), but DrawComplexParameters::BumpMapInfo only exists under
+		// #if UNREAL_OLDUNREAL -- pass nullptr for the TextureInfo arg otherwise (SetTextureHelper
+		// already treats a null TextureInfo pointer as "skip", same pattern LightMap/FogMap use).
+		SetTextureHelper(this, BumpMapIndex, FTEXTURE_GET(Shader->BumpMapInfo), PF_None, DrawFlags, ShaderDrawFlags::DF_BumpMap, 0.0, nullptr,
+#if UNREAL_OLDUNREAL
+			&DrawCallParams->BumpMapInfo,
+#else
+			nullptr,
+#endif
+			DrawCallParams->TexHandles);
 	}
 
 #if ENGINE_VERSION==227
@@ -325,8 +337,6 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 
 		for (INT i = 0; i < NumPts - 2; i++)
 		{
-			// stijn: not using the normals currently, but we're keeping them in
-			// because they make our vertex data aligned to a 32 byte boundary
 			(Out  )->Coords = FPlaneToVec4(In[0    ]->Point);
 			(Out++)->DrawID = DrawID;
 			(Out  )->Coords = FPlaneToVec4(In[i + 1]->Point);
@@ -389,11 +399,10 @@ UXOpenGLRenderDevice::DrawComplexProgram::DrawComplexProgram(const TCHAR* Name, 
 
 void UXOpenGLRenderDevice::DrawComplexProgram::CreateInputLayout()
 {
-	for (INT i = 0; i < 3; ++i)
+	for (INT i = 0; i < 2; ++i)
 		glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, DrawID)));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(DrawComplexVertex), (GLvoid*)(offsetof(DrawComplexVertex, Normal)));
 	VertBuffer.SetInputLayoutCreated();
 }
 

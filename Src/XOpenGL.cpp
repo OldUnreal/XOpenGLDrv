@@ -189,6 +189,7 @@ void UXOpenGLRenderDevice::StaticConstructor()
 	new(GetClass(), TEXT("UsePersistentBuffers"), RF_Public)UBoolProperty(CPP_PROPERTY(UsePersistentBuffers), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseBindlessTextures"), RF_Public)UBoolProperty(CPP_PROPERTY(UseBindlessTextures), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderDrawParameters"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderDrawParameters), TEXT("Options"), CPF_Config);
+	new(GetClass(), TEXT("UseIndirectDraw"), RF_Public)UBoolProperty(CPP_PROPERTY(UseIndirectDraw), TEXT("Options"), CPF_Config);
 	new(GetClass(), TEXT("UseShaderCache"), RF_Public)UBoolProperty(CPP_PROPERTY(UseShaderCache), TEXT("Options"), CPF_Config);
 #if _WIN32
 	new(GetClass(), TEXT("ReduceMouseLag"), RF_Public)UBoolProperty(CPP_PROPERTY(ReduceMouseLag), TEXT("Options"), CPF_Config);
@@ -587,6 +588,14 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UsingPersistentBuffers = UsePersistentBuffers ? true : false;
 	UsingShaderDrawParameters = UseShaderDrawParameters ? true : false;
 
+	// glMultiDrawArraysIndirect/GL_DRAW_INDIRECT_BUFFER: glMultiDrawArraysIndirect != nullptr is the
+	// real, load-bearing check here (this glad build only loads it behind a genuine core GL 4.3
+	// context -- there's no extension-string fallback path). OpenGLVersion != GL_ES is redundant but
+	// cheap belt-and-suspenders (gladLoadGLES2Loader never touches this pointer at all) and also
+	// transparently covers the MACOSX path, which hardcodes context version 4.1 and skips the
+	// IsSupportedGLVersion probes above entirely.
+	UsingIndirectDraw = UseIndirectDraw && OpenGLVersion != GL_ES && glMultiDrawArraysIndirect != nullptr;
+
 	if (OpenGLVersion == GL_ES)
     {
 		if (SimulateMultiPass)
@@ -803,6 +812,24 @@ void UXOpenGLRenderDevice::SelectGLVersion()
 				SelectedMinorVersion = Max<INT>(3, SelectedMinorVersion);
 			}
         }
+		if (UseIndirectDraw && !UsePersistentBuffers)
+		{
+			debugf(TEXT("XOpenGL: UseIndirectDraw requires UsePersistentBuffers. Disabling UseIndirectDraw."));
+			UseIndirectDraw = false;
+		}
+		if (UseIndirectDraw)
+		{
+			if (!IsSupportedGLVersion(4, 3))
+			{
+				debugf(TEXT("XOpenGL: UseIndirectDraw is enabled, but this device does not support OpenGL 4.3. We will disable this option"));
+				UseIndirectDraw = false;
+			}
+			else
+			{
+				SelectedMajorVersion = Max<INT>(4, SelectedMajorVersion);
+				SelectedMinorVersion = Max<INT>(3, SelectedMinorVersion);
+			}
+		}
 #endif
     }
 
@@ -2316,6 +2343,21 @@ void UXOpenGLRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane S
 		EditorState->RendMap = Viewport->Actor->RendMap;
 		EditorStateBuffer.Bind();
 		EditorStateBuffer.BufferData(true);
+	}
+
+	// Decide, once per pass (matching RendMap's own lifetime above -- never changes mid-pass),
+	// whether Gouraud draws need real per-vertex normals this pass: bump mapping (session-wide
+	// config) or the editor's REN_Normals debug view. See DrawGouraudProgram::bNeedNormalsThisPass.
+	// REN_Normals itself only exists as a C++ symbol for ENGINE_VERSION==227 (see ERenderMap in
+	// UnCamera.h and the matching #if in ShaderProgram.cpp's GLSL #define emission) -- on other
+	// engine versions that debug view doesn't exist at all, so BumpMaps is the only trigger.
+	if (auto GouraudShader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]))
+	{
+#if ENGINE_VERSION==227
+		GouraudShader->bNeedNormalsThisPass = BumpMaps || (GIsEditor && Viewport->Actor->RendMap == REN_Normals);
+#else
+		GouraudShader->bNeedNormalsThisPass = BumpMaps;
+#endif
 	}
 
 	LockHit(InHitData, InHitSize);

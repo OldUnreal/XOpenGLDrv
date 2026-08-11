@@ -23,16 +23,26 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
 	{"vec4", "FogMapUV", 0},
 	{"vec4", "DetailUV", 0},
 	{"vec4", "MacroUV", 0},
+#if ENGINE_VERSION==227
 	{"vec4", "EnviroMapUV", 0},
+#endif
 	{"vec4", "DiffuseInfo", 0},
 	{"vec4", "MacroInfo", 0},
+#if UNREAL_OLDUNREAL
 	{"vec4", "BumpMapInfo", 0},
+#endif
+#if ENGINE_VERSION==227
 	{"vec4", "HeightMapInfo", 0},
+#endif
 	{"vec4", "XAxis", 0},
 	{"vec4", "YAxis", 0},
 	{"vec4", "ZAxis", 0},
 	{"vec4", "DrawColor", 0},
+#if ENGINE_VERSION==227
     {"uvec4", "TexHandles", 4},
+#else
+    {"uvec4", "TexHandles", 3},
+#endif
 	{"uint", "DrawFlags", 0},
     {"uint", "Dummy0", 0},
     {"uint", "Dummy1", 0},
@@ -46,7 +56,6 @@ void UXOpenGLRenderDevice::DrawComplexProgram::BuildVertexShader(GLuint ShaderTy
     Out << R"(
 layout(location = 0) in vec3 Coords; // == gl_Vertex
 layout(location = 1) in uint DrawID; // emulated gl_DrawID
-layout(location = 2) in vec4 Normal;
 
 out vec3 vCoords;
 out vec2 vTexCoords;

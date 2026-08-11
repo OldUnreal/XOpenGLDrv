@@ -20,9 +20,8 @@ const UXOpenGLRenderDevice::ShaderProgram::DrawCallParameterInfo UXOpenGLRenderD
 {
     {"vec4", "DiffuseInfo", 0},
     {"vec4", "DetailMacroInfo", 0},
-    {"vec4", "MiscInfo", 0},
     {"vec4", "DrawColor", 0},
-    {"uvec4", "TexHandles", 4},
+    {"uvec4", "TexHandles", 3},
     {"uint", "DrawFlags", 0},
     {"uint", "Dummy0", 0},
     {"uint", "Dummy1", 0},

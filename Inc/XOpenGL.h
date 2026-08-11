@@ -478,6 +478,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	BITFIELD UsePersistentBuffers;
 	BITFIELD UseBufferInvalidation;
 	BITFIELD UseShaderDrawParameters;
+	BITFIELD UseIndirectDraw;
 	BITFIELD UseShaderCache;
 #if _WIN32
 	BITFIELD ReduceMouseLag; // Present through a low-latency DXGI flip-model swapchain (WGL_NV_DX_interop)
@@ -506,6 +507,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Not configurable
 	bool	UsingPersistentBuffers;
 	bool	UsingShaderDrawParameters;
+	bool	UsingIndirectDraw;
 	bool    UsingGeometryShaders;
 	static INT LogLevel; // Verbosity level of the GL debug logging
 
@@ -741,9 +743,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 		virtual void Unbind() = 0;
 	};
 
-	BoundBuffer* UBOPoint{};    // aka GL_UNIFORM_BUFFER
-	BoundBuffer* SSBOPoint{};   // aka GL_SHADER_STORAGE_BUFFER
-	BoundBuffer* ArrayPoint{};  // aka GL_ARRAY_BUFFER
+	BoundBuffer* UBOPoint{};      // aka GL_UNIFORM_BUFFER
+	BoundBuffer* SSBOPoint{};     // aka GL_SHADER_STORAGE_BUFFER
+	BoundBuffer* ArrayPoint{};    // aka GL_ARRAY_BUFFER
+	BoundBuffer* IndirectPoint{}; // aka GL_DRAW_INDIRECT_BUFFER
 
 	//
 	// A BufferObject describes a GPU-mapped buffer object. If we're using persistent
@@ -885,6 +888,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 			glBindBuffer(GL_UNIFORM_BUFFER, 0);
 		}
 
+		// Generates an indirect-draw command buffer (aka GL_DRAW_INDIRECT_BUFFER) for this buffer object.
+		// Not an indexed binding point, so unlike GenerateSSBOBuffer/GenerateUBOBuffer there's no
+		// glBindBufferBase step.
+		void GenerateIndirectBuffer(UXOpenGLRenderDevice* RenDev)
+		{
+			BindingPoint = &RenDev->IndirectPoint;
+			glGenBuffers(1, &BufferObjectName);
+		}
+
 		// Creates a CPU-accessible mapping for this buffer
 		void MapVertexBuffer(bool Persistent, GLuint BufferSize, bool UseInvalidation = false)
 		{
@@ -899,6 +911,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void MapUBOBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN, bool UseInvalidation = false)
 		{
 			MapBuffer(GL_UNIFORM_BUFFER, Persistent, BufferSize, ExpectedUsage, UseInvalidation);
+		}
+
+		void MapIndirectBuffer(bool Persistent, GLuint BufferSize, GLenum ExpectedUsage=DRAWCALL_BUFFER_USAGE_PATTERN, bool UseInvalidation = false)
+		{
+			MapBuffer(GL_DRAW_INDIRECT_BUFFER, Persistent, BufferSize, ExpectedUsage, UseInvalidation);
 		}
 
 		// Binds and unbinds the buffer so we can write to it
@@ -939,6 +956,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			bInputLayoutCreated = true;
 		}
+
+		// Raw GL names, needed when a second VAO wants to reference this buffer's VBO as one of its
+		// own attribute sources (see DrawGouraudProgram's dual-VAO normals setup).
+		GLuint GetBufferObjectName() const { return BufferObjectName; }
+		GLuint GetVaoObjectName() const { return VaoObjectName; }
 
 		void RebindBufferBase(const GLuint BindingIndex)
 		{
@@ -1115,8 +1137,21 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BindingIndex{};
 	};
     
+	// Layout mandated by the GL spec for glMultiDrawArraysIndirect: 4x GLuint, {count, instanceCount,
+	// first, baseInstance}. BaseInstance is always 0 here -- this renderer's per-draw indexing is the
+	// emulated DrawID vertex attribute (baked from ParametersBuffer's absolute position at write time),
+	// not gl_InstanceID/gl_BaseInstance.
+	struct DrawArraysIndirectCommand
+	{
+		GLuint Count;
+		GLuint InstanceCount;
+		GLuint First;
+		GLuint BaseInstance;
+	};
+	static_assert(sizeof(DrawArraysIndirectCommand) == 16, "Invalid indirect command size");
+
 	//
-	// Helper class for glMultiDrawArrays batching
+	// Helper class for glMultiDrawArrays / glMultiDrawArraysIndirect batching
 	//
 	class MultiDrawBuffer
 	{
@@ -1125,12 +1160,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			FirstArray.AddZeroed(1024);
 			CountArray.AddZeroed(1024);
+			Capacity = 1024;
 		}
 
 		MultiDrawBuffer(INT MaxMultiDraw)
 		{
 			FirstArray.AddZeroed(MaxMultiDraw);
 			CountArray.AddZeroed(MaxMultiDraw);
+			Capacity = MaxMultiDraw;
 		}
 
 		// @AbsoluteFirstVertex must be the absolute position (SubBufferOffset + NextElemIndex) of
@@ -1139,11 +1176,27 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// MultiDrawBuffers can now interleave writes into the same shared VertBuffer/ParametersBuffer
 		// (see MultiSpecializationShaderProgramImpl), and a relative counter would go stale the
 		// instant another MultiDrawBuffer's writes advanced the shared cursor in between.
-		void StartDrawCall(GLint AbsoluteFirstVertex) { FirstArray(TotalCommands) = AbsoluteFirstVertex; }
+		void StartDrawCall(GLint AbsoluteFirstVertex)
+		{
+			FirstArray(TotalCommands) = AbsoluteFirstVertex;
+			if (bUseIndirect)
+			{
+				auto* Cmd = CommandBuffer.GetCurrentElementPtr();
+				Cmd->First = AbsoluteFirstVertex;
+				Cmd->InstanceCount = 1;
+				Cmd->BaseInstance = 0;
+			}
+		}
 
 		void EndDrawCall(INT Vertices)
 		{
 			CountArray(TotalCommands) = Vertices;
+			if (bUseIndirect)
+			{
+				// Same slot StartDrawCall just wrote -- CommandBuffer's cursor hasn't moved yet.
+				CommandBuffer.GetCurrentElementPtr()->Count = Vertices;
+				CommandBuffer.Advance(1);
+			}
 			TotalVertices += Vertices;
 			TotalCommands++;
 		}
@@ -1155,9 +1208,43 @@ class UXOpenGLRenderDevice : public URenderDevice
 			TotalCommands = TotalVertices = 0;
 		}
 
+		// Lazily allocates the persistently-mapped GL_DRAW_INDIRECT_BUFFER this MultiDrawBuffer will
+		// submit commands from. Mirrors how FirstArray/CountArray are already owned 1:1 by this
+		// instance -- each MultiDrawBuffer (the single ShaderProgram::DrawBuffer, or one of the 8
+		// pooled SpecializationBatch::DrawBuffers) gets its own small buffer rather than sharing one
+		// across a shader, because glMultiDrawArraysIndirect requires its commands to be contiguous,
+		// and multiple pooled batches routinely interleave writes into shared buffers otherwise.
+		void MapCommandBuffer(UXOpenGLRenderDevice* RenDev)
+		{
+			if (CommandBuffer.Buffer)
+				return;
+			CommandBuffer.GenerateIndirectBuffer(RenDev);
+			CommandBuffer.MapIndirectBuffer(RenDev->UsingPersistentBuffers, Capacity, DRAWCALL_BUFFER_USAGE_PATTERN, RenDev->UseBufferInvalidation);
+			bUseIndirect = true;
+		}
+
+		void UnmapCommandBuffer()
+		{
+			CommandBuffer.DeleteBuffer();
+			bUseIndirect = false;
+		}
+
 		void Draw(GLenum Mode, UXOpenGLRenderDevice* RenDev)
 		{
-			if (glMultiDrawArrays)
+			if (bUseIndirect)
+			{
+				CommandBuffer.Bind();
+				CommandBuffer.BufferData(false);
+				glMultiDrawArraysIndirect(Mode, (const void*)(uintptr_t)CommandBuffer.SubBufferOffsetBytes(),
+										   TotalCommands, sizeof(DrawArraysIndirectCommand));
+				// Unconditional: TotalCommands resets to 0 on every Draw() (see Reset(), called by our
+				// owner right after this), so the next accumulation cycle always starts writing back at
+				// element 0 of the currently-active sub-buffer -- we must rotate every single Draw() to
+				// avoid overwriting a sub-buffer the GPU may still be reading from this very call.
+				CommandBuffer.Lock();
+				CommandBuffer.Rotate(true);
+			}
+			else if (glMultiDrawArrays)
 			{
 				glMultiDrawArrays(Mode, &FirstArray(0), &CountArray(0), TotalCommands);
 			}
@@ -1181,6 +1268,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 		INT TotalVertices{};
 		INT TotalCommands{};
+
+		BufferObject<DrawArraysIndirectCommand> CommandBuffer;
+		GLuint Capacity{};      // == FirstArray.Num(), remembered for MapCommandBuffer
+		bool   bUseIndirect{};  // cached once, in MapCommandBuffer()
 	};
 
 	//
@@ -1608,10 +1699,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 					ParametersBuffer.MapUBOBuffer(RenDev->UsingPersistentBuffers, ParametersBufferSize, DRAWCALL_BUFFER_USAGE_PATTERN, RenDev->UseBufferInvalidation);
 				}
 			}
+
+			if (RenDev->UsingIndirectDraw)
+				DrawBuffer.MapCommandBuffer(RenDev);
 		}
 
 		virtual void UnmapBuffers()
 		{
+			if (RenDev->UsingIndirectDraw)
+				DrawBuffer.UnmapCommandBuffer();
 			VertBuffer.DeleteBuffer();
 			ParametersBuffer.DeleteBuffer();
 		}
@@ -1745,6 +1841,48 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 		}
 
+		// Shared indirect-draw command buffer for every pooled batch. Deliberately NOT one per
+		// SpecializationBatch (unlike the base ShaderProgramImpl::DrawBuffer, which is fine owning its
+		// own -- it's only ever Draw()n once per Flush()). Flush()'s loop can draw several batches per
+		// call, and giving each its own persistently-mapped buffer meant each one separately paid a
+		// glFenceSync/glClientWaitSync pair on every single Draw() -- confirmed via an NVIDIA Nsight
+		// capture showing that triplet after nearly every glMultiDrawArraysIndirect call, instead of
+		// once per Flush() like VertBuffer/ParametersBuffer. See DrawBatchIndirect() below for how a
+		// shared buffer stays safe despite batches never writing in submission order.
+		BufferObject<DrawArraysIndirectCommand> CommandBuffer;
+
+		// Base ShaderProgramImpl::MapBuffers()/UnmapBuffers() know nothing about PendingBatches, so we
+		// need our own override to map/unmap the shared indirect-draw command buffer too. Sized to
+		// ParametersBufferSize (already finalized by Base::MapBuffers()): one indirect command
+		// corresponds to exactly one draw call, exactly like one ParametersBuffer slot does, so reusing
+		// that number gives CommandBuffer the same safe epoch ParametersBuffer already has, with no
+		// extra overflow risk.
+		virtual void MapBuffers() override
+		{
+			Base::MapBuffers();
+			if (this->RenDev->UsingIndirectDraw && !CommandBuffer.Buffer)
+			{
+				CommandBuffer.GenerateIndirectBuffer(this->RenDev);
+				CommandBuffer.MapIndirectBuffer(this->RenDev->UsingPersistentBuffers, static_cast<GLuint>(this->ParametersBufferSize),
+												 DRAWCALL_BUFFER_USAGE_PATTERN, this->RenDev->UseBufferInvalidation);
+			}
+		}
+
+		virtual void UnmapBuffers() override
+		{
+			if (this->RenDev->UsingIndirectDraw)
+				CommandBuffer.DeleteBuffer();
+			Base::UnmapBuffers();
+		}
+
+		// No-op hooks for a derived class that needs to keep a second vertex-attribute buffer (with
+		// its own VAO) in lockstep with VertBuffer -- see DrawGouraudProgram's packed-normals setup.
+		// Called at the exact points where VertBuffer itself is bound/uploaded/rotated, so a derived
+		// override never has to duplicate this class's binding/rotation logic.
+		virtual void OnVertBufferBound() {}
+		virtual void OnVertBufferUploaded() {}
+		virtual void OnVertBufferRotated() {}
+
 		virtual void Flush(bool Rotate) override
 		{
 			const bool HavePendingData = HasPendingData();
@@ -1770,11 +1908,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 			// last write and this call, so we can't assume ours are still current.
 			this->VertBuffer.Bind();
 			this->ParametersBuffer.Bind();
+			OnVertBufferBound();
+
+			const bool UseIndirect = this->RenDev->UsingIndirectDraw;
+			if (UseIndirect)
+				CommandBuffer.Bind();
 
 			if (HavePendingData)
 			{
 				this->VertBuffer.BufferData(false);
 				this->ParametersBuffer.BufferData(false);
+				OnVertBufferUploaded();
 
 				// Issue one draw call per pending specialization batch. Nothing needs the GL
 				// program restored to CurrentSpecialization afterward -- ActivateShader() is a
@@ -1787,8 +1931,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 						continue;
 
 					glUseProgram(B.Specialization->ShaderProgramObject);
-					B.DrawBuffer.Draw(this->DrawMode, this->RenDev);
+					if (UseIndirect)
+						DrawBatchIndirect(B);
+					else
+						B.DrawBuffer.Draw(this->DrawMode, this->RenDev);
 				}
+
+				if (UseIndirect)
+					CommandBuffer.BufferData(false);
 			}
 
 			if (Rotate)
@@ -1805,6 +1955,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 				this->VertBuffer.Lock();
 				this->VertBuffer.Rotate(true);
+				OnVertBufferRotated();
+
+				// CommandBuffer rotates in lockstep with VertBuffer/ParametersBuffer -- once per
+				// buffer-exhaustion event, shared across however many batches were drawn since the
+				// last rotation, not once per batch (see the member comment above).
+				if (UseIndirect)
+				{
+					CommandBuffer.Lock();
+					CommandBuffer.Rotate(true);
+				}
 			}
 
 			// Every batch's data has either just been drawn or belonged to an empty slot -- free
@@ -1818,10 +1978,39 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 	private:
+		// Writes @B's already-accumulated {First,Count} pairs into the shared CommandBuffer at its
+		// current (contiguous) cursor position and issues one glMultiDrawArraysIndirect referencing
+		// that range. Deferring the write to here (instead of writing incrementally at
+		// StartDrawCall/EndDrawCall time, like the base ShaderProgramImpl::DrawBuffer does) is what
+		// lets every batch drawn in one Flush()/FlushOneBatch() share ONE persistent buffer instead of
+		// each owning its own -- nothing else writes to CommandBuffer between the moment we record
+		// @Start and the moment we finish this batch's commands, so this range stays contiguous even
+		// though different batches' StartDrawCall/EndDrawCall writes (into FirstArray/CountArray) are
+		// themselves interleaved with each other over the course of accumulating this Flush.
+		void DrawBatchIndirect(SpecializationBatch& B)
+		{
+			const GLuint Start = CommandBuffer.CurrentAbsolutePosition();
+			for (INT i = 0; i < B.DrawBuffer.TotalCommands; ++i)
+			{
+				auto* Cmd = CommandBuffer.GetCurrentElementPtr();
+				Cmd->First = B.DrawBuffer.FirstArray(i);
+				Cmd->Count = B.DrawBuffer.CountArray(i);
+				Cmd->InstanceCount = 1;
+				Cmd->BaseInstance = 0;
+				CommandBuffer.Advance(1);
+			}
+			glMultiDrawArraysIndirect(this->DrawMode, (const void*)(uintptr_t)(GLuint)(Start * sizeof(DrawArraysIndirectCommand)),
+									   B.DrawBuffer.TotalCommands, sizeof(DrawArraysIndirectCommand));
+		}
+
 		// Drains one specific batch's own pending draws (its {First,Count} list only) without
 		// touching the shared VertBuffer/ParametersBuffer's rotation -- used when the pool is full
 		// and we need to free up exactly one slot, not when the shared buffers themselves are out
-		// of room (that's handled by the normal Flush(true) path).
+		// of room (that's handled by the normal Flush(true) path). Mirrors that: never calls
+		// CommandBuffer.Lock()/Rotate() either, exactly like it never rotates VertBuffer/
+		// ParametersBuffer -- Advance() always lands on a fresh slot in the current sub-buffer
+		// regardless of whether it's reached via this path or the main Flush() loop, so only a real
+		// Flush(true) needs to actually rotate anything.
 		void FlushOneBatch(SpecializationBatch* Batch)
 		{
 			if (Batch->DrawBuffer.TotalCommands == 0)
@@ -1833,11 +2022,22 @@ class UXOpenGLRenderDevice : public URenderDevice
 			// Bind our own buffers unconditionally -- see the equivalent comment in Flush().
 			this->VertBuffer.Bind();
 			this->ParametersBuffer.Bind();
+			OnVertBufferBound();
 			this->VertBuffer.BufferData(false);
 			this->ParametersBuffer.BufferData(false);
+			OnVertBufferUploaded();
 
 			glUseProgram(Batch->Specialization->ShaderProgramObject);
-			Batch->DrawBuffer.Draw(this->DrawMode, this->RenDev);
+			if (this->RenDev->UsingIndirectDraw)
+			{
+				CommandBuffer.Bind();
+				DrawBatchIndirect(*Batch);
+				CommandBuffer.BufferData(false);
+			}
+			else
+			{
+				Batch->DrawBuffer.Draw(this->DrawMode, this->RenDev);
+			}
 
 			Batch->DrawBuffer.Reset();
 			Batch->Specialization = nullptr;
@@ -2000,29 +2200,51 @@ class UXOpenGLRenderDevice : public URenderDevice
 	{
 		glm::vec4 DiffuseInfo;			// UMult, VMult, Diffuse, Alpha
 		glm::vec4 DetailMacroInfo;		// Detail UMult, Detail VMult, Macro UMult, Macro VMult
-		glm::vec4 MiscInfo;				// BumpMap Specular, Gamma
 		glm::vec4 DrawColor;
-		glm::uint64 TexHandles[8];		// mirrored as 4 uvec4s
+		// Only indices 0 (Diffuse), 3 (Detail), 4 (Macro) are ever read on the GPU side for this
+		// shader -- LightMap/FogMap/EnvironmentMap/HeightMap are structurally unused by Gouraud
+		// meshes (they use per-vertex LightColor/FogColor instead), and BumpMapIndex(5)'s handle is
+		// written (for the sibling game) but never read here. 6 slots (3 uvec4s) covers indices 0-5.
+		glm::uint64 TexHandles[6];		// mirrored as 3 uvec4s
 		glm::uint32 DrawFlags;
 		glm::uint32 Dummy0;
 		glm::uint32 Dummy1;
 		glm::uint32 Dummy2;
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawGouraudParametersInfo[];
-	static_assert(sizeof(DrawGouraudParameters) == 144, "Invalid complex drawcall parameters size");
+	static_assert(sizeof(DrawGouraudParameters) == 112, "Invalid complex drawcall parameters size");
 
 	struct DrawGouraudVertex
 	{
 		glm::vec3 Coords;
 		glm::uint DrawID;
-		glm::vec4 Normals;
 		glm::vec2 TexCoords;
 		glm::vec4 LightColor;
 		glm::vec4 FogColor;
 	};
-	static_assert(sizeof(DrawGouraudVertex) == 72, "Invalid gouraud buffered vertex size");
+	static_assert(sizeof(DrawGouraudVertex) == 56, "Invalid gouraud buffered vertex size");
+
+	// A per-vertex normal, packed into GL_INT_2_10_10_10_REV (10/10/10/2 bits XYZW) instead of a
+	// 16-byte vec4. Kept in its own VBO (DrawGouraudProgram::NormalsBuffer), separate from
+	// DrawGouraudVertex, so draws that don't need real per-vertex normals (the common case -- no
+	// bump maps active, not in the RendMap==REN_Normals editor debug view) never touch this data at
+	// all. See DrawGouraudProgram::bNeedNormalsThisPass and CreateInputLayout.
+	struct DrawGouraudNormal
+	{
+		glm::int32 PackedNormal;
+	};
+	static_assert(sizeof(DrawGouraudNormal) == 4, "Invalid gouraud packed-normal size");
 
 	// ============================== DRAWCOMPLEX ==============================
+	// EnviroMapUV/HeightMapInfo and their TexHandles slots are only ever written/read under
+	// #if ENGINE_VERSION==227 (see DrawComplex.cpp/DrawComplex_GLSL.cpp) -- live for the sibling
+	// game that shares this codebase at that engine version, dead in this build. BumpMapInfo is
+	// different: its C++ writer is NOT version-gated (DrawComplex.cpp's SetTextureHelper call for
+	// BumpMapIndex runs whenever a texture has a real bump map, in every engine version), but its
+	// GLSL reader is only live under #if UNREAL_OLDUNREAL (ShaderProgram.cpp's
+	// SetOptionsForRendererConfig), so it's gated on that macro instead. Version-gating instead of
+	// deleting keeps this struct byte-identical to before for the sibling (304 bytes either way)
+	// while shrinking it for this build (240 bytes).
 	struct DrawComplexParameters
 	{
 		glm::vec4 DiffuseUV;
@@ -2030,31 +2252,44 @@ class UXOpenGLRenderDevice : public URenderDevice
 		glm::vec4 FogMapUV;
 		glm::vec4 DetailUV;
 		glm::vec4 MacroUV;
+#if ENGINE_VERSION==227
 		glm::vec4 EnviroMapUV;
+#endif
 		glm::vec4 DiffuseInfo;
 		glm::vec4 MacroInfo;
+#if UNREAL_OLDUNREAL
 		glm::vec4 BumpMapInfo;
+#endif
+#if ENGINE_VERSION==227
 		glm::vec4 HeightMapInfo;
+#endif
 		glm::vec4 XAxis;
 		glm::vec4 YAxis;
 		glm::vec4 ZAxis;
 		glm::vec4 DrawColor;
-		glm::uint64 TexHandles[8]; // mirrored as 4 uvec2s
+#if ENGINE_VERSION==227
+		glm::uint64 TexHandles[8]; // needs indices 0-7 (Environment/Height live for the sibling), mirrored as 4 uvec4s
+#else
+		glm::uint64 TexHandles[6]; // needs indices 0-5 (Diffuse..Macro + Bump handle), mirrored as 3 uvec4s
+#endif
 		glm::uint32 DrawFlags;
 		glm::uint32 Dummy0;
 		glm::uint32 Dummy1;
 		glm::uint32 Dummy2;
 	};
 	static const ShaderProgram::DrawCallParameterInfo DrawComplexParametersInfo[];
+#if ENGINE_VERSION==227
 	static_assert(sizeof(DrawComplexParameters) == 304, "Invalid complex drawcall parameters size");
+#else
+	static_assert(sizeof(DrawComplexParameters) == 240, "Invalid complex drawcall parameters size");
+#endif
 
 	struct DrawComplexVertex
 	{
 		glm::vec3 Coords;
 		glm::uint DrawID;
-		glm::vec4 Normal;
 	};
-	static_assert(sizeof(DrawComplexVertex) == 32, "Invalid complex buffered vertex size");
+	static_assert(sizeof(DrawComplexVertex) == 16, "Invalid complex buffered vertex size");
 
 	// ============================== NOPROGRAM ==============================
 	struct NoParameters
@@ -2141,6 +2376,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
 		void CreateInputLayout();
+		void MapBuffers() override;
+		void UnmapBuffers() override;
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -2150,6 +2387,18 @@ class UXOpenGLRenderDevice : public URenderDevice
 		FTEXTURE_PTR DetailTextureInfo{};
 		FTEXTURE_PTR MacroTextureInfo{};
 		FTEXTURE_PTR BumpMapInfo{};
+
+		// Packed per-vertex normals, kept in their own VBO/VAO so the common case (no bump maps,
+		// not in the RendMap==REN_Normals editor debug view) never has to touch this data. See
+		// CreateInputLayout for how the two VAOs are built, and XOpenGL.cpp's Lock() for where
+		// bNeedNormalsThisPass gets decided (once per pass, matching how RendMap itself behaves).
+		BufferObject<DrawGouraudNormal> NormalsBuffer;
+		bool bNeedNormalsThisPass{};
+
+	protected:
+		void OnVertBufferBound() override;
+		void OnVertBufferUploaded() override;
+		void OnVertBufferRotated() override;
 	};
 
 	//
