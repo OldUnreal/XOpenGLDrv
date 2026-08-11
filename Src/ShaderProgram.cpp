@@ -669,8 +669,10 @@ void UXOpenGLRenderDevice::ResetShaders()
 		SSBOPoint->Unbind();
 	if (ArrayPoint)
 		ArrayPoint->Unbind();
+	if (IndirectPoint)
+		IndirectPoint->Unbind();
 
-	UBOPoint = SSBOPoint = ArrayPoint = nullptr;
+	UBOPoint = SSBOPoint = ArrayPoint = IndirectPoint = nullptr;
 	
 	for (const auto Shader: Shaders)
 		delete Shader;
@@ -705,7 +707,15 @@ void UXOpenGLRenderDevice::RecompileShaders()
 
 // We stamp the shader cache with the GL vendor, renderer, version, and the XOpenGL build date.
 // If any of these change, we discard the cache and recompile all shaders from source.
-static FString ShaderCacheBuildDate = __DATE__;
+//
+// ShaderCacheLayoutVersion is an explicit salt on top of __DATE__: bump it whenever
+// DrawCallParameterInfo layouts, generated GLSL, or anything else changes that could let an old
+// cached program binary load "successfully" (glProgramBinary only checks GL_LINK_STATUS, not
+// struct/layout compatibility) but then run against a mismatched C++-side layout. __DATE__ alone
+// is calendar-day granularity, so two builds on the same day would otherwise share a cache key
+// even if the layout changed between them.
+static const INT ShaderCacheLayoutVersion = 1;
+static FString ShaderCacheBuildDate = FString(__DATE__) + FString::Printf(TEXT(" v%d"), ShaderCacheLayoutVersion);
 
 UBOOL UXOpenGLRenderDevice::SaveShaderCache()
 {

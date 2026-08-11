@@ -32,14 +32,25 @@
 	Helpers
 -----------------------------------------------------------------------------*/
 
-static void BufferVert(UXOpenGLRenderDevice::DrawGouraudVertex* Vert, FTransTexture* P, glm::uint DrawID)
+// Packs a normalized vector into GL_INT_2_10_10_10_REV (10 bits X, 10 bits Y, 10 bits Z, 2 bits W).
+// Divides by 511 (2^(10-1)-1), matching the GL spec's signed-normalized decode formula for a
+// 10-bit component. W bits are left 0 -- decodes to 0.0, unused by every consumer of this attribute.
+static FORCEINLINE glm::int32 PackNormal_1010102(const FVector& N)
+{
+	auto Q = [](FLOAT V) -> glm::int32 { return static_cast<glm::int32>(Clamp(V, -1.f, 1.f) * 511.f) & 0x3FF; };
+	return Q(N.X) | (Q(N.Y) << 10) | (Q(N.Z) << 20);
+}
+
+static void BufferVert(UXOpenGLRenderDevice::DrawGouraudVertex* Vert, UXOpenGLRenderDevice::DrawGouraudNormal* NormOut,
+                        FTransTexture* P, glm::uint DrawID, bool bWriteNormal)
 {
 	Vert->Coords		= glm::vec3(P->Point.X, P->Point.Y, P->Point.Z);
 	Vert->DrawID		= DrawID;
-	Vert->Normals		= glm::vec4(P->Normal.X, P->Normal.Y, P->Normal.Z, 0.f);
 	Vert->TexCoords     = glm::vec2(P->U, P->V);
 	Vert->LightColor	= glm::vec4(P->Light.X, P->Light.Y, P->Light.Z, P->Light.W);
 	Vert->FogColor		= glm::vec4(P->Fog.X, P->Fog.Y, P->Fog.Z, P->Fog.W);
+	if (bWriteNormal)
+		NormOut->PackedNormal = PackNormal_1010102(P->Normal);
 }
 
 static void SetTextureHelper
@@ -67,7 +78,9 @@ static void SetTextureHelper
 
 DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& Info, DWORD PolyFlags)
 {
-	auto Shader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
+	// Shaders[Gouraud_Prog] is always constructed as exactly DrawGouraudProgram (ShaderProgram.cpp,
+	// InitShaders) -- static_cast is safe and avoids a per-draw RTTI lookup.
+	auto Shader = static_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
 
 	// Gather options
 	DWORD DrawFlags = ShaderDrawFlags::DF_None;
@@ -244,12 +257,10 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 		DrawCallParams->DetailMacroInfo.y = TexInfo[DetailTextureIndex].VMult;
 	}
 
-	DrawCallParams->MiscInfo = glm::vec4(0.f, 0.f, 0.f, 0.f);
 #if ENGINE_VERSION==227
 	if (Info.Texture && Info.Texture->BumpMap && BumpMaps)
 	{
 		SetTextureHelper(this, BumpMapIndex, Info.Texture->BumpMap, Frame, Shader->BumpMapInfo, DrawCallParams->TexHandles, DrawFlags, ShaderDrawFlags::DF_BumpMap);
-		DrawCallParams->MiscInfo.x = Info.Texture->BumpMap->Specular;
 	}
 #endif
 
@@ -280,7 +291,9 @@ DWORD UXOpenGLRenderDevice::PrepareGouraudCall(FSceneNode* Frame, FTextureInfo& 
 void UXOpenGLRenderDevice::FinishGouraudCall(FTextureInfo& Info, DWORD DrawFlags)
 {
 #if !XOPENGL_MODIFIED_LOCK
-	auto Shader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
+	// Shaders[Gouraud_Prog] is always constructed as exactly DrawGouraudProgram (ShaderProgram.cpp,
+	// InitShaders) -- static_cast is safe and avoids a per-draw RTTI lookup.
+	auto Shader = static_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
 	if (DrawFlags & ShaderDrawFlags::DF_DetailTexture)
 		Info.Texture->DetailTexture->Unlock(Shader->DetailTextureInfo);
 
@@ -303,7 +316,9 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	if (NoDrawGouraud)
 		return;
 
-	auto Shader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
+	// Shaders[Gouraud_Prog] is always constructed as exactly DrawGouraudProgram (ShaderProgram.cpp,
+	// InitShaders) -- static_cast is safe and avoids a per-draw RTTI lookup.
+	auto Shader = static_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
 
     STAT(clockFast(Stats.GouraudPolyCycles));
 	SetProgram(Gouraud_Prog);
@@ -342,18 +357,23 @@ void UXOpenGLRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& I
 	auto* Batch = Shader->ActiveBatch;
 	Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
+	auto NormOut = Shader->NormalsBuffer.GetCurrentElementPtr();
 	const auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
+	const bool bWriteNormal = Shader->bNeedNormalsThisPass;
 
 	// Unfan and buffer
 	for (INT i = 0; i < InVertexCount; i++)
 	{
-		BufferVert(Out++, Pts[0    ], DrawID);
-		BufferVert(Out++, Pts[i + 1], DrawID);
-		BufferVert(Out++, Pts[i + 2], DrawID);
+		BufferVert(Out++, NormOut++, Pts[0    ], DrawID, bWriteNormal);
+		BufferVert(Out++, NormOut++, Pts[i + 1], DrawID, bWriteNormal);
+		BufferVert(Out++, NormOut++, Pts[i + 2], DrawID, bWriteNormal);
 	}
 
 	Batch->DrawBuffer.EndDrawCall(OutVertexCount);
 	Shader->VertBuffer.Advance(OutVertexCount);
+	// Unconditional, regardless of bWriteNormal -- keeps NormalsBuffer's ring position numerically
+	// identical to VertBuffer's at all times. See DrawGouraudProgram::OnVertBufferUploaded.
+	Shader->NormalsBuffer.Advance(OutVertexCount);
 	Shader->ParametersBuffer.Advance(1);
 
 	FinishGouraudCall(Info, DrawFlags);
@@ -369,7 +389,9 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	if (NoDrawGouraudList)
 		return;
 
-	auto Shader = dynamic_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
+	// Shaders[Gouraud_Prog] is always constructed as exactly DrawGouraudProgram (ShaderProgram.cpp,
+	// InitShaders) -- static_cast is safe and avoids a per-draw RTTI lookup.
+	auto Shader = static_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
 
     STAT(clockFast(Stats.GouraudPolyCycles));
 	SetProgram(Gouraud_Prog);
@@ -398,7 +420,9 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 	Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
 	auto End = Shader->VertBuffer.GetLastElementPtr();
+	auto NormOut = Shader->NormalsBuffer.GetCurrentElementPtr();
 	auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
+	const bool bWriteNormal = Shader->bNeedNormalsThisPass;
 
 	INT PolyListSize = 0;
 	for (INT i = 0; i < NumPts; i++)
@@ -409,6 +433,8 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 		{
 			Batch->DrawBuffer.EndDrawCall(PolyListSize);
 			Shader->VertBuffer.Advance(PolyListSize);
+			// Unconditional, regardless of bWriteNormal -- see DrawGouraudPolygon/OnVertBufferUploaded.
+			Shader->NormalsBuffer.Advance(PolyListSize);
 			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
 
 			Shader->Flush(true);
@@ -418,17 +444,19 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 			Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
 			Out = Shader->VertBuffer.GetCurrentElementPtr();
 			End = Shader->VertBuffer.GetLastElementPtr();
+			NormOut = Shader->NormalsBuffer.GetCurrentElementPtr();
 			DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
 
 			PolyListSize = 0;
 		}
 
-		BufferVert(Out++, &Pts[i], DrawID);
+		BufferVert(Out++, NormOut++, &Pts[i], DrawID, bWriteNormal);
 		PolyListSize++;
 	}
 
 	Batch->DrawBuffer.EndDrawCall(PolyListSize);
 	Shader->VertBuffer.Advance(PolyListSize);
+	Shader->NormalsBuffer.Advance(PolyListSize);
 	Shader->ParametersBuffer.Advance(1);
 
 	FinishGouraudCall(Info, DrawFlags);
@@ -564,18 +592,99 @@ UXOpenGLRenderDevice::DrawGouraudProgram::DrawGouraudProgram(const TCHAR* Name, 
 		ShaderCompilationOptions::OPT_GeometryShaders;
 }
 
+// Builds two VAOs against the same underlying VertBuffer VBO:
+//   VAO A (VertBuffer's own, bound by the time this runs -- see MapBuffers) omits attribute 2
+//   (Normal) entirely: the common case, used whenever bNeedNormalsThisPass is false.
+//   VAO B (NormalsBuffer's own) additionally references NormalsBuffer's VBO for attribute 2, a
+//   packed GL_INT_2_10_10_10_REV value that GL unpacks/normalizes into the same vec4 the vertex
+//   shader already declares -- no shader-side changes needed for either VAO.
+// See DrawGouraudProgram::OnVertBufferBound for where the two VAOs actually get selected.
 void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 {
-	for (INT i = 0; i < 6; ++i)
-		glEnableVertexAttribArray(i);
 	using Vert = DrawGouraudVertex;
+
+	// VAO A: no-normals case
+	for (INT i = 0; i < 6; ++i)
+		if (i != 2)
+			glEnableVertexAttribArray(i);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
 	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vert), (GLvoid*)(offsetof(Vert, DrawID)));
-	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, Normals)));
 	glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, TexCoords)));
 	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, LightColor)));
 	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, FogColor)));
 	VertBuffer.SetInputLayoutCreated();
+
+	// VAO B: with-normals case, references both VBOs
+	glBindVertexArray(NormalsBuffer.GetVaoObjectName());
+	for (INT i = 0; i < 6; ++i)
+		glEnableVertexAttribArray(i);
+	glBindBuffer(GL_ARRAY_BUFFER, VertBuffer.GetBufferObjectName());
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(0));
+	glVertexAttribIPointer(1, 1, GL_UNSIGNED_INT,   sizeof(Vert), (GLvoid*)(offsetof(Vert, DrawID)));
+	glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, TexCoords)));
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, LightColor)));
+	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(Vert), (GLvoid*)(offsetof(Vert, FogColor)));
+	glBindBuffer(GL_ARRAY_BUFFER, NormalsBuffer.GetBufferObjectName());
+	glVertexAttribPointer(2, 4, GL_INT_2_10_10_10_REV, GL_TRUE, sizeof(DrawGouraudNormal), (GLvoid*)(0));
+	NormalsBuffer.SetInputLayoutCreated();
+
+	// Leave VAO A actually bound: VertBuffer.bBound is still true from the Bind() call our caller
+	// (MapBuffers) made before invoking us, and that flag must keep matching GL's real current VAO,
+	// or the next Flush()'s "no-op if already bBound" VertBuffer.Bind() would wrongly skip restoring
+	// VAO A and leave VAO B active regardless of bNeedNormalsThisPass.
+	glBindVertexArray(VertBuffer.GetVaoObjectName());
+}
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::MapBuffers()
+{
+	if (!NormalsBuffer.Buffer)
+	{
+		NormalsBuffer.GenerateVertexBuffer(RenDev);
+		NormalsBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize, RenDev->UseBufferInvalidation);
+	}
+	// Base MapBuffers() maps VertBuffer/ParametersBuffer and, on first call, binds VertBuffer and
+	// calls CreateInputLayout() -- which needs NormalsBuffer already mapped (above) so it can build
+	// VAO B against it.
+	MultiSpecializationShaderProgramImpl<DrawGouraudVertex, DrawGouraudParameters>::MapBuffers();
+}
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::UnmapBuffers()
+{
+	NormalsBuffer.DeleteBuffer();
+	MultiSpecializationShaderProgramImpl<DrawGouraudVertex, DrawGouraudParameters>::UnmapBuffers();
+}
+
+// this->VertBuffer.Bind() (called just before this) always rebinds VAO A -- if this pass needs
+// real normals, override that with VAO B. NormalsBuffer.Bind() shares VertBuffer's ArrayPoint
+// binding slot (both are GL_ARRAY_BUFFER BufferObjects), so it correctly invalidates VertBuffer's
+// bBound cache too: the next flush's unconditional VertBuffer.Bind() will re-issue glBindVertexArray
+// back to VAO A the next time bNeedNormalsThisPass is false, with no extra bookkeeping needed here.
+void UXOpenGLRenderDevice::DrawGouraudProgram::OnVertBufferBound()
+{
+	if (bNeedNormalsThisPass)
+		NormalsBuffer.Bind();
+}
+
+// Gated on bNeedNormalsThisPass, unlike position tracking (Advance(), unconditional in BufferVert's
+// call sites -- that's what keeps NormalsBuffer's ring position numerically identical to
+// VertBuffer's at all times). BufferData() itself must NOT run unconditionally: on the persistent-
+// buffer path it's a no-op regardless, but on the non-persistent fallback it calls glBufferSubData
+// against whatever buffer is currently bound to GL_ARRAY_BUFFER -- which is VertBuffer's, not
+// NormalsBuffer's, whenever OnVertBufferBound() above didn't call NormalsBuffer.Bind() -- so calling
+// it here unconditionally would silently corrupt VertBuffer's data in that fallback path. Skipping
+// the upload when normals aren't needed is also simply correct: nothing written this pass into
+// NormalsBuffer is meaningful (BufferVert only packs real data when bNeedNormalsThisPass is true),
+// and nothing will read it until a future pass where this condition is true again re-uploads it.
+void UXOpenGLRenderDevice::DrawGouraudProgram::OnVertBufferUploaded()
+{
+	if (bNeedNormalsThisPass)
+		NormalsBuffer.BufferData(false);
+}
+
+void UXOpenGLRenderDevice::DrawGouraudProgram::OnVertBufferRotated()
+{
+	NormalsBuffer.Lock();
+	NormalsBuffer.Rotate(true);
 }
 
 /*-----------------------------------------------------------------------------
