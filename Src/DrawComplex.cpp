@@ -148,22 +148,61 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 		Shader->LastResolvedOptions = RequiredOptions;
 	}
 
+	const bool NonOpaque = !(NextPolyFlags & PF_Occlude);
+
+	// For non-opaque draws, request a shared "uber" specialization instead of this surface's exact
+	// texture-layer combination -- see the OPT_RuntimeTextureLayers comment in XOpenGL.h. The engine's
+	// depth sort for translucent geometry has no notion of texture layers, so translucent surfaces
+	// with different layer combinations end up interleaved, forcing a real specialization switch on
+	// nearly every draw; routing them all through one or two uber specializations (checking layer
+	// presence via the per-draw DrawFlags at runtime instead of at compile time) collapses that churn.
+	// Opaque draws are unaffected and keep requesting their exact specialization as before. Relies on
+	// bindless texture handles to select the right texture at runtime without a TMU rebind.
+	ShaderCompilationOptions SpecializationToRequest = RequiredOptions;
+	if (NonOpaque && UsingBindlessTextures)
+	{
+		constexpr DWORD Tier2Mask = ShaderCompilationOptions::OPT_HasBumpMap | ShaderCompilationOptions::OPT_HasEnvironmentMap | ShaderCompilationOptions::OPT_HasHeightMap;
+		const bool NeedsTier2 = RequiredOptions.HasOption(Tier2Mask);
+		SpecializationToRequest.SetOption(ShaderCompilationOptions::OPT_HasLightMap | ShaderCompilationOptions::OPT_HasFogMap | ShaderCompilationOptions::OPT_HasDetailTexture | ShaderCompilationOptions::OPT_HasMacroTexture);
+		if (NeedsTier2)
+			SpecializationToRequest.SetOption(Tier2Mask);
+		else
+			SpecializationToRequest.UnsetOption(Tier2Mask);
+		// Masked vs alpha-blended discard is also collapsed to a runtime DrawFlags check (see
+		// ApplyPolyFlags/the Macro & EnvironmentMap discard blocks) -- clear both so draws that only
+		// differ by these bits still land in the same specialization/batch.
+		SpecializationToRequest.UnsetOption(ShaderCompilationOptions::OPT_IsMasked | ShaderCompilationOptions::OPT_IsAlphaBlended);
+		SpecializationToRequest.SetOption(ShaderCompilationOptions::OPT_RuntimeTextureLayers);
+	}
+
 	// Resolve (lazily compiling if needed) the specialization this surface needs, and select its
 	// pending batch -- WITHOUT switching the GL program away from whatever's actually bound right
 	// now. Complex_Prog no longer flushes just because a different specialization is needed: draws
 	// for many specializations can be buffered at once (see MultiSpecializationShaderProgramImpl)
 	// and only get drawn when something else requires it.
-	CompiledShader* Specialization = Shader->GetOrBuildSpecialization(RequiredOptions);
+	CompiledShader* Specialization = Shader->GetOrBuildSpecialization(SpecializationToRequest);
 	auto* Batch = Shader->SelectBatch(Specialization);
 
 	const bool NeedRotate = !Shader->ParametersBuffer.CanBuffer(1); // shared buffer genuinely exhausted
 	const bool CanBuffer = !Batch->DrawBuffer.IsFull() && !NeedRotate;
+	const bool BlendWillChange = WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags);
 
-	// Flush OUR OWN pending batches if the blend mode is about to change or we're out of room
-	// (this batch's own draw-call list is full, or the shared buffer itself is). Per-texture-layer
-	// state changes no longer need to be pre-checked here -- BindTextureAndSampler flushes lazily,
-	// exactly when a texture layer actually needs to be rebound, instead of us predicting it upfront.
-	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || !CanBuffer)
+	// Some OTHER batch already has pending content: this surface being non-opaque means it needs
+	// everything submitted before it fully drawn first -- opaque draws don't write depth-order-
+	// sensitive state that cares about being reordered relative to each other, but a translucent
+	// draw's own depth test needs any earlier opaque geometry already depth-written, and two
+	// pending non-opaque batches for different specializations could have their relative blending
+	// order scrambled by Flush()'s pool-slot iteration. Scoped to NonOpaque only: consecutive
+	// non-opaque surfaces sharing a specialization, with nothing else interleaved, still batch
+	// together normally, since they land in the same batch in submission order either way.
+	const bool NeedOwnFlushForOrdering = NonOpaque && Shader->HasOtherPendingBatch(Batch);
+
+	// Flush OUR OWN pending batches if the blend mode is about to change, a differently-
+	// specialized non-opaque batch is already pending, or we're out of room (this batch's own
+	// draw-call list is full, or the shared buffer itself is). Per-texture-layer state changes no
+	// longer need to be pre-checked here -- BindTextureAndSampler flushes lazily, exactly when a
+	// texture layer actually needs to be rebound, instead of us predicting it upfront.
+	if (BlendWillChange || NeedOwnFlushForOrdering || !CanBuffer)
 	{
 		// Dispatch buffered data
 		Shader->Flush(NeedRotate); // only rotate if the shared buffer specifically needs it
@@ -177,11 +216,11 @@ void UXOpenGLRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& S
 	// this must run before SetBlend below (under the OLD blend state) and unconditionally, not
 	// nested inside the block above, or a translucent surface whose only difference from the
 	// previous draw is specialization would skip it.
-	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags) || !(NextPolyFlags & PF_Occlude))
+	if (BlendWillChange || NonOpaque)
 		FlushInactiveBatchedProgram(Gouraud_Prog);
 
 	// Update global GL state, now that anything that needed the OLD state is on-screen
-	if (WillBlendStateChange(CurrentBlendPolyFlags, NextPolyFlags))
+	if (BlendWillChange)
 		SetBlend(NextPolyFlags);
 
 	// Stage this draw's parameters in a local, stack-allocated struct rather than fetching the real

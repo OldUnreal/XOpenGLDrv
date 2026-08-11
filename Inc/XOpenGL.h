@@ -1281,7 +1281,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 			OPT_IsModulated			 = 0x02000000,
 			OPT_IsTranslucent		 = 0x04000000,
 			OPT_IsRenderFog			 = 0x08000000,
-			OPT_IsUnlit				 = 0x10000000
+			OPT_IsUnlit				 = 0x10000000,
+
+			// Set when OPT_HasXXX texture-layer bits above were force-set beyond what this
+			// draw's own surface data implies (uber-shader specializations for translucent
+			// draws, see DrawComplexSurface/PrepareGouraudCall). Tells the shader to guard
+			// each texture-layer block with a runtime check of the per-draw DrawFlags instead
+			// of trusting the compile-time OPT_HasXXX bit.
+			OPT_RuntimeTextureLayers = 0x20000000
         };
 
 		ShaderCompilationOptions(DWORD ShaderOptions)
@@ -1662,10 +1669,36 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// at valid but logically-empty memory, not the batch the caller thinks it's still writing.
 		SpecializationBatch* ActiveBatch{};
 
+		// True if some batch OTHER than @Except currently has pending (undrawn) draws. Used to
+		// decide whether a non-opaque draw can safely append to its own batch without flushing
+		// first -- see the design note on SelectBatch below.
+		bool HasOtherPendingBatch(SpecializationBatch* Except) const
+		{
+			for (auto& B : PendingBatches)
+				if (&B != Except && B.DrawBuffer.TotalCommands > 0)
+					return true;
+			return false;
+		}
+
 		// Finds (or creates) the batch for @Specialization and makes it ActiveBatch. If every pool
 		// slot is already claimed by a different specialization, evicts whichever one has the
 		// fewest pending draws (cheapest to give up) via a narrow single-batch drain, rather than
 		// flushing every other batch's accumulated work too.
+		//
+		// Note this does NOT by itself guarantee draw-order safety for non-opaque draws: Flush()
+		// draws each pending batch in pool-slot order, not submission order. That's invisible for
+		// opaque/depth-tested geometry (whichever of two opaque draws is genuinely closer wins the
+		// depth test regardless of which one the GPU rasterizes first), but two real hazards exist
+		// for non-opaque (translucent) draws:
+		//   1. Two non-opaque batches for different specializations both pending at once could have
+		//      their relative blending order scrambled.
+		//   2. A non-opaque draw's own depth test needs every OPAQUE draw submitted before it to
+		//      already be depth-written -- translucent draws don't write depth, so opaque draws
+		//      submitted after it are unaffected regardless of when they actually run, but opaque
+		//      draws submitted before it are NOT safe to leave pending.
+		// Both hazards reduce to the same rule: a non-opaque draw must flush everything (via
+		// HasOtherPendingBatch) before it's safe to just append to its own batch. See
+		// DrawComplexSurface/PrepareGouraudCall for where this is applied.
 		SpecializationBatch* SelectBatch(CompiledShader* Specialization)
 		{
 			for (auto& B : PendingBatches)
@@ -1697,6 +1730,21 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return false;
 		}
 
+		// Deliberately does nothing. The base ActivateShader() (Wait/Bind/UseShader) exists so a
+		// freshly-switched-to program is ready to draw immediately -- but for us, "ready to draw"
+		// isn't decided at switch time at all: CurrentSpecialization is just a frozen renderer-
+		// config marker (see GetOrBuildSpecialization/RecompileShader), never the specialization
+		// we're actually about to use, so calling UseShader() here would always bind a program
+		// object that's about to be superseded. Flush() (above) binds VertBuffer/ParametersBuffer
+		// itself right before it needs them, and glUseProgram's each pending batch's own
+		// specialization individually -- so there's nothing useful left for this to do. This is
+		// what stops SetProgram switches and sibling flushes (FlushInactiveBatchedProgram) from
+		// emitting a glUseProgram/rebind that's immediately thrown away without a draw ever
+		// happening.
+		virtual void ActivateShader() override
+		{
+		}
+
 		virtual void Flush(bool Rotate) override
 		{
 			const bool HavePendingData = HasPendingData();
@@ -1717,8 +1765,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 				memcpy(&this->DrawCallParams, In, sizeof(DrawCallParamsType));
 			}
 
-			// We might have to rebind the parameters buffer here because things like PushClipPlane
-			// and PopClipPlane can temporarily bind another UBO.
+			// Bind our own buffers unconditionally: ActivateShader() is a no-op for us (see below),
+			// and a sibling program's own Flush() may have rebound its VAO/UBO/SSBO in between our
+			// last write and this call, so we can't assume ours are still current.
+			this->VertBuffer.Bind();
 			this->ParametersBuffer.Bind();
 
 			if (HavePendingData)
@@ -1726,7 +1776,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 				this->VertBuffer.BufferData(false);
 				this->ParametersBuffer.BufferData(false);
 
-				// Issue one draw call per pending specialization batch
+				// Issue one draw call per pending specialization batch. Nothing needs the GL
+				// program restored to CurrentSpecialization afterward -- ActivateShader() is a
+				// no-op for us, and GetOrBuildSpecialization/SelectBatch don't depend on any
+				// particular program being current either -- so we just leave whatever the last
+				// batch drawn with is bound.
 				for (auto& B : PendingBatches)
 				{
 					if (B.DrawBuffer.TotalCommands == 0)
@@ -1735,11 +1789,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 					glUseProgram(B.Specialization->ShaderProgramObject);
 					B.DrawBuffer.Draw(this->DrawMode, this->RenDev);
 				}
-
-				// Restore whatever this shader's "current" specialization actually is, so callers
-				// that expect glUseProgram(CurrentSpecialization) to still be bound aren't surprised.
-				if (this->CurrentSpecialization)
-					glUseProgram(this->CurrentSpecialization->ShaderProgramObject);
 			}
 
 			if (Rotate)
@@ -1781,15 +1830,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 				return;
 			}
 
+			// Bind our own buffers unconditionally -- see the equivalent comment in Flush().
+			this->VertBuffer.Bind();
 			this->ParametersBuffer.Bind();
 			this->VertBuffer.BufferData(false);
 			this->ParametersBuffer.BufferData(false);
 
 			glUseProgram(Batch->Specialization->ShaderProgramObject);
 			Batch->DrawBuffer.Draw(this->DrawMode, this->RenDev);
-
-			if (this->CurrentSpecialization)
-				glUseProgram(this->CurrentSpecialization->ShaderProgramObject);
 
 			Batch->DrawBuffer.Reset();
 			Batch->Specialization = nullptr;

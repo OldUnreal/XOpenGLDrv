@@ -87,10 +87,16 @@ void main(void)
   Out.Normals = vec4(Normals.xyz, 0);
 
 #if OPT_DetailTextures && OPT_HasDetailTexture
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_DetailTexture))
+#endif
   Out.DetailTexCoords = TexCoords * GetDetailMacroInfo(DrawID).xy;
 #endif
 
 #if OPT_MacroTextures && OPT_HasMacroTexture
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_MacroTexture))
+#endif
   Out.MacroTexCoords = TexCoords * GetDetailMacroInfo(DrawID).zw;
 #endif
 
@@ -102,6 +108,9 @@ void main(void)
   gl_Position = vec4(Coords, 1.0);
 #else 
 # if OPT_BumpMaps && OPT_HasBumpMap
+# if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_BumpMap))
+# endif
   {
     vec3 T = vec3(1.0, 1.0, 1.0); // Arbitrary.
     vec3 B = vec3(1.0, 1.0, 1.0); // Replace with actual values extracted from mesh generation some day.
@@ -184,6 +193,9 @@ void main(void)
   vec3 Bitangent;
   vec3 T;
   vec3 B;
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_BumpMap))
+#endif
   {
     Tangent = GetTangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
     Bitangent = GetBitangent(In[0].Coords, In[1].Coords, In[2].Coords, In[0].TexCoords, In[1].TexCoords, In[2].TexCoords);
@@ -202,6 +214,10 @@ void main(void)
   {
 #if OPT_BumpMaps && OPT_HasBumpMap
     {
+#if OPT_RuntimeTextureLayers
+      if (bool(DrawFlags & DF_BumpMap))
+      {
+#endif
       vec3 N = normalize(vec3(modelMat * In[i].Normals));
 
       // TBN must have right handed coord system.
@@ -210,6 +226,9 @@ void main(void)
       Out.TBNMat = mat3(T, B, N);
       Out.TangentViewPos = Out.TBNMat * normalize(FrameCoords[0].xyz);
       Out.TangentFragPos = Out.TBNMat * In[i].Coords.xyz;
+#if OPT_RuntimeTextureLayers
+      }
+#endif
     }
 #endif
 #if OPT_DistanceFog || OPT_ClipDistance
@@ -294,7 +313,10 @@ void main(void)
   Color *= GetDiffuseInfo(DrawID).z; // Diffuse factor.
   Color.a *= GetDiffuseInfo(DrawID).w; // Alpha.
 
-#if OPT_IsAlphaBlended
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_AlphaBlended))
+    Color.a *= In.LightColor.a;
+#elif OPT_IsAlphaBlended
   Color.a *= In.LightColor.a;
 #endif
 
@@ -359,6 +381,10 @@ void main(void)
 
 #if OPT_DetailTextures && OPT_HasDetailTexture
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_DetailTexture))
+    {
+#endif
     float NearZ = In.Coords.z / 512.0;
     float DetailScale = 1.0;
     float bNear;
@@ -385,22 +411,36 @@ void main(void)
         TotalColor.rgb *= DetailTexColor.rgb;
       }
     }
-  }     
+#if OPT_RuntimeTextureLayers
+    }
+#endif
+  }
 #endif
 
 #if OPT_MacroTextures && !OPT_BumpMaps && OPT_HasMacroTexture
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_MacroTexture))
+    {
+#endif
     vec4 MacroTexColor = GetTexel(GetTexHandleHelper(DrawID, MacroTextureIndex), TMUMacro, In.MacroTexCoords);
     vec3 hsvMacroTex = rgb2hsv(MacroTexColor.rgb);
     hsvMacroTex.b += (MacroTexColor.r - 0.1);
     hsvMacroTex = hsv2rgb(hsvMacroTex);
     MacroTexColor = vec4(hsvMacroTex, 1.0);
     TotalColor *= MacroTexColor;
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
 #if OPT_BumpMaps && OPT_HasBumpMap
   {
+#if OPT_RuntimeTextureLayers
+    if (bool(DrawFlags & DF_BumpMap))
+    {
+#endif
     float MinLight = 0.05f;
     vec3 TangentViewDir = normalize(In.TangentViewPos - In.TangentFragPos);
     //normal from normal map
@@ -445,6 +485,9 @@ void main(void)
       TotalBumpColor += (ambient + diffuse + specular) * attenuation;
     }
     TotalColor += vec4(clamp(TotalBumpColor, 0.0, 1.0), 1.0);
+#if OPT_RuntimeTextureLayers
+    }
+#endif
   }
 #endif
 
@@ -500,7 +543,10 @@ void main(void)
       TotalColor.a = 0.51;
   }
 
-#if OPT_IsAlphaBlended
+#if OPT_RuntimeTextureLayers
+  if (bool(DrawFlags & DF_AlphaBlended) && DrawColor.a > 0.0)
+    TotalColor.a *= DrawColor.a;
+#elif OPT_IsAlphaBlended
   if (DrawColor.a > 0.0)
     TotalColor.a *= DrawColor.a;
 #endif
