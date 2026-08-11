@@ -631,7 +631,18 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::CreateInputLayout()
 	// Leave VAO A actually bound: VertBuffer.bBound is still true from the Bind() call our caller
 	// (MapBuffers) made before invoking us, and that flag must keep matching GL's real current VAO,
 	// or the next Flush()'s "no-op if already bBound" VertBuffer.Bind() would wrongly skip restoring
-	// VAO A and leave VAO B active regardless of bNeedNormalsThisPass.
+	// VAO A and leave VAO B active regardless of bNeedNormalsThisPass. Also explicitly restore
+	// GL_ARRAY_BUFFER to VertBuffer's own VBO -- the VAO-B setup above left it pointing at
+	// NormalsBuffer's VBO, and unlike the VAO binding, GL_ARRAY_BUFFER isn't part of a VAO's captured
+	// state, so it stays wrong until something corrects it. On the non-persistent-buffer fallback
+	// path, VertBuffer.BufferData()'s glBufferSubData(GL_ARRAY_BUFFER, ...) call implicitly targets
+	// whatever is CURRENTLY bound to GL_ARRAY_BUFFER -- since VertBuffer.bBound is (correctly) still
+	// true, Bind()'s no-op-if-already-bound check means nothing ever re-issues this glBindBuffer
+	// again, so every subsequent vertex upload for this shader would silently land in NormalsBuffer's
+	// storage instead of VertBuffer's, leaving VertBuffer's actual GPU-visible vertex data stale --
+	// invisible on the persistent-buffer path (BufferData() is a no-op there) but the exact cause of
+	// visibly stale/corrupted Gouraud geometry when persistent buffers are off.
+	glBindBuffer(GL_ARRAY_BUFFER, VertBuffer.GetBufferObjectName());
 	glBindVertexArray(VertBuffer.GetVaoObjectName());
 }
 
@@ -683,8 +694,19 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::OnVertBufferUploaded()
 
 void UXOpenGLRenderDevice::DrawGouraudProgram::OnVertBufferRotated()
 {
-	NormalsBuffer.Lock();
-	NormalsBuffer.Rotate(true);
+	// Rotate()'s non-persistent-buffer branch does an implicit-target glBufferData(GL_ARRAY_BUFFER,
+	// ...) orphan call -- it does NOT bind itself first, it trusts whatever is currently bound. The
+	// caller (Flush()) just explicitly rebound VertBuffer right before calling VertBuffer.Rotate(),
+	// so GL_ARRAY_BUFFER is now VertBuffer's, not NormalsBuffer's -- without this Bind(), the orphan
+	// call below would silently reallocate VertBuffer's real GPU object down to NormalsBuffer's much
+	// smaller size (this was the actual cause of the non-persistent-buffer flicker/GL_INVALID_VALUE
+	// bug: VertBuffer's object stayed correctly *bound*, just wrongly *sized*, which is why a
+	// bind-mismatch check didn't catch it).
+	NormalsBuffer.Bind();
+	// Position math only -- the caller (MultiSpecializationShaderProgramImpl::Flush) sequences a
+	// shared WaitRotation() after this hook returns and before any new-slot write, covering
+	// NormalsBuffer the same way it covers VertBuffer/ParametersBuffer/CommandBuffer.
+	NormalsBuffer.Rotate();
 }
 
 /*-----------------------------------------------------------------------------

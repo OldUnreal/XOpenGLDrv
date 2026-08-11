@@ -827,10 +827,33 @@ class UXOpenGLRenderDevice : public URenderDevice
 				this->Wait();
 				return true;
 			}
-			
+
 			glBufferData(BufferType, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
 			return true;
 		}
+
+		// Position-math-only rotation, no implicit wait -- caller is responsible for waiting on a
+		// shared fence (see ShaderProgramImpl::WaitRotation) before writing into the new sub-buffer.
+		// Used by buffers that always rotate in lockstep with siblings sharing one fence instead of
+		// each maintaining its own; Rotate(bool) above is untouched and still used where a buffer
+		// fences itself independently.
+		bool Rotate()
+		{
+			NextElemIndex = 0;
+			FirstUnbufferedElemIndex = 0;
+
+			if (bPersistentBuffer)
+			{
+				Index = (Index + 1) % SubBufferCount;
+				SubBufferOffset = Index * SubBufferSize;
+				return true;
+			}
+
+			glBufferData(BufferType, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
+			return true;
+		}
+
+		GLuint GetIndex() const { return Index; }
 
 		T* GetElementPtr(GLuint ElemIndex)
 		{
@@ -1640,18 +1663,21 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (Rotate)
 			{
-				// Now switch to a different parameters and vertex buffers so we don't stomp on 
-				// the data the GPU is using
-				ParametersBuffer.Lock();
-				ParametersBuffer.Rotate(true);
+				// One shared fence pair for both buffers -- they only ever rotate together, so a
+				// single fence (which marks a point in the command stream, not a specific buffer)
+				// covers both instead of each maintaining its own Sync[]/Lock()/Wait() cycle.
+				LockRotation(ParametersBuffer.GetIndex());   // pre-rotation index, same for both buffers
+
+				ParametersBuffer.Rotate();                   // position math only, no wait
+				VertBuffer.Rotate();                         // position math only, no wait
+
+				// MUST happen before any write into the freshly-rotated sub-buffers below.
+				WaitRotation(VertBuffer.GetIndex());         // post-rotation index, same for both buffers
 
 				// Make sure the new parameters buffer starts with the drawcall parameters of the
 				// call latest drawcall
 				auto Out = ParametersBuffer.GetCurrentElementPtr();
 				memcpy(Out, &DrawCallParams, sizeof(DrawCallParamsType));
-
-				VertBuffer.Lock();
-				VertBuffer.Rotate(true);
 			}
 
 			// Reset the multidraw buffer. Absolute buffer positions for the next draw calls are
@@ -1661,9 +1687,40 @@ class UXOpenGLRenderDevice : public URenderDevice
 			DrawBuffer.Reset();
 		}
 
+		// Inserts one fence covering every buffer (VertBuffer/ParametersBuffer, and for the pooled
+		// subclass CommandBuffer/NormalsBuffer) that rotates together in the same Flush(true) call --
+		// a GL fence marks a point in the command stream, not a specific buffer, so one fence per
+		// rotation event is equivalent to the N independent ones it replaces.
+		void LockRotation(GLuint Index)
+		{
+			if (!RotationSync)
+				return;
+			glDeleteSync(RotationSync[Index]);
+			RotationSync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+		}
+
+		// Blocks until the GPU has signaled sub-buffer slot @Index is free for the CPU to reuse.
+		// MUST be called before writing anything new into that slot in any of the lockstep buffers.
+		void WaitRotation(GLuint Index)
+		{
+			if (!RotationSync || !RotationSync[Index])
+				return;
+			while (1)
+			{
+				GLenum WaitReturn = glClientWaitSync(RotationSync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, 1);
+				if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
+					return;
+				if (WaitReturn == GL_WAIT_FAILED)
+				{
+					GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"), Index);
+					return;
+				}
+			}
+		}
+
 		virtual void ActivateShader()
 		{
-			VertBuffer.Wait();
+			WaitRotation(VertBuffer.GetIndex());
 			VertBuffer.Bind();
 			ParametersBuffer.Bind();
 			UseShader();
@@ -1682,6 +1739,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 				VertBuffer.MapVertexBuffer(RenDev->UsingPersistentBuffers, VertexBufferSize, RenDev->UseBufferInvalidation);
 				VertBuffer.Bind();
 				CreateInputLayout();
+
+				if (RenDev->UsingPersistentBuffers)
+				{
+					RotationSync = new GLsync[NUMBUFFERS];
+					memset(RotationSync, 0, sizeof(GLsync) * NUMBUFFERS);
+				}
 			}
 
 			if (!ParametersBuffer.Buffer)
@@ -1710,12 +1773,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 				DrawBuffer.UnmapCommandBuffer();
 			VertBuffer.DeleteBuffer();
 			ParametersBuffer.DeleteBuffer();
+
+			delete[] RotationSync;
+			RotationSync = nullptr;
 		}
 
 		// Templated member data
 		DrawCallParamsType                          DrawCallParams;
 		BufferObject<DrawCallParamsType>            ParametersBuffer;
 		BufferObject<VertexType>                    VertBuffer;
+		GLsync*                                     RotationSync{};   // shared fence array; one per NUMBUFFERS slot
 	};
 
 	// Extends ShaderProgramImpl to let ONE shader accumulate pending draws for MULTIPLE
@@ -1752,7 +1819,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			// so a single specialization being drawn a lot in a row still gets flushed sometimes
 			// (freeing GPU-visible memory pressure and giving other pending batches a chance to
 			// draw), not because we expect it to matter for typical scenes.
-			MultiDrawBuffer DrawBuffer{ 128 };
+			MultiDrawBuffer DrawBuffer{ 1024 };
 		};
 
 		static constexpr INT PoolSize = 8;
@@ -1908,16 +1975,29 @@ class UXOpenGLRenderDevice : public URenderDevice
 			// last write and this call, so we can't assume ours are still current.
 			this->VertBuffer.Bind();
 			this->ParametersBuffer.Bind();
-			OnVertBufferBound();
 
 			const bool UseIndirect = this->RenDev->UsingIndirectDraw;
+
+			if (HavePendingData)
+			{
+				// MUST run before OnVertBufferBound(): for DrawGouraudProgram, that hook may call
+				// NormalsBuffer.Bind(), which -- via the shared ArrayPoint binding-point protocol --
+				// steals GL_ARRAY_BUFFER away from VertBuffer to select VAO B. BufferData()'s
+				// non-persistent-buffer glBufferSubData/glBufferData calls trust whatever is
+				// currently bound with no bBound check of their own, so uploading VertBuffer's own
+				// data has to happen while VertBuffer itself is still the bound GL_ARRAY_BUFFER.
+				this->VertBuffer.BufferData(false);
+				this->ParametersBuffer.BufferData(false);
+			}
+
+			// Now safe to let a derived class switch to a sibling buffer/VAO (e.g. DrawGouraudProgram
+			// selecting VAO B for real per-vertex normals) -- our own uploads above are already done.
+			OnVertBufferBound();
 			if (UseIndirect)
 				CommandBuffer.Bind();
 
 			if (HavePendingData)
 			{
-				this->VertBuffer.BufferData(false);
-				this->ParametersBuffer.BufferData(false);
 				OnVertBufferUploaded();
 
 				// Issue one draw call per pending specialization batch. Nothing needs the GL
@@ -1943,28 +2023,34 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			if (Rotate)
 			{
-				// Now switch to a different parameters and vertex buffers so we don't stomp on
-				// the data the GPU is using
-				this->ParametersBuffer.Lock();
-				this->ParametersBuffer.Rotate(true);
+				// Re-bind: OnVertBufferBound() above may have switched GL_ARRAY_BUFFER away from
+				// VertBuffer (e.g. to NormalsBuffer) to select the drawing VAO -- Rotate()'s
+				// non-persistent-buffer glBufferData orphan call needs VertBuffer/ParametersBuffer
+				// actually bound again first, for the same reason the upload above does.
+				this->VertBuffer.Bind();
+				this->ParametersBuffer.Bind();
+
+				// One shared fence pair for every buffer that rotates here -- they only ever
+				// rotate together within a single Flush(true) call (VertBuffer/ParametersBuffer
+				// always, CommandBuffer when UsingIndirectDraw, NormalsBuffer via the
+				// OnVertBufferRotated() hook when DrawGouraudProgram needs it) -- so one fence
+				// (which marks a point in the command stream, not a specific buffer) covers all
+				// of them instead of each maintaining its own Sync[]/Lock()/Wait() cycle.
+				this->LockRotation(this->ParametersBuffer.GetIndex());
+
+				this->ParametersBuffer.Rotate();
+				this->VertBuffer.Rotate();
+				OnVertBufferRotated();
+				if (UseIndirect)
+					CommandBuffer.Rotate();
+
+				// MUST happen before any write into the freshly-rotated sub-buffers below.
+				this->WaitRotation(this->VertBuffer.GetIndex());
 
 				// Make sure the new parameters buffer starts with the drawcall parameters of the
 				// call latest drawcall
 				auto Out = this->ParametersBuffer.GetCurrentElementPtr();
 				memcpy(Out, &this->DrawCallParams, sizeof(DrawCallParamsType));
-
-				this->VertBuffer.Lock();
-				this->VertBuffer.Rotate(true);
-				OnVertBufferRotated();
-
-				// CommandBuffer rotates in lockstep with VertBuffer/ParametersBuffer -- once per
-				// buffer-exhaustion event, shared across however many batches were drawn since the
-				// last rotation, not once per batch (see the member comment above).
-				if (UseIndirect)
-				{
-					CommandBuffer.Lock();
-					CommandBuffer.Rotate(true);
-				}
 			}
 
 			// Every batch's data has either just been drawn or belonged to an empty slot -- free
@@ -2019,12 +2105,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 				return;
 			}
 
-			// Bind our own buffers unconditionally -- see the equivalent comment in Flush().
+			// Bind our own buffers unconditionally -- see the equivalent comment in Flush(). Upload
+			// BEFORE OnVertBufferBound() -- see the equivalent comment in Flush() for why (that hook
+			// may steal GL_ARRAY_BUFFER away from VertBuffer via NormalsBuffer.Bind(), and
+			// BufferData()'s non-persistent-buffer path trusts whatever is currently bound).
 			this->VertBuffer.Bind();
 			this->ParametersBuffer.Bind();
-			OnVertBufferBound();
 			this->VertBuffer.BufferData(false);
 			this->ParametersBuffer.BufferData(false);
+			OnVertBufferBound();
 			OnVertBufferUploaded();
 
 			glUseProgram(Batch->Specialization->ShaderProgramObject);
