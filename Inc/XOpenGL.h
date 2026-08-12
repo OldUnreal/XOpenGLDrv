@@ -522,7 +522,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	static PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB;
 	TArray<FPlane> SupportedDisplayModes;
 
-# if !defined(_USING_V110_SDK71_)
+# if !OLDUNREAL_WINXP
 	// DXGI low-latency swapchain (ReduceMouseLag) via WGL_NV_DX_interop.
 	static PFNWGLDXOPENDEVICENVPROC wglDXOpenDeviceNV;
 	static PFNWGLDXCLOSEDEVICENVPROC wglDXCloseDeviceNV;
@@ -2033,7 +2033,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  UnsetRes();
 	void  SwapControl();
 
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 	// DXGI low-latency swapchain (ReduceMouseLag).
 	bool CreateDXGIFramebuffer(INT Width, INT Height, HANDLE hDev, struct ID3D11Device* pDevice, struct IDXGISwapChain* pSwapChain);
 	void InitDXGISwapchain(INT Width, INT Height);

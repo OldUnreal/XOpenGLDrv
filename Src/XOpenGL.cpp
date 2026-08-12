@@ -29,7 +29,7 @@
 #ifndef _WIN32
 #include <sys/time.h>
 #else
-# if !defined(_USING_V110_SDK71_)
+# if !OLDUNREAL_WINXP
 #  include <d3d11.h>
 #  include <dxgi.h>
 #  include <dxgi1_5.h>
@@ -1242,7 +1242,7 @@ UBOOL UXOpenGLRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL 
 		return 0;
 	}
 
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 	if (ReduceMouseLag && !UsingDXGISwapchain)
 		InitDXGISwapchain(Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
 #endif
@@ -1560,7 +1560,7 @@ void UXOpenGLRenderDevice::SetSceneNode(FSceneNode* Frame)
 		UpdateCoords(Frame);
 #endif
 	if (StoredGamma != GetViewportGamma(Viewport) || StoredOneXBlending != OneXBlending || StoredActorXBlending != ActorXBlending
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 		|| StoredUsingDXGISwapchain != UsingDXGISwapchain
 #endif
 		)
@@ -1663,7 +1663,7 @@ void UXOpenGLRenderDevice::SetFrameStateUniforms()
 	FrameState->Gamma = StoredGamma;
 	FrameState->LightColorIntensity = ActorXBlending ? 1.f : 1.5f;
 	FrameState->LightMapIntensity = OneXBlending ? 2.f : 4.f;
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 	// The DXGI interop backbuffer is read back by D3D with a top-down (D3D) row order,
 	// while we rendered into it with GL's bottom-up convention, so the post-process pass
 	// needs to flip vertically to compensate (mirrors AntiDrv's YScale trick).
@@ -1921,7 +1921,7 @@ void UXOpenGLRenderDevice::DestroyRenderFBO()
 	DXGI low-latency swapchain (WGL_NV_DX_interop) - ReduceMouseLag.
 -----------------------------------------------------------------------------*/
 
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 
 bool UXOpenGLRenderDevice::CreateDXGIFramebuffer(
 	INT             Width,
@@ -2358,7 +2358,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		if (Blit)
 		{
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 			if (UsingDXGISwapchain)
 			{
 				ResizeDXGISwapchain(Viewport->PhysicalSizeX, Viewport->PhysicalSizeY);
@@ -2368,7 +2368,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 #endif
 
 			SetProgram(PostProcess_Prog);
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 			if (UsingDXGISwapchain)
 				glBindFramebuffer(GL_FRAMEBUFFER, DXGIFramebuffer);
 #endif
@@ -2378,7 +2378,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 
 #if !_WIN32
 			SDL_GL_SwapWindow(Window);
-#elif !defined(_USING_V110_SDK71_)
+#elif !OLDUNREAL_WINXP
 			if (UsingDXGISwapchain)
 			{
 				// Make the D3D device's back buffer see what we just rendered, then present it
@@ -2671,7 +2671,7 @@ void UXOpenGLRenderDevice::Exit()
 			Flush(0);
 
 		DestroyRenderFBO();
-#if _WIN32 && !defined(_USING_V110_SDK71_)
+#if _WIN32 && !OLDUNREAL_WINXP
 		DestroyDXGISwapchain();
 #endif
 
@@ -2983,7 +2983,7 @@ TArray<HGLRC>		UXOpenGLRenderDevice::AllContexts;
 PFNWGLCHOOSEPIXELFORMATARBPROC UXOpenGLRenderDevice::wglChoosePixelFormatARB = nullptr;
 PFNWGLCREATECONTEXTATTRIBSARBPROC UXOpenGLRenderDevice::wglCreateContextAttribsARB = nullptr;
 PFNWGLGETEXTENSIONSSTRINGARBPROC UXOpenGLRenderDevice::wglGetExtensionsStringARB = nullptr;
-# if !defined(_USING_V110_SDK71_)
+# if !OLDUNREAL_WINXP
 PFNWGLDXOPENDEVICENVPROC UXOpenGLRenderDevice::wglDXOpenDeviceNV = nullptr;
 PFNWGLDXCLOSEDEVICENVPROC UXOpenGLRenderDevice::wglDXCloseDeviceNV = nullptr;
 PFNWGLDXREGISTEROBJECTNVPROC UXOpenGLRenderDevice::wglDXRegisterObjectNV = nullptr;
