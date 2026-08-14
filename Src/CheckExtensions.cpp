@@ -110,7 +110,15 @@ void UXOpenGLRenderDevice::CheckExtensions()
 
     if (UseBindlessTextures)
     {
-        if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
+        if (IsAMD)
+        {
+            // stijn: AMD's GPU (drivers?) can't prove that the bindless textures handles we use in XOpenGL
+			// are dynamically uniform expressions, so they make texel fetching _extremely_ slow (i.e., unplayable).
+			// We just disable bindless outright here.
+            GWarn->Logf(TEXT("XOpenGL: AMD GPU detected. Disabling UseBindlessTextures because AMD drivers don't like how we use bindless textures and perform very poorly when we enable them!"));
+            UseBindlessTextures = false;
+        }
+        else if (GLExtensionSupported(TEXT("GL_ARB_bindless_texture")))
         {
             debugf(NAME_DevGraphics, TEXT("XOpenGL: GL_ARB_bindless_texture found. UseBindlessTextures enabled."));
         }
