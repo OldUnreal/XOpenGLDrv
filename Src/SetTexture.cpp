@@ -32,11 +32,11 @@
 #define MASKED_TEXTURE_TAG 4
 static void FixCacheID(FTextureInfo& Info, DWORD PolyFlags)
 {
-	if ((PolyFlags & (PF_Masked|PF_Translucent)) && Info.Format == TEXF_P8)
+	if (Info.Format == TEXF_P8 && (PolyFlags & PF_Masked))
 	{
 		Info.CacheID |= MASKED_TEXTURE_TAG;
 	}
-	else
+	else 
 	{
 		Info.CacheID &= ~MASKED_TEXTURE_TAG;
 	}
