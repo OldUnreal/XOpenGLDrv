@@ -247,6 +247,15 @@ static FName UserInterface = FName(TEXT("UserInterface"), FNAME_Intrinsic);
 
 BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bind, DWORD PolyFlags, BOOL IsFirstUpload, BOOL IsBindlessTexture, BOOL PartialUpload, INT U, INT V, INT UL, INT VL, BYTE* TextureData)
 {
+	// stijn: this texture's bindless handle is currently resident, and we're about to modify its
+	// contents. Doing this without revoking residency is apparently undefined behavior, but the
+	// NVIDIA drivers tolerate it without complaining. The AMD drivers also tolerate it, but
+	// performance tanks if we do it.
+	// By revoking residency here, bindless+ssbo+persistent buffers+indirect draw becomes the fastest
+	// rendering path on AMD too...
+	if (IsBindlessTexture && Bind->BindlessTexHandle && glIsTextureHandleResidentARB(Bind->BindlessTexHandle))
+		glMakeTextureHandleNonResidentARB(Bind->BindlessTexHandle);
+
 	bool UnsupportedTexture = false;
 
 	if (Info.NumMips && !Info.Mips[0])
@@ -685,6 +694,9 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	// Cleanup.
 	if (SupportsLazyTextures)
 		Info.Unload();
+
+	if (IsBindlessTexture && Bind->BindlessTexHandle)
+		glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
 
 	return !UnsupportedTexture;
 }
