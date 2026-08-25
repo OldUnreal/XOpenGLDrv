@@ -59,7 +59,7 @@
 // None of the original renderer or audio devices did this because you can easily trigger
 // another crash during cleanup. This would change your crash message and hide the original
 // cause of the crash.
-#define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 1
+#define XOPENGL_REALLY_WANT_NONCRITICAL_CLEANUP 0
 #define XOPENGL_MODIFIED_LOCK 1
 
 #define FGetHSV FPlane::GetHSV
