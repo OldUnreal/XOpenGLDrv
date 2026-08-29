@@ -1885,7 +1885,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return ActiveBatch = Victim;
 		}
 
-		virtual bool HasPendingData() const override
+		virtual bool HasPendingData() const 
 		{
 			for (auto& B : PendingBatches)
 				if (B.DrawBuffer.TotalCommands > 0)
@@ -1904,7 +1904,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// what stops SetProgram switches and sibling flushes (FlushInactiveBatchedProgram) from
 		// emitting a glUseProgram/rebind that's immediately thrown away without a draw ever
 		// happening.
-		virtual void ActivateShader() override
+		virtual void ActivateShader() 
 		{
 		}
 
@@ -1924,7 +1924,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// corresponds to exactly one draw call, exactly like one ParametersBuffer slot does, so reusing
 		// that number gives CommandBuffer the same safe epoch ParametersBuffer already has, with no
 		// extra overflow risk.
-		virtual void MapBuffers() override
+		virtual void MapBuffers() 
 		{
 			Base::MapBuffers();
 			if (this->RenDev->UsingIndirectDraw && !CommandBuffer.Buffer)
@@ -1935,7 +1935,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 			}
 		}
 
-		virtual void UnmapBuffers() override
+		virtual void UnmapBuffers() 
 		{
 			if (this->RenDev->UsingIndirectDraw)
 				CommandBuffer.DeleteBuffer();
@@ -1950,7 +1950,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		virtual void OnVertBufferUploaded() {}
 		virtual void OnVertBufferRotated() {}
 
-		virtual void Flush(bool Rotate) override
+		virtual void Flush(bool Rotate) 
 		{
 			const bool HavePendingData = HasPendingData();
 
@@ -2465,8 +2465,8 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		DrawGouraudProgram(const TCHAR* Name, UXOpenGLRenderDevice* RenDev);
 		void CreateInputLayout();
-		void MapBuffers() override;
-		void UnmapBuffers() override;
+		void MapBuffers();
+		void UnmapBuffers();
 
 		static void BuildVertexShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
 		static void BuildGeometryShader(GLuint ShaderType, UXOpenGLRenderDevice* GL, FShaderWriterX& Out);
@@ -2485,9 +2485,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 		bool bNeedNormalsThisPass{};
 
 	protected:
-		void OnVertBufferBound() override;
-		void OnVertBufferUploaded() override;
-		void OnVertBufferRotated() override;
+		void OnVertBufferBound();
+		void OnVertBufferUploaded();
+		void OnVertBufferRotated();
 	};
 
 	//
