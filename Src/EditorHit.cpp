@@ -25,6 +25,23 @@ void UXOpenGLRenderDevice::PushHit(const BYTE* Data, INT Count)
 	INT Index = HitStack.Add(Count);
 	appMemcpy(&HitStack(Index), Data, Count);
 
+	UpdateHitColor();
+
+	unguard;
+}
+
+// Pick the HitColor for geometry drawn under the current HitStack.
+void UXOpenGLRenderDevice::UpdateHitColor()
+{
+	guard(UXOpenGLRenderDevice::UpdateHitColor);
+
+	// Geometry drawn outside any hit proxy must read back as the clear color (no hit).
+	if (HitStack.Num() == 0)
+	{
+		HitColor = FPlane(0.f, 0.f, 0.f, 0.f);
+		return;
+	}
+
 	// Save the full HitStack. This is needed for Hit->Parent code (e.g. HCoords).
 	INT Offset = HitMem.Add(HitStack.Num());
 	appMemcpy(&HitMem(Offset), &HitStack(0), HitStack.Num());
@@ -79,6 +96,9 @@ void UXOpenGLRenderDevice::PopHit(INT Count, UBOOL bForce)
 
 	// Remove the passed info from the working stack.
 	HitStack.Remove(HitStack.Num() - Count, Count);
+
+	// Whatever is drawn next belongs to the parent proxy, or to none.
+	UpdateHitColor();
 
 	unguard;
 }

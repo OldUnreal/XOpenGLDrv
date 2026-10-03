@@ -2707,6 +2707,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	void  LockHit(BYTE* InHitData, INT* InHitSize);
 	void  UnlockHit(UBOOL Blit);
 	void  SetSceneNodeHit(FSceneNode* Frame);
+	void  UpdateHitColor();
 	bool  HitTesting() { return HitData != NULL; }
 
 	//
