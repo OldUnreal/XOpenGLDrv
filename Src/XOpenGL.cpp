@@ -1457,6 +1457,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		}
 
 		It.Value().BindlessTexHandle = 0;
+		It.Value().BindlessTexResident = FALSE;
 		if (It.Value().Id)
 		{
 			glDeleteTextures(1, &It.Value().Id);

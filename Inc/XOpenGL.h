@@ -691,6 +691,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		INT MaxLevel;
 		GLuint Sampler;				// Sampler object
 		GLuint64 BindlessTexHandle;	// Bindless handle
+		BOOL BindlessTexResident;	// Tracked here so we don't need glIsTextureHandleResidentARB, which stalls threaded GL drivers
 		INT RealtimeChangeCount{};
 	};
 

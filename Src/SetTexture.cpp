@@ -253,8 +253,14 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	// performance tanks if we do it.
 	// By revoking residency here, bindless+ssbo+persistent buffers+indirect draw becomes the fastest
 	// rendering path on AMD too...
-	if (IsBindlessTexture && Bind->BindlessTexHandle && glIsTextureHandleResidentARB(Bind->BindlessTexHandle))
+	// We only do this on AMD though. Toggling residency on every re-upload made performance tank on
+	// Linux+NVIDIA (especially with __GL_THREADED_OPTIMIZATIONS), and NVIDIA doesn't need it.
+	const BOOL ToggleResidency = IsAMD && IsBindlessTexture && Bind->BindlessTexHandle && Bind->BindlessTexResident;
+	if (ToggleResidency)
+	{
 		glMakeTextureHandleNonResidentARB(Bind->BindlessTexHandle);
+		Bind->BindlessTexResident = FALSE;
+	}
 
 	bool UnsupportedTexture = false;
 
@@ -695,8 +701,11 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	if (SupportsLazyTextures)
 		Info.Unload();
 
-	if (IsBindlessTexture && Bind->BindlessTexHandle)
+	if (ToggleResidency)
+	{
 		glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
+		Bind->BindlessTexResident = TRUE;
+	}
 
 	return !UnsupportedTexture;
 }
@@ -802,6 +811,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
         else
         {
             glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
+            Bind->BindlessTexResident = TRUE;
         }
 
         unguard;
@@ -809,6 +819,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
     else if (IsNewBind)
     {
         Bind->BindlessTexHandle = 0;
+        Bind->BindlessTexResident = FALSE;
     }
 
 	Tex.BindlessTexHandle = Bind->BindlessTexHandle;
