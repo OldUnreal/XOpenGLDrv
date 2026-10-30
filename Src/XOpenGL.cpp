@@ -612,6 +612,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UsingShaderDrawParameters = false;
 #endif
 
+	// Core 4.5 contexts give us glNamedBuffer(Sub)Data. Many drivers hand out their highest core
+	// version even if we only asked for 3.3, so this often works with UsePersistentBuffers=False too.
+	UsingDSABufferUploads = OpenGLVersion != GL_ES && glNamedBufferData != nullptr && glNamedBufferSubData != nullptr;
+	debugf(NAME_DevGraphics, TEXT("XOpenGL: DSA buffer uploads %ls."), UsingDSABufferUploads ? TEXT("enabled") : TEXT("disabled"));
+	CurrentProgramObject = 0;
+
 	if (OpenGLVersion == GL_Core
 #if MACOSX
 		&& 0
@@ -2624,6 +2630,21 @@ void UXOpenGLRenderDevice::FlushBatchedPrograms()
 			FlushInactiveBatchedProgram(i);
 
 	Shaders[ActiveProgram]->Flush(false);
+}
+
+void UXOpenGLRenderDevice::FlushProgramsUsingTextureUnit(INT Multi)
+{
+	// stijn: without bindless textures, every texture switch used to drain both Complex_Prog and
+	// Gouraud_Prog, even though most switches happen on units (lightmap, fogmap, detail, ...) that
+	// the other program's pending draws never sample. Only drain the programs that actually care.
+	const DWORD UnitBit = 1u << Multi;
+
+	for (INT i = 0; i < Max_Prog; ++i)
+		if (i != ActiveProgram && Shaders[i] && (Shaders[i]->GetPendingTextureUnits() & UnitBit))
+			FlushInactiveBatchedProgram(i);
+
+	if (Shaders[ActiveProgram]->GetPendingTextureUnits() & UnitBit)
+		Shaders[ActiveProgram]->Flush(false);
 }
 
 #if ENGINE_VERSION==227

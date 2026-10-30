@@ -763,8 +763,15 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	// which is the one case where we won't end up calling BindTextureAndSampler below at all.
 	// Complex_Prog and Gouraud_Prog both funnel through this same function using the same texture
 	// index constants, so either one can independently have pending draws depending on the old
-	// binding/contents -- drain both, not just whichever one is currently active.
-	FlushBatchedPrograms();
+	// binding/contents.
+	// If we're re-uploading an existing texture, pending draws may sample it through any unit (or
+	// through its bindless handle), so drain both programs. If we're just binding a different
+	// texture to TMU Multi, only draws that sample TMU Multi care.
+	const bool WillChangeExistingContents = Bind && Bind->Id && (Info.bRealtimeChanged || IsTextureDataStale);
+	if (WillChangeExistingContents)
+		FlushBatchedPrograms();
+	else
+		FlushProgramsUsingTextureUnit(Multi);
 
     // Make current.
 	Tex.CurrentCacheID   = Info.CacheID;

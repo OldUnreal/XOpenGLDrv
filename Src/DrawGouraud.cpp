@@ -702,7 +702,9 @@ void UXOpenGLRenderDevice::DrawGouraudProgram::OnVertBufferRotated()
 	// smaller size (this was the actual cause of the non-persistent-buffer flicker/GL_INVALID_VALUE
 	// bug: VertBuffer's object stayed correctly *bound*, just wrongly *sized*, which is why a
 	// bind-mismatch check didn't catch it).
-	NormalsBuffer.Bind();
+	// With DSA, the orphan call targets NormalsBuffer by name, so there's nothing to bind.
+	if (!NormalsBuffer.UsesDSA())
+		NormalsBuffer.Bind();
 	// Position math only -- the caller (MultiSpecializationShaderProgramImpl::Flush) sequences a
 	// shared WaitRotation() after this hook returns and before any new-slot write, covering
 	// NormalsBuffer the same way it covers VertBuffer/ParametersBuffer/CommandBuffer.
