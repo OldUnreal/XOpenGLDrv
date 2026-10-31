@@ -2427,7 +2427,8 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 
 #if !_WIN32
 			SDL_GL_SwapWindow(Window);
-#elif !OLDUNREAL_WINXP
+#else
+# if !OLDUNREAL_WINXP
 			if (UsingDXGISwapchain)
 			{
 				// Make the D3D device's back buffer see what we just rendered, then present it
@@ -2469,6 +2470,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 					debugf(NAME_Warning, TEXT("XOpenGL: DXGI Present failed (0x%08X)"), hrPresent);
 			}
 			else
+# endif // !OLDUNREAL_WINXP
 				verify(SwapBuffers(hDC));
 #endif
 		}
