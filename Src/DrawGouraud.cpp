@@ -53,6 +53,80 @@ static void BufferVert(UXOpenGLRenderDevice::DrawGouraudVertex* Vert, UXOpenGLRe
 		NormOut->PackedNormal = PackNormal_1010102(P->Normal);
 }
 
+// Streams whole triangles into the Gouraud shader's shared vertex buffer as ONE draw call, splitting
+// it only when the current vertex sub-buffer runs out of room. Shared by DrawGouraudPolyList (which
+// writes every triangle it's given) and DrawGouraudTriangles (which culls per triangle first).
+// Usage: PrepareGouraudCall, then Begin(), any number of Write()s, then Finish().
+struct FGouraudTriWriter
+{
+	using ProgramType = UXOpenGLRenderDevice::DrawGouraudProgram;
+
+	ProgramType* Shader;
+	decltype(static_cast<ProgramType*>(nullptr)->ActiveBatch) Batch{};
+	decltype(static_cast<ProgramType*>(nullptr)->ActiveBatch->Specialization) Specialization{};
+	UXOpenGLRenderDevice::DrawGouraudVertex* Out{};
+	UXOpenGLRenderDevice::DrawGouraudVertex* End{};
+	UXOpenGLRenderDevice::DrawGouraudNormal* NormOut{};
+	glm::uint DrawID{};
+	bool bWriteNormal{};
+	INT Count{};
+
+	explicit FGouraudTriWriter(ProgramType* InShader)
+		: Shader(InShader)
+	{}
+
+	// PrepareGouraudCall resolved and stashed the batch for this mesh's specialization in
+	// Shader->ActiveBatch rather than returning it directly. Remember the specialization too: an
+	// overflow split in Write() needs to re-acquire a batch for it after Flush() clears ActiveBatch.
+	void Begin()
+	{
+		Batch = Shader->ActiveBatch;
+		Specialization = Batch->Specialization;
+		bWriteNormal = Shader->bNeedNormalsThisPass;
+		StartDrawCall();
+	}
+
+	void Write(FTransTexture* A, FTransTexture* B, FTransTexture* C)
+	{
+		// Meshes can be bigger than the vertex buffer, so check here if we need to split the mesh
+		// up into separate draw calls
+		if (Out + 2 > End)
+		{
+			Finish(); // advances the parameters buffer so Flush automatically restores the drawcall params of the _current_ drawcall
+			Shader->Flush(true);
+			//debugf(NAME_DevGraphics, TEXT("DrawGouraud overflow!"));
+			Batch = Shader->SelectBatch(Specialization); // re-acquire: Flush() cleared every batch
+			StartDrawCall();
+		}
+
+		BufferVert(Out++, NormOut++, A, DrawID, bWriteNormal);
+		BufferVert(Out++, NormOut++, B, DrawID, bWriteNormal);
+		BufferVert(Out++, NormOut++, C, DrawID, bWriteNormal);
+		Count += 3;
+	}
+
+	void Finish()
+	{
+		Batch->DrawBuffer.EndDrawCall(Count);
+		Shader->VertBuffer.Advance(Count);
+		// Unconditional, regardless of bWriteNormal -- keeps NormalsBuffer's ring position numerically
+		// identical to VertBuffer's at all times. See DrawGouraudProgram::OnVertBufferUploaded.
+		Shader->NormalsBuffer.Advance(Count);
+		Shader->ParametersBuffer.Advance(1);
+	}
+
+private:
+	void StartDrawCall()
+	{
+		Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
+		Out = Shader->VertBuffer.GetCurrentElementPtr();
+		End = Shader->VertBuffer.GetLastElementPtr();
+		NormOut = Shader->NormalsBuffer.GetCurrentElementPtr();
+		DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
+		Count = 0;
+	}
+};
+
 static void SetTextureHelper
 (
 	UXOpenGLRenderDevice* RenDev, 
@@ -410,54 +484,11 @@ void UXOpenGLRenderDevice::DrawGouraudPolyList(FSceneNode* Frame, FTextureInfo& 
 
 	DWORD DrawFlags = PrepareGouraudCall(Frame, Info, PolyFlags);
 
-	// PrepareGouraudCall resolved and stashed the batch for this mesh's specialization in
-	// Shader->ActiveBatch rather than returning it directly. Save the specialization itself too,
-	// since the mid-loop overflow-split below needs to re-acquire a batch for it after a flush
-	// clears Shader->ActiveBatch.
-	auto* Batch = Shader->ActiveBatch;
-	CompiledShader* Specialization = Batch->Specialization;
-
-	Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
-	auto Out = Shader->VertBuffer.GetCurrentElementPtr();
-	auto End = Shader->VertBuffer.GetLastElementPtr();
-	auto NormOut = Shader->NormalsBuffer.GetCurrentElementPtr();
-	auto DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
-	const bool bWriteNormal = Shader->bNeedNormalsThisPass;
-
-	INT PolyListSize = 0;
-	for (INT i = 0; i < NumPts; i++)
-	{
-		// Polylists can be bigger than the vertex buffer so check here if we
-		// need to split the mesh up into separate drawcalls
-		if ((i % 3 == 0) && (Out + 2 > End))
-		{
-			Batch->DrawBuffer.EndDrawCall(PolyListSize);
-			Shader->VertBuffer.Advance(PolyListSize);
-			// Unconditional, regardless of bWriteNormal -- see DrawGouraudPolygon/OnVertBufferUploaded.
-			Shader->NormalsBuffer.Advance(PolyListSize);
-			Shader->ParametersBuffer.Advance(1); // advance so Flush automatically restores the drawcall params of the _current_ drawcall
-
-			Shader->Flush(true);
-			//debugf(NAME_DevGraphics, TEXT("DrawGouraudPolyList overflow!"));
-			Batch = Shader->SelectBatch(Specialization); // re-acquire: Flush() cleared every batch
-
-			Batch->DrawBuffer.StartDrawCall(Shader->VertBuffer.CurrentAbsolutePosition());
-			Out = Shader->VertBuffer.GetCurrentElementPtr();
-			End = Shader->VertBuffer.GetLastElementPtr();
-			NormOut = Shader->NormalsBuffer.GetCurrentElementPtr();
-			DrawID = Shader->ParametersBuffer.CurrentAbsolutePosition();
-
-			PolyListSize = 0;
-		}
-
-		BufferVert(Out++, NormOut++, &Pts[i], DrawID, bWriteNormal);
-		PolyListSize++;
-	}
-
-	Batch->DrawBuffer.EndDrawCall(PolyListSize);
-	Shader->VertBuffer.Advance(PolyListSize);
-	Shader->NormalsBuffer.Advance(PolyListSize);
-	Shader->ParametersBuffer.Advance(1);
+	FGouraudTriWriter Writer(Shader);
+	Writer.Begin();
+	for (INT i = 0; i + 2 < NumPts; i += 3)
+		Writer.Write(&Pts[i], &Pts[i + 1], &Pts[i + 2]);
+	Writer.Finish();
 
 	FinishGouraudCall(Info, DrawFlags);
     STAT(unclockFast(Stats.GouraudPolyCycles));
@@ -471,70 +502,86 @@ void UXOpenGLRenderDevice::DrawGouraudTriangles(const FSceneNode* Frame, const F
 {
 	guard(UXOpenGLRenderDevice::DrawGouraudTriangles);
 
-	if (NoDrawGouraudList)
+	if (NoDrawGouraudList || NumPts < 3)
 		return;
 
     STAT(clockFast(Stats.GouraudPolyCycles));
 
-	INT StartOffset = 0;
-	INT i = 0;
+	// Shaders[Gouraud_Prog] is always constructed as exactly DrawGouraudProgram (ShaderProgram.cpp,
+	// InitShaders) -- static_cast is safe and avoids a per-draw RTTI lookup.
+	auto Shader = static_cast<DrawGouraudProgram*>(Shaders[Gouraud_Prog]);
 
-	if (Frame->NearClip.W != 0.0)
+	const bool PushedClipPlane = Frame->NearClip.W != 0.0;
+	if (PushedClipPlane)
 		PushClipPlane(Frame->NearClip);
 
-	for (; i < NumPts; i += 3)
+	const bool Mirror = Frame->Mirror == -1.0;
+	const bool TwoSided = (PolyFlags & PF_TwoSided) != 0;
+	const bool Environment = (PolyFlags & PF_Environment) != 0;
+	const FLOAT EnvUScale = 0.5f * Info.UScale * Info.USize;
+	const FLOAT EnvVScale = 0.5f * Info.VScale * Info.VSize;
+
+	// Cull per triangle and write the survivors straight into ONE draw call (split only if the
+	// vertex buffer fills up). Culled triangles used to end the current DrawGouraudPolyList and
+	// start a new one, paying a full PrepareGouraudCall (texture setup, batch selection, a
+	// parameters slot and an indirect command) for every contiguous run of visible triangles.
+	// Nothing is set up until the first triangle survives, so a mesh that is entirely outcoded
+	// or back-facing costs no GL work at all.
+	FGouraudTriWriter Writer(Shader);
+	DWORD DrawFlags = 0;
+	bool Started = false;
+
+	for (INT i = 0; i + 2 < NumPts; i += 3)
 	{
-		if (Frame->Mirror == -1.0)
-			Exchange(Pts[i + 2], Pts[i]);
-
-		// Environment mapping.
-		if (PolyFlags & PF_Environment)
-		{
-			FLOAT UScale = Info.UScale * Info.USize / 256.0f;
-			FLOAT VScale = Info.VScale * Info.VSize / 256.0f;
-
-			for (INT j = 0; j < 3; j++)
-			{
-				FVector T = Pts[i + j].Point.UnsafeNormal().MirrorByVector(Pts[i + j].Normal).TransformVectorBy(Frame->Uncoords);
-				Pts[i + j].U = (T.X + 1.0f) * 0.5f * 256.0f * UScale;
-				Pts[i + j].V = (T.Y + 1.0f) * 0.5f * 256.0f * VScale;
-			}
-		}
+		FTransTexture* Tri[3] = { &Pts[i], &Pts[i + 1], &Pts[i + 2] };
 
 		// If outcoded, skip it.
-		if (Pts[i].Flags & Pts[i + 1].Flags & Pts[i + 2].Flags)
-		{
-			// stijn: push the triangles we've already processed (if any)
-			if (i - StartOffset > 0)
-			{
-				DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
-				StartOffset = i + 3;
-			}
+		if (Tri[0]->Flags & Tri[1]->Flags & Tri[2]->Flags)
 			continue;
+
+		if (Mirror)
+			Exchange(Tri[0], Tri[2]);
+
+		// Backface reject if not two sided, otherwise flip it to face the camera.
+		if (FTriple(Tri[0]->Point, Tri[1]->Point, Tri[2]->Point) <= 0.0)
+		{
+			if (!TwoSided)
+				continue;
+			Exchange(Tri[0], Tri[2]);
 		}
 
-		// Backface reject it.
-		if ((PolyFlags & PF_TwoSided) && FTriple(Pts[i].Point, Pts[i + 1].Point, Pts[i + 2].Point) <= 0.0)
+		// Environment mapping.
+		if (Environment)
 		{
-			if (!(PolyFlags & PF_TwoSided))
+			for (INT j = 0; j < 3; j++)
 			{
-				// stijn: push the triangles we've already processed (if any)
-				if (i - StartOffset > 0)
-				{
-					DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
-					StartOffset = i + 3;
-				}
-				continue;
+				FTransTexture& P = *Tri[j];
+				FVector T = P.Point.UnsafeNormal().MirrorByVector(P.Normal).TransformVectorBy(Frame->Uncoords);
+				P.U = (T.X + 1.0f) * EnvUScale;
+				P.V = (T.Y + 1.0f) * EnvVScale;
 			}
-			Exchange(Pts[i + 2], Pts[i]);
 		}
+
+		if (!Started)
+		{
+			SetProgram(Gouraud_Prog);
+			if (!Shader->VertBuffer.CanBuffer(3))
+				Shader->Flush(true);
+			DrawFlags = PrepareGouraudCall(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), PolyFlags);
+			Writer.Begin();
+			Started = true;
+		}
+
+		Writer.Write(Tri[0], Tri[1], Tri[2]);
 	}
 
-	// stijn: push the remaining triangles
-	if (i - StartOffset > 0)
-		DrawGouraudPolyList(const_cast<FSceneNode*>(Frame), const_cast<FTextureInfo&>(Info), Pts + StartOffset, i - StartOffset, PolyFlags, nullptr);
+	if (Started)
+	{
+		Writer.Finish();
+		FinishGouraudCall(const_cast<FTextureInfo&>(Info), DrawFlags);
+	}
 
-	if (Frame->NearClip.W != 0.0)
+	if (PushedClipPlane)
 		PopClipPlane();
 
     STAT(unclockFast(Stats.GouraudPolyCycles));
