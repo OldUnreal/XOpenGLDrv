@@ -817,7 +817,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 		// Returns true if the currently active sub-buffer still has room for @ElementCount elements
-		bool CanBuffer(GLuint ElementCount)
+		bool CanBuffer(GLuint ElementCount) const
 		{
 			return static_cast<GLint>(SubBufferSize) - static_cast<GLint>(NextElemIndex) >= static_cast<GLint>(ElementCount);
 		}
@@ -1274,7 +1274,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 			TotalCommands++;
 		}
 
-		bool IsFull() const { return TotalCommands + 1 >= FirstArray.Num(); }
+		bool IsFull() const 
+		{ 
+			return TotalCommands + 1 >= FirstArray.Num() || 
+				// Also full when the current sub-buffer of our indirect command buffer has no room left
+				(bUseIndirect && !CommandBuffer.CanBuffer(1)); 
+		}
+
+		bool UsesIndirect() const { return bUseIndirect; }
 
 		void Reset()
 		{
@@ -1308,14 +1315,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				CommandBuffer.Bind();
 				CommandBuffer.BufferData(false);
-				glMultiDrawArraysIndirect(Mode, (const void*)(uintptr_t)CommandBuffer.SubBufferOffsetBytes(),
+				// Only this MultiDrawBuffer writes into its CommandBuffer, so this draw's commands are
+				// the last TotalCommands elements before the write cursor. Submit from there instead of
+				// from the start of the sub-buffer: the cursor no longer resets after every Draw(), so
+				// later draws append behind this one rather than overwriting what the GPU may still be
+				// reading. That means no per-Draw() fence and wait (one glFenceSync + glClientWaitSync
+				// for every Tile flush); the sub-buffer is only rotated together with VertBuffer/
+				// ParametersBuffer under their shared fence -- see ShaderProgramImpl::Flush and IsFull().
+				const GLuint Start = CommandBuffer.CurrentAbsolutePosition() - static_cast<GLuint>(TotalCommands);
+				glMultiDrawArraysIndirect(Mode, (const void*)(uintptr_t)(Start * sizeof(DrawArraysIndirectCommand)),
 										   TotalCommands, sizeof(DrawArraysIndirectCommand));
-				// Unconditional: TotalCommands resets to 0 on every Draw() (see Reset(), called by our
-				// owner right after this), so the next accumulation cycle always starts writing back at
-				// element 0 of the currently-active sub-buffer -- we must rotate every single Draw() to
-				// avoid overwriting a sub-buffer the GPU may still be reading from this very call.
-				CommandBuffer.Lock();
-				CommandBuffer.Rotate(true);
 			}
 			else if (glMultiDrawArrays)
 			{
@@ -1728,6 +1737,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 				ParametersBuffer.Rotate();                   // position math only, no wait
 				VertBuffer.Rotate();                         // position math only, no wait
 
+				// The indirect command buffer rotates in lockstep too, covered by the same fence
+				if (DrawBuffer.UsesIndirect())
+				{
+					if (!DrawBuffer.CommandBuffer.UsesDSA())
+						DrawBuffer.CommandBuffer.Bind();
+					DrawBuffer.CommandBuffer.Rotate();       // position math only, no wait
+				}
+
 				// MUST happen before any write into the freshly-rotated sub-buffers below.
 				WaitRotation(VertBuffer.GetIndex());         // post-rotation index, same for both buffers
 
@@ -1752,12 +1769,22 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			if (!RotationSync)
 				return;
-			glDeleteSync(RotationSync[Index]);
+			if (RotationSync[Index]) // may already have been consumed by WaitRotation()
+				glDeleteSync(RotationSync[Index]);
 			RotationSync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 		}
 
 		// Blocks until the GPU has signaled sub-buffer slot @Index is free for the CPU to reuse.
 		// MUST be called before writing anything new into that slot in any of the lockstep buffers.
+		//
+		// Once a fence has been seen signaled, we delete it and clear its slot: the sub-buffer stays
+		// free until the next LockRotation() on this index puts a new fence there, so any further
+		// WaitRotation() on it (e.g. every ActivateShader() while we're still writing into this same
+		// sub-buffer) returns immediately without making a GL call. 
+		// Claude says this is a crucial optimization for Mesa's glthread, because glClientWaitSync 
+		// is a synchronous call that makes the app thread wait for the glthread to drain the whole 
+		// queue first, so glClientWaitSync()s that return GL_ALREADY_SIGNALED are unexpected
+		// performance killers.
 		void WaitRotation(GLuint Index)
 		{
 			if (!RotationSync || !RotationSync[Index])
@@ -1766,13 +1793,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				GLenum WaitReturn = glClientWaitSync(RotationSync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, 1);
 				if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
-					return;
+					break;
 				if (WaitReturn == GL_WAIT_FAILED)
 				{
 					GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"), Index);
-					return;
+					break;
 				}
 			}
+			glDeleteSync(RotationSync[Index]);
+			RotationSync[Index] = nullptr;
 		}
 
 		virtual void ActivateShader()
@@ -2101,9 +2130,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 					else
 						B.DrawBuffer.Draw(this->DrawMode, this->RenDev);
 				}
-
-				if (UseIndirect)
-					CommandBuffer.BufferData(false);
 			}
 
 			if (Rotate)
@@ -2174,6 +2200,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 				Cmd->BaseInstance = 0;
 				CommandBuffer.Advance(1);
 			}
+			// Non-persistent path: the commands we just wrote only exist in our CPU-side copy until
+			// this uploads them, and the draw below reads the GL buffer as of the moment it's issued --
+			// so this has to happen first, per batch (no-op with persistent buffers). CommandBuffer is
+			// already bound by our caller, which the non-DSA glBufferSubData relies on.
+			CommandBuffer.BufferData(false);
 			glMultiDrawArraysIndirect(this->DrawMode, (const void*)(uintptr_t)(GLuint)(Start * sizeof(DrawArraysIndirectCommand)),
 									   B.DrawBuffer.TotalCommands, sizeof(DrawArraysIndirectCommand));
 		}
@@ -2211,7 +2242,6 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				CommandBuffer.Bind();
 				DrawBatchIndirect(*Batch);
-				CommandBuffer.BufferData(false);
 			}
 			else
 			{

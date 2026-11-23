@@ -919,8 +919,9 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 			if (!(PolyFlags & (PF_Invisible | PF_Translucent | PF_Modulated | PF_AlphaBlend | PF_Highlighted)))
 			{
 				//instead of forcing permanent state changes when disabling glBend use this as default state. Also fixes some flickering due to these changes.
+				// The constant blend color is (0,0,0,0), i.e. add...nothing :) That's GL's initial value and
+				// nothing in this renderer ever changes it, so we don't re-set it on every switch back to opaque.
 				glBlendFunc(GL_ONE, GL_CONSTANT_COLOR);
-				glBlendColor(0.0, 0.0, 0.0, 0.0);//actually add...nothing :)
 			}
 			else if (PolyFlags & PF_Invisible)
 			{
