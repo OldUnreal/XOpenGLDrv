@@ -508,6 +508,17 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	UsingPersistentBuffers;
 	bool	UsingShaderDrawParameters;
 	bool	UsingIndirectDraw;
+	bool	UsingDSABufferUploads; // glNamedBuffer(Sub)Data available, so buffer uploads don't need a generic bind first
+
+	// Last program we passed to glUseProgram on this context. Lets us skip redundant program switches.
+	GLuint	CurrentProgramObject;
+	void UseProgram(GLuint ProgramObject)
+	{
+		if (CurrentProgramObject == ProgramObject)
+			return;
+		glUseProgram(ProgramObject);
+		CurrentProgramObject = ProgramObject;
+	}
 	bool    UsingGeometryShaders;
 	static INT LogLevel; // Verbosity level of the GL debug logging
 
@@ -691,6 +702,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		INT MaxLevel;
 		GLuint Sampler;				// Sampler object
 		GLuint64 BindlessTexHandle;	// Bindless handle
+		BOOL BindlessTexResident;	// Tracked here so we don't need glIsTextureHandleResidentARB, which stalls threaded GL drivers
 		INT RealtimeChangeCount{};
 	};
 
@@ -741,6 +753,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 	public:
 		virtual void Bind() = 0;
 		virtual void Unbind() = 0;
+
+		// Gives up the binding point without touching GL state. Only safe when the caller is about to
+		// bind another buffer to the same target anyway.
+		virtual void ForgetBinding() = 0;
 	};
 
 	BoundBuffer* UBOPoint{};      // aka GL_UNIFORM_BUFFER
@@ -801,7 +817,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		}
 
 		// Returns true if the currently active sub-buffer still has room for @ElementCount elements
-		bool CanBuffer(GLuint ElementCount)
+		bool CanBuffer(GLuint ElementCount) const
 		{
 			return static_cast<GLint>(SubBufferSize) - static_cast<GLint>(NextElemIndex) >= static_cast<GLint>(ElementCount);
 		}
@@ -828,7 +844,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 				return true;
 			}
 
-			glBufferData(BufferType, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
+			Orphan();
 			return true;
 		}
 
@@ -849,11 +865,25 @@ class UXOpenGLRenderDevice : public URenderDevice
 				return true;
 			}
 
-			glBufferData(BufferType, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
+			Orphan();
 			return true;
 		}
 
 		GLuint GetIndex() const { return Index; }
+
+		// Non-persistent buffers only: gives the driver a fresh backing store so it doesn't have to wait for the GPU.
+		// Without DSA, this targets whatever is currently bound to BufferType!
+		void Orphan()
+		{
+			if (bUseDSA)
+				glNamedBufferData(BufferObjectName, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
+			else
+				glBufferData(BufferType, SubBufferSize * sizeof(T), nullptr, ExpectedUsage);
+		}
+
+		// True if uploads/orphaning go through glNamedBuffer(Sub)Data, i.e., they don't depend on
+		// which buffer is currently bound to BufferType
+		bool UsesDSA() const { return bUseDSA; }
 
 		T* GetElementPtr(GLuint ElemIndex)
 		{
@@ -885,6 +915,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateVertexBuffer(UXOpenGLRenderDevice* RenDev)
 		{
 			BindingPoint = &RenDev->ArrayPoint;
+			bUseDSA = RenDev->UsingDSABufferUploads;
 			glGenBuffers(1, &BufferObjectName);
 			glGenVertexArrays(1, &VaoObjectName);
 		}
@@ -893,6 +924,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateSSBOBuffer(UXOpenGLRenderDevice* RenDev, const GLuint BindingIndex)
 		{
 			BindingPoint = &RenDev->SSBOPoint;
+			bUseDSA = RenDev->UsingDSABufferUploads;
 			this->BindingIndex = BindingIndex;
 			glGenBuffers(1, &BufferObjectName);
 			glBindBuffer(GL_SHADER_STORAGE_BUFFER, BufferObjectName);
@@ -904,6 +936,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateUBOBuffer(UXOpenGLRenderDevice* RenDev, const GLuint BindingIndex)
 		{
 			BindingPoint = &RenDev->UBOPoint;
+			bUseDSA = RenDev->UsingDSABufferUploads;
 			this->BindingIndex = BindingIndex;
 			glGenBuffers(1, &BufferObjectName);
 			glBindBuffer(GL_UNIFORM_BUFFER, BufferObjectName);
@@ -917,6 +950,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		void GenerateIndirectBuffer(UXOpenGLRenderDevice* RenDev)
 		{
 			BindingPoint = &RenDev->IndirectPoint;
+			bUseDSA = RenDev->UsingDSABufferUploads;
 			glGenBuffers(1, &BufferObjectName);
 		}
 
@@ -947,8 +981,9 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (bBound)
 				return;
 
+			// No need to bind 0 first since we're binding over it right away
 			if (*BindingPoint)
-				(*BindingPoint)->Unbind();
+				(*BindingPoint)->ForgetBinding();
 			if (BufferType == GL_ARRAY_BUFFER)
 				glBindVertexArray(VaoObjectName);
 			glBindBuffer(BufferType, BufferObjectName);
@@ -961,6 +996,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!bBound)
 				return;
 			glBindBuffer(BufferType, 0);
+			bBound = false;
+			*BindingPoint = nullptr;
+		}
+
+		void ForgetBinding()
+		{
 			bBound = false;
 			*BindingPoint = nullptr;
 		}
@@ -1011,7 +1052,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 			if (!bPersistentBuffer)
 			{
 				if (Replace)
-					glBufferData(BufferType, Size, Buffer, ExpectedUsage);
+				{
+					if (bUseDSA)
+						glNamedBufferData(BufferObjectName, Size, Buffer, ExpectedUsage);
+					else
+						glBufferData(BufferType, Size, Buffer, ExpectedUsage);
+				}
 				else
 				{
 					// stijn: we're about to fully overwrite [UnbufferedRegionOffset, UnbufferedRegionOffset+Size),
@@ -1020,7 +1066,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 					// This can improve performance on some drivers.
 					if (bUseInvalidation && Size > 0)
 						glInvalidateBufferSubData(BufferObjectName, UnbufferedRegionOffset, Size);
-					glBufferSubData(BufferType, UnbufferedRegionOffset, Size, &Buffer[FirstUnbufferedElemIndex]);
+					if (bUseDSA)
+						glNamedBufferSubData(BufferObjectName, UnbufferedRegionOffset, Size, &Buffer[FirstUnbufferedElemIndex]);
+					else
+						glBufferSubData(BufferType, UnbufferedRegionOffset, Size, &Buffer[FirstUnbufferedElemIndex]);
 				}
 			}
 			else
@@ -1144,6 +1193,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint BufferObjectName{};		// OpenGL name of the buffer object
 		GLuint VaoObjectName{};			// (Optional) OpenGL name of the VAO we associated with the buffer
 		bool   bPersistentBuffer{};     // true if we persistently map this buffer into system RAM
+		bool   bUseDSA{};               // true if we upload/orphan with glNamedBuffer(Sub)Data
 		bool   bUseInvalidation{};      // true if we should hint the driver that partial updates can discard old contents
 		GLenum ExpectedUsage{};			//
 
@@ -1224,7 +1274,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 			TotalCommands++;
 		}
 
-		bool IsFull() const { return TotalCommands + 1 >= FirstArray.Num(); }
+		bool IsFull() const 
+		{ 
+			return TotalCommands + 1 >= FirstArray.Num() || 
+				// Also full when the current sub-buffer of our indirect command buffer has no room left
+				(bUseIndirect && !CommandBuffer.CanBuffer(1)); 
+		}
+
+		bool UsesIndirect() const { return bUseIndirect; }
 
 		void Reset()
 		{
@@ -1258,14 +1315,16 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				CommandBuffer.Bind();
 				CommandBuffer.BufferData(false);
-				glMultiDrawArraysIndirect(Mode, (const void*)(uintptr_t)CommandBuffer.SubBufferOffsetBytes(),
+				// Only this MultiDrawBuffer writes into its CommandBuffer, so this draw's commands are
+				// the last TotalCommands elements before the write cursor. Submit from there instead of
+				// from the start of the sub-buffer: the cursor no longer resets after every Draw(), so
+				// later draws append behind this one rather than overwriting what the GPU may still be
+				// reading. That means no per-Draw() fence and wait (one glFenceSync + glClientWaitSync
+				// for every Tile flush); the sub-buffer is only rotated together with VertBuffer/
+				// ParametersBuffer under their shared fence -- see ShaderProgramImpl::Flush and IsFull().
+				const GLuint Start = CommandBuffer.CurrentAbsolutePosition() - static_cast<GLuint>(TotalCommands);
+				glMultiDrawArraysIndirect(Mode, (const void*)(uintptr_t)(Start * sizeof(DrawArraysIndirectCommand)),
 										   TotalCommands, sizeof(DrawArraysIndirectCommand));
-				// Unconditional: TotalCommands resets to 0 on every Draw() (see Reset(), called by our
-				// owner right after this), so the next accumulation cycle always starts writing back at
-				// element 0 of the currently-active sub-buffer -- we must rotate every single Draw() to
-				// avoid overwriting a sub-buffer the GPU may still be reading from this very call.
-				CommandBuffer.Lock();
-				CommandBuffer.Rotate(true);
 			}
 			else if (glMultiDrawArrays)
 			{
@@ -1604,6 +1663,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 		// single DrawBuffer has commands in it"; MultiSpecializationShaderProgramImpl overrides
 		// this to check its whole pool of pending specialization batches instead.
 		virtual bool HasPendingData() const { return DrawBuffer.TotalCommands > 0; }
+
+		// Bitmask of the texture units (see TextureIndices) that buffered-but-undrawn draws sample
+		// from. Rebinding a texture unit that's not in this mask doesn't require a flush. The default
+		// is conservative: if we have any pending data at all, assume it uses every unit.
+		virtual DWORD GetPendingTextureUnits() const { return HasPendingData() ? ~0u : 0u; }
 	};
 
 	// Base class for shader implementations
@@ -1648,8 +1712,10 @@ class UXOpenGLRenderDevice : public URenderDevice
 			}
 
 			// We might have to rebind the parameters buffer here because things like PushClipPlane and
-			// PopClipPlane can temporarily bind another UBO.
-			ParametersBuffer.Bind();
+			// PopClipPlane can temporarily bind another UBO. Only matters for the upload though, so not
+			// needed with DSA.
+			if (!ParametersBuffer.UsesDSA())
+				ParametersBuffer.Bind();
 
 			if (HavePendingData)
 			{
@@ -1670,6 +1736,14 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 				ParametersBuffer.Rotate();                   // position math only, no wait
 				VertBuffer.Rotate();                         // position math only, no wait
+
+				// The indirect command buffer rotates in lockstep too, covered by the same fence
+				if (DrawBuffer.UsesIndirect())
+				{
+					if (!DrawBuffer.CommandBuffer.UsesDSA())
+						DrawBuffer.CommandBuffer.Bind();
+					DrawBuffer.CommandBuffer.Rotate();       // position math only, no wait
+				}
 
 				// MUST happen before any write into the freshly-rotated sub-buffers below.
 				WaitRotation(VertBuffer.GetIndex());         // post-rotation index, same for both buffers
@@ -1695,12 +1769,22 @@ class UXOpenGLRenderDevice : public URenderDevice
 		{
 			if (!RotationSync)
 				return;
-			glDeleteSync(RotationSync[Index]);
+			if (RotationSync[Index]) // may already have been consumed by WaitRotation()
+				glDeleteSync(RotationSync[Index]);
 			RotationSync[Index] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 		}
 
 		// Blocks until the GPU has signaled sub-buffer slot @Index is free for the CPU to reuse.
 		// MUST be called before writing anything new into that slot in any of the lockstep buffers.
+		//
+		// Once a fence has been seen signaled, we delete it and clear its slot: the sub-buffer stays
+		// free until the next LockRotation() on this index puts a new fence there, so any further
+		// WaitRotation() on it (e.g. every ActivateShader() while we're still writing into this same
+		// sub-buffer) returns immediately without making a GL call. 
+		// Claude says this is a crucial optimization for Mesa's glthread, because glClientWaitSync 
+		// is a synchronous call that makes the app thread wait for the glthread to drain the whole 
+		// queue first, so glClientWaitSync()s that return GL_ALREADY_SIGNALED are unexpected
+		// performance killers.
 		void WaitRotation(GLuint Index)
 		{
 			if (!RotationSync || !RotationSync[Index])
@@ -1709,13 +1793,15 @@ class UXOpenGLRenderDevice : public URenderDevice
 			{
 				GLenum WaitReturn = glClientWaitSync(RotationSync[Index], GL_SYNC_FLUSH_COMMANDS_BIT, 1);
 				if (WaitReturn == GL_ALREADY_SIGNALED || WaitReturn == GL_CONDITION_SATISFIED)
-					return;
+					break;
 				if (WaitReturn == GL_WAIT_FAILED)
 				{
 					GWarn->Logf(TEXT("XOpenGL: glClientWaitSync[%i] GL_WAIT_FAILED"), Index);
-					return;
+					break;
 				}
 			}
+			glDeleteSync(RotationSync[Index]);
+			RotationSync[Index] = nullptr;
 		}
 
 		virtual void ActivateShader()
@@ -1885,12 +1971,37 @@ class UXOpenGLRenderDevice : public URenderDevice
 			return ActiveBatch = Victim;
 		}
 
-		virtual bool HasPendingData() const 
+		virtual bool HasPendingData() const
 		{
 			for (auto& B : PendingBatches)
 				if (B.DrawBuffer.TotalCommands > 0)
 					return true;
 			return false;
+		}
+
+		// Exact, rather than the conservative default: every pending draw samples precisely the
+		// layers its specialization was compiled for (OPT_RuntimeTextureLayers specializations still
+		// have the OPT_HasXXX bits set for every layer they might sample).
+		virtual DWORD GetPendingTextureUnits() const
+		{
+			DWORD Units = 0;
+			for (auto& B : PendingBatches)
+				if (B.DrawBuffer.TotalCommands > 0)
+					Units |= TextureUnitsForOptions(B.Specialization->Options.GetMask());
+			return Units;
+		}
+
+		static DWORD TextureUnitsForOptions(DWORD Options)
+		{
+			DWORD Units = 1u << DiffuseTextureIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasLightMap)		Units |= 1u << LightMapIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasFogMap)			Units |= 1u << FogMapIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasDetailTexture)	Units |= 1u << DetailTextureIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasMacroTexture)	Units |= 1u << MacroTextureIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasBumpMap)			Units |= 1u << BumpMapIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasEnvironmentMap)	Units |= 1u << EnvironmentMapIndex;
+			if (Options & ShaderCompilationOptions::OPT_HasHeightMap)		Units |= 1u << HeightMapIndex;
+			return Units;
 		}
 
 		// Deliberately does nothing. The base ActivateShader() (Wait/Bind/UseShader) exists so a
@@ -1972,9 +2083,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 
 			// Bind our own buffers unconditionally: ActivateShader() is a no-op for us (see below),
 			// and a sibling program's own Flush() may have rebound its VAO/UBO/SSBO in between our
-			// last write and this call, so we can't assume ours are still current.
+			// last write and this call, so we can't assume ours are still current. VertBuffer.Bind()
+			// selects our VAO, which we need for drawing. The parameters buffer is read through its
+			// own indexed binding point, so the generic bind only matters for non-DSA uploads.
 			this->VertBuffer.Bind();
-			this->ParametersBuffer.Bind();
+			if (!this->ParametersBuffer.UsesDSA())
+				this->ParametersBuffer.Bind();
 
 			const bool UseIndirect = this->RenDev->UsingIndirectDraw;
 
@@ -2010,15 +2124,12 @@ class UXOpenGLRenderDevice : public URenderDevice
 					if (B.DrawBuffer.TotalCommands == 0)
 						continue;
 
-					glUseProgram(B.Specialization->ShaderProgramObject);
+					this->RenDev->UseProgram(B.Specialization->ShaderProgramObject);
 					if (UseIndirect)
 						DrawBatchIndirect(B);
 					else
 						B.DrawBuffer.Draw(this->DrawMode, this->RenDev);
 				}
-
-				if (UseIndirect)
-					CommandBuffer.BufferData(false);
 			}
 
 			if (Rotate)
@@ -2026,9 +2137,13 @@ class UXOpenGLRenderDevice : public URenderDevice
 				// Re-bind: OnVertBufferBound() above may have switched GL_ARRAY_BUFFER away from
 				// VertBuffer (e.g. to NormalsBuffer) to select the drawing VAO -- Rotate()'s
 				// non-persistent-buffer glBufferData orphan call needs VertBuffer/ParametersBuffer
-				// actually bound again first, for the same reason the upload above does.
-				this->VertBuffer.Bind();
-				this->ParametersBuffer.Bind();
+				// actually bound again first, for the same reason the upload above does. The DSA
+				// orphan doesn't care what's bound.
+				if (!this->VertBuffer.UsesDSA())
+				{
+					this->VertBuffer.Bind();
+					this->ParametersBuffer.Bind();
+				}
 
 				// One shared fence pair for every buffer that rotates here -- they only ever
 				// rotate together within a single Flush(true) call (VertBuffer/ParametersBuffer
@@ -2085,6 +2200,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 				Cmd->BaseInstance = 0;
 				CommandBuffer.Advance(1);
 			}
+			// Non-persistent path: the commands we just wrote only exist in our CPU-side copy until
+			// this uploads them, and the draw below reads the GL buffer as of the moment it's issued --
+			// so this has to happen first, per batch (no-op with persistent buffers). CommandBuffer is
+			// already bound by our caller, which the non-DSA glBufferSubData relies on.
+			CommandBuffer.BufferData(false);
 			glMultiDrawArraysIndirect(this->DrawMode, (const void*)(uintptr_t)(GLuint)(Start * sizeof(DrawArraysIndirectCommand)),
 									   B.DrawBuffer.TotalCommands, sizeof(DrawArraysIndirectCommand));
 		}
@@ -2110,18 +2230,18 @@ class UXOpenGLRenderDevice : public URenderDevice
 			// may steal GL_ARRAY_BUFFER away from VertBuffer via NormalsBuffer.Bind(), and
 			// BufferData()'s non-persistent-buffer path trusts whatever is currently bound).
 			this->VertBuffer.Bind();
-			this->ParametersBuffer.Bind();
+			if (!this->ParametersBuffer.UsesDSA())
+				this->ParametersBuffer.Bind();
 			this->VertBuffer.BufferData(false);
 			this->ParametersBuffer.BufferData(false);
 			OnVertBufferBound();
 			OnVertBufferUploaded();
 
-			glUseProgram(Batch->Specialization->ShaderProgramObject);
+			this->RenDev->UseProgram(Batch->Specialization->ShaderProgramObject);
 			if (this->RenDev->UsingIndirectDraw)
 			{
 				CommandBuffer.Bind();
 				DrawBatchIndirect(*Batch);
-				CommandBuffer.BufferData(false);
 			}
 			else
 			{
@@ -2672,6 +2792,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	// Shaders[ActiveProgram] is the only one that could have pending data.
 	void  FlushInactiveBatchedProgram(INT ProgramIndex);
 	void  FlushBatchedPrograms();
+
+	// Like FlushBatchedPrograms, but only drains Complex_Prog/Gouraud_Prog if their pending draws
+	// actually sample texture unit @Multi. Use this before rebinding a texture unit. Changing a
+	// texture's contents can affect draws regardless of unit, so that still needs FlushBatchedPrograms.
+	void  FlushProgramsUsingTextureUnit(INT Multi);
 #if UNREAL_OLDUNREAL
 	void  SetDistanceFog(FFogSurf& Surf);
 #endif

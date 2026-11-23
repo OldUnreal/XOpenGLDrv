@@ -253,8 +253,14 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	// performance tanks if we do it.
 	// By revoking residency here, bindless+ssbo+persistent buffers+indirect draw becomes the fastest
 	// rendering path on AMD too...
-	if (IsBindlessTexture && Bind->BindlessTexHandle && glIsTextureHandleResidentARB(Bind->BindlessTexHandle))
+	// We only do this on AMD though. Toggling residency on every re-upload made performance tank on
+	// Linux+NVIDIA (especially with __GL_THREADED_OPTIMIZATIONS), and NVIDIA doesn't need it.
+	const BOOL ToggleResidency = IsAMD && IsBindlessTexture && Bind->BindlessTexHandle && Bind->BindlessTexResident;
+	if (ToggleResidency)
+	{
 		glMakeTextureHandleNonResidentARB(Bind->BindlessTexHandle);
+		Bind->BindlessTexResident = FALSE;
+	}
 
 	bool UnsupportedTexture = false;
 
@@ -695,8 +701,11 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	if (SupportsLazyTextures)
 		Info.Unload();
 
-	if (IsBindlessTexture && Bind->BindlessTexHandle)
+	if (ToggleResidency)
+	{
 		glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
+		Bind->BindlessTexResident = TRUE;
+	}
 
 	return !UnsupportedTexture;
 }
@@ -754,8 +763,15 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	// which is the one case where we won't end up calling BindTextureAndSampler below at all.
 	// Complex_Prog and Gouraud_Prog both funnel through this same function using the same texture
 	// index constants, so either one can independently have pending draws depending on the old
-	// binding/contents -- drain both, not just whichever one is currently active.
-	FlushBatchedPrograms();
+	// binding/contents.
+	// If we're re-uploading an existing texture, pending draws may sample it through any unit (or
+	// through its bindless handle), so drain both programs. If we're just binding a different
+	// texture to TMU Multi, only draws that sample TMU Multi care.
+	const bool WillChangeExistingContents = Bind && Bind->Id && (Info.bRealtimeChanged || IsTextureDataStale);
+	if (WillChangeExistingContents)
+		FlushBatchedPrograms();
+	else
+		FlushProgramsUsingTextureUnit(Multi);
 
     // Make current.
 	Tex.CurrentCacheID   = Info.CacheID;
@@ -802,6 +818,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
         else
         {
             glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
+            Bind->BindlessTexResident = TRUE;
         }
 
         unguard;
@@ -809,6 +826,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
     else if (IsNewBind)
     {
         Bind->BindlessTexHandle = 0;
+        Bind->BindlessTexResident = FALSE;
     }
 
 	Tex.BindlessTexHandle = Bind->BindlessTexHandle;
@@ -901,8 +919,9 @@ void UXOpenGLRenderDevice::SetBlend(DWORD PolyFlags)
 			if (!(PolyFlags & (PF_Invisible | PF_Translucent | PF_Modulated | PF_AlphaBlend | PF_Highlighted)))
 			{
 				//instead of forcing permanent state changes when disabling glBend use this as default state. Also fixes some flickering due to these changes.
+				// The constant blend color is (0,0,0,0), i.e. add...nothing :) That's GL's initial value and
+				// nothing in this renderer ever changes it, so we don't re-set it on every switch back to opaque.
 				glBlendFunc(GL_ONE, GL_CONSTANT_COLOR);
-				glBlendColor(0.0, 0.0, 0.0, 0.0);//actually add...nothing :)
 			}
 			else if (PolyFlags & PF_Invisible)
 			{

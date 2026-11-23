@@ -612,6 +612,12 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	UsingShaderDrawParameters = false;
 #endif
 
+	// Core 4.5 contexts give us glNamedBuffer(Sub)Data. Many drivers hand out their highest core
+	// version even if we only asked for 3.3, so this often works with UsePersistentBuffers=False too.
+	UsingDSABufferUploads = OpenGLVersion != GL_ES && glNamedBufferData != nullptr && glNamedBufferSubData != nullptr;
+	debugf(NAME_DevGraphics, TEXT("XOpenGL: DSA buffer uploads %ls."), UsingDSABufferUploads ? TEXT("enabled") : TEXT("disabled"));
+	CurrentProgramObject = 0;
+
 	if (OpenGLVersion == GL_Core
 #if MACOSX
 		&& 0
@@ -1457,6 +1463,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		}
 
 		It.Value().BindlessTexHandle = 0;
+		It.Value().BindlessTexResident = FALSE;
 		if (It.Value().Id)
 		{
 			glDeleteTextures(1, &It.Value().Id);
@@ -2420,7 +2427,8 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 
 #if !_WIN32
 			SDL_GL_SwapWindow(Window);
-#elif !OLDUNREAL_WINXP
+#else
+# if !OLDUNREAL_WINXP
 			if (UsingDXGISwapchain)
 			{
 				// Make the D3D device's back buffer see what we just rendered, then present it
@@ -2462,6 +2470,7 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 					debugf(NAME_Warning, TEXT("XOpenGL: DXGI Present failed (0x%08X)"), hrPresent);
 			}
 			else
+# endif // !OLDUNREAL_WINXP
 				verify(SwapBuffers(hDC));
 #endif
 		}
@@ -2623,6 +2632,21 @@ void UXOpenGLRenderDevice::FlushBatchedPrograms()
 			FlushInactiveBatchedProgram(i);
 
 	Shaders[ActiveProgram]->Flush(false);
+}
+
+void UXOpenGLRenderDevice::FlushProgramsUsingTextureUnit(INT Multi)
+{
+	// stijn: without bindless textures, every texture switch used to drain both Complex_Prog and
+	// Gouraud_Prog, even though most switches happen on units (lightmap, fogmap, detail, ...) that
+	// the other program's pending draws never sample. Only drain the programs that actually care.
+	const DWORD UnitBit = 1u << Multi;
+
+	for (INT i = 0; i < Max_Prog; ++i)
+		if (i != ActiveProgram && Shaders[i] && (Shaders[i]->GetPendingTextureUnits() & UnitBit))
+			FlushInactiveBatchedProgram(i);
+
+	if (Shaders[ActiveProgram]->GetPendingTextureUnits() & UnitBit)
+		Shaders[ActiveProgram]->Flush(false);
 }
 
 #if ENGINE_VERSION==227

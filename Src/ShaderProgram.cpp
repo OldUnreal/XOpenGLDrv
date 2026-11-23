@@ -876,7 +876,7 @@ void UXOpenGLRenderDevice::ShaderProgram::BindShaderState(CompiledShader* Specia
 
 void UXOpenGLRenderDevice::ShaderProgram::UseShader()
 {
-	glUseProgram(CurrentSpecialization->ShaderProgramObject);
+	RenDev->UseProgram(CurrentSpecialization->ShaderProgramObject);
 }
 
 void UXOpenGLRenderDevice::ShaderProgram::RecompileShader(ShaderCompilationOptions Options)
@@ -920,7 +920,7 @@ UXOpenGLRenderDevice::CompiledShader* UXOpenGLRenderDevice::ShaderProgram::GetOr
 	// but it's a one-time cost per specialization, not per draw, and callers that just want to
 	// resolve a specialization without switching to it don't need to restore the previous
 	// binding afterward (Flush()/ActivateShader() always resync it before it's relied on again).
-	glUseProgram(NewSpecialization->ShaderProgramObject);
+	RenDev->UseProgram(NewSpecialization->ShaderProgramObject);
 	BindShaderState(NewSpecialization);
 
 	return NewSpecialization;
@@ -936,7 +936,7 @@ bool UXOpenGLRenderDevice::ShaderProgram::SelectSpecialization(ShaderCompilation
 		return false;
 
 	CurrentSpecialization = NewSpecialization;
-	glUseProgram(CurrentSpecialization->ShaderProgramObject);
+	RenDev->UseProgram(CurrentSpecialization->ShaderProgramObject);
 	return true;
 }
 
@@ -990,6 +990,9 @@ void UXOpenGLRenderDevice::ShaderProgram::DeleteCompiledShader(CompiledShader* S
 	if (Shader->FragmentShaderObject)
 		glDetachShader(Shader->ShaderProgramObject, Shader->FragmentShaderObject);
 
+	// The name can be reused by a new program, so make sure UseProgram doesn't skip binding that one
+	if (RenDev->CurrentProgramObject == Shader->ShaderProgramObject)
+		RenDev->CurrentProgramObject = 0;
 	glDeleteProgram(Shader->ShaderProgramObject);
 }
 

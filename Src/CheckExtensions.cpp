@@ -280,19 +280,16 @@ void UXOpenGLRenderDevice::CheckExtensions()
 		GWarn->Logf(TEXT("XOpenGL: Anisotropic filter extension not found!"));
 		MaxAnisotropy = 0.f;
 	}
+
 	if (MaxAnisotropy > 0.f)
 	{
 		FLOAT tmp;
 		glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY, &tmp);
-
-		if (tmp < 0.f)
-			tmp = 0.f; // seems in Linux ARM with ODROID-XU4 the extension check fails. Better safe than sorry.
+		tmp = Max<FLOAT>(0.f, tmp); // seems in Linux ARM with ODROID-XU4 the extension check fails. Better safe than sorry.
 
 		debugf(NAME_DevGraphics, TEXT("XOpenGL: MaxAnisotropy = (%f/%f)"), MaxAnisotropy, tmp);
 
-		if (MaxAnisotropy > tmp)
-			MaxAnisotropy = tmp;
-
+        MaxAnisotropy = Min<FLOAT>(MaxAnisotropy, tmp);
 		UseTrilinear = true; // Anisotropic filtering doesn't make much sense without trilinear filtering
 	}
 
