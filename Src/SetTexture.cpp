@@ -260,7 +260,11 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	{
 		glMakeTextureHandleNonResidentARB(Bind->BindlessTexHandle);
 		Bind->BindlessTexResident = FALSE;
+		NumResidentTexHandles--;
 	}
+
+	if (IsBindlessTexture && !IsFirstUpload)
+		Stats.ResidentTexReuploads++;
 
 	bool UnsupportedTexture = false;
 
@@ -691,7 +695,14 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	unguard;
 
 	// Set max level.
-	if (IsFirstUpload || Bind->MaxLevel != MaxLevel)
+	// Not for a texture that already has a bindless handle, though:
+	// - We upload those with DSA and never bind them, so glTexParameteri would change whatever texture
+	//   is bound to the active unit instead. With bindless on, that's some other, resident texture,
+	//   modified without revoking its residency first.
+	// - ARB_bindless_texture freezes a texture's parameters once a handle exists for it (TexParameter*
+	//   on it is INVALID_OPERATION), so there's no correct way to change MAX_LEVEL here anyway.
+	// Bind->MaxLevel keeps describing what the texture really has.
+	if (!IsBindlessTexture && (IsFirstUpload || Bind->MaxLevel != MaxLevel))
 	{
 		Bind->MaxLevel = MaxLevel;
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, MaxLevel);
@@ -705,6 +716,7 @@ BOOL UXOpenGLRenderDevice::UploadTexture(FTextureInfo& Info, FCachedTexture* Bin
 	{
 		glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
 		Bind->BindlessTexResident = TRUE;
+		NumResidentTexHandles++;
 	}
 
 	return !UnsupportedTexture;
@@ -819,6 +831,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
         {
             glMakeTextureHandleResidentARB(Bind->BindlessTexHandle);
             Bind->BindlessTexResident = TRUE;
+            NumResidentTexHandles++;
         }
 
         unguard;

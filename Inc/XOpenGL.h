@@ -630,6 +630,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	SupportsGLSLInt64;
 	bool	SupportsClipDistance;
 	bool	IsAMD; // stijn: GL_VENDOR identifies this as an AMD/ATI GPU. These GPUs don't like how we use bindless textures in XOpenGLDrv
+	INT		NumResidentTexHandles; // Bindless texture handles currently resident. Diagnostic only (see DrawStats/GetStats)
 
 	//
 	// Framerate Limiter
@@ -688,6 +689,7 @@ class UXOpenGLRenderDevice : public URenderDevice
 		DWORD TriangleCycles;
 		DWORD Resample7777Cycles;
 		INT StallCount;
+		INT ResidentTexReuploads;	// Re-uploads (full or partial) of textures that already had a bindless handle, this frame
 	} Stats;
 
 	//

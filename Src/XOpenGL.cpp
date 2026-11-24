@@ -415,6 +415,7 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SupportsAMDMemoryInfo = false;
 	SupportsNVIDIAMemoryInfo = false;
 	IsAMD = false;
+	NumResidentTexHandles = 0;
 	SupportsSwapControl = false;
 	SupportsSwapControlTear = false;
 	SupportsClipDistance = true;
@@ -1471,6 +1472,7 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 		}
 	}
 	BindMap->Empty();
+	NumResidentTexHandles = 0;
 
 	if (Binds.Num())
 		glDeleteTextures(Binds.Num(), (GLuint*)&Binds(0));
@@ -2899,7 +2901,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 {
 	guard(UXOpenGLRenderDevice::GetStats);
 	const double msPerCycle = GSecondsPerCycle * 1000.0f;
-	FString StatsString = FString::Printf(TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\nPersistent buffer stalls: %i\n"),
+	FString StatsString = FString::Printf(TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\nPersistent buffer stalls: %i\nCached textures: %i\nResident bindless handles: %i\nBindless re-uploads (this frame): %i\n"),
 		msPerCycle * Stats.BindCycles,
 		msPerCycle * Stats.ImageCycles,
 		msPerCycle * Stats.ComplexCycles,
@@ -2909,7 +2911,10 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		msPerCycle * Stats.Draw2DLine,
 		msPerCycle * Stats.Draw3DLine,
 		msPerCycle * Stats.Draw2DPoint,
-		Stats.StallCount
+		Stats.StallCount,
+		BindMap ? BindMap->Num() : 0,
+		NumResidentTexHandles,
+		Stats.ResidentTexReuploads
 	);
 
 #if UNREAL_OLDUNREAL
@@ -2998,6 +3003,15 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
     Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Persistent buffer stalls = %i"), Stats.StallCount);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Cached textures = %i"), BindMap ? BindMap->Num() : 0);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Resident bindless handles = %i"), NumResidentTexHandles);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Bindless re-uploads (this frame) = %i"), Stats.ResidentTexReuploads);
 
 #ifndef __LINUX_ARM__
 	if (SupportsNVIDIAMemoryInfo)
