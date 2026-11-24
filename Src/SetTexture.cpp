@@ -27,9 +27,8 @@
 //
 // This function ensures the masked and non-masked copies of the texture map to different keys in the BindMap.
 // We rely on the fact that the least significant bits of a CacheID are always zero. This means it is safe to reuse
-// said bits as a tag.
+// said bits as a tag (MASKED_TEXTURE_TAG, see XOpenGL.h).
 //
-#define MASKED_TEXTURE_TAG 4
 static void FixCacheID(FTextureInfo& Info, DWORD PolyFlags)
 {
 	if (Info.Format == TEXF_P8 && (PolyFlags & PF_Masked))
@@ -762,6 +761,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 	// Bail out early if the texture is fully up-to-date
 	if (Bind && (IsResidentBindlessTexture || IsBoundToTMU) && !IsTextureDataStale)
 	{
+		Bind->LastUsedFrame = TextureCacheFrame;
 		Tex.BindlessTexHandle = Bind->BindlessTexHandle;
 		STAT(unclockFast(Stats.BindCycles));
 		return;
@@ -793,6 +793,12 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
 		// Figure out OpenGL-related scaling for the texture.
 		Bind = &BindMap->Set( Info.CacheID, FCachedTexture() );
 		memset(Bind, 0, sizeof(FCachedTexture));
+
+		// Diagnostic: what kind of texture is this?
+		if (IsAtlasCacheID(Info.CacheID))
+			CachedAtlasTextures++;
+		else
+			CachedTexturesByKind[GetCacheIDKind(Info.CacheID)]++;
 	}
 
 	UBOOL IsNewBind = Bind->Id == 0;
@@ -843,6 +849,7 @@ void UXOpenGLRenderDevice::SetTexture(INT Multi, FTextureInfo& Info, DWORD PolyF
     }
 
 	Tex.BindlessTexHandle = Bind->BindlessTexHandle;
+	Bind->LastUsedFrame = TextureCacheFrame;
 
     CHECK_GL_ERROR();
 	STAT(unclockFast(Stats.ImageCycles));

@@ -156,6 +156,30 @@ public:
 		return Count;
 		unguardSlow;
 	}
+	// Removes every pair for which Pred(Key, Value) returns true. Unlike calling Remove() per key,
+	// this compacts Pairs in a single pass and rehashes only once, so removing thousands of entries
+	// stays linear. Invalidates any pointers previously returned by Find()/Set().
+	template<class TPred> INT RemoveIf( TPred Pred )
+	{
+		guardSlow(TOpenGLMapBase::RemoveIf);
+		INT Write = 0;
+		for( INT Read=0; Read<Pairs.Num(); Read++ )
+		{
+			if( Pred(Pairs(Read).Key, Pairs(Read).Value) )
+				continue;
+			if( Write != Read )
+				Pairs(Write) = Pairs(Read);
+			Write++;
+		}
+		const INT Removed = Pairs.Num() - Write;
+		if( Removed )
+		{
+			Pairs.Remove( Write, Removed );
+			Relax();
+		}
+		return Removed;
+		unguardSlow;
+	}
 	TI* Find( const TK& Key )
 	{
 		guardSlow(TOpenGLMapBase::Find);

@@ -100,6 +100,9 @@
 #define DRAWGOURAUDPOLY_SIZE 1024
 #define NUMBUFFERS 8
 
+// Tag that FixCacheID (SetTexture.cpp) adds to a P8 texture's CacheID for its PF_Masked copy
+#define MASKED_TEXTURE_TAG 4
+
 #if ENGINE_VERSION>=430 && ENGINE_VERSION<1100
 # define MAX_LIGHTS 256
 #else
@@ -630,7 +633,11 @@ class UXOpenGLRenderDevice : public URenderDevice
 	bool	SupportsGLSLInt64;
 	bool	SupportsClipDistance;
 	bool	IsAMD; // stijn: GL_VENDOR identifies this as an AMD/ATI GPU. These GPUs don't like how we use bindless textures in XOpenGLDrv
-	INT		NumResidentTexHandles; // Bindless texture handles currently resident. Diagnostic only (see DrawStats/GetStats)
+
+	// STAT HARDWARE diagnostics
+	INT		NumResidentTexHandles;
+	INT		CachedTexturesByKind[CID_MAX + 1];
+	INT		CachedAtlasTextures;
 
 	//
 	// Framerate Limiter
@@ -706,7 +713,46 @@ class UXOpenGLRenderDevice : public URenderDevice
 		GLuint64 BindlessTexHandle;	// Bindless handle
 		BOOL BindlessTexResident;	// Tracked here so we don't need glIsTextureHandleResidentARB, which stalls threaded GL drivers
 		INT RealtimeChangeCount{};
+		INT LastUsedFrame;			// TextureCacheFrame of the last SetTexture call for this texture (see EvictUnusedTextures)
 	};
+
+	// CacheID helpers
+	static bool IsAtlasCacheID(QWORD CacheID)
+	{
+#if UNREAL_TOURNAMENT_OLDUNREAL
+		return FStaticBspInfoBase::IsAtlasID(CacheID);
+#else
+		return false;
+#endif
+	}
+	// FixCacheID may add MASKED_TEXTURE_TAG to a CID_RenderTexture ID; undo only that case, since several
+	// other kinds (e.g. CID_RenderFogMap) legitimately have that bit set in their ECacheIDBase.
+	static INT GetCacheIDKind(QWORD CacheID)
+	{
+		const INT Kind = static_cast<INT>(CacheID & CID_MAX);
+		return Kind == (CID_RenderTexture | MASKED_TEXTURE_TAG) ? CID_RenderTexture : Kind;
+	}
+	// Lightmap-type textures that are only kept in our cache because Render handed them to us at some
+	// point. These are the ones EvictUnusedTextures may delete. We keep regular textures and atlases.
+	static bool IsEvictableCacheIDKind(INT Kind)
+	{
+		switch (Kind)
+		{
+			case CID_ShadowMap:
+			case CID_IlluminationMap:
+			case CID_StaticMap:
+			case CID_RenderFogMap:
+			case CID_DynamicMap:
+				return true;
+			default:
+				return false;
+		}
+	}
+
+	// Counts frames for texture eviction. Incremented once per Unlock().
+	INT TextureCacheFrame;
+	// Deletes lightmap-type dynamic textures that we haven't used for a while.
+	void EvictUnusedTextures();
 
 	// All currently cached textures.
 	TOpenGLMap<QWORD,FCachedTexture> LocalBindMap, *BindMap;

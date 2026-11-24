@@ -416,6 +416,9 @@ UBOOL UXOpenGLRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT 
 	SupportsNVIDIAMemoryInfo = false;
 	IsAMD = false;
 	NumResidentTexHandles = 0;
+	appMemzero(CachedTexturesByKind, sizeof(CachedTexturesByKind));
+	CachedAtlasTextures = 0;
+	TextureCacheFrame = 0;
 	SupportsSwapControl = false;
 	SupportsSwapControlTear = false;
 	SupportsClipDistance = true;
@@ -1457,22 +1460,18 @@ void UXOpenGLRenderDevice::Flush(UBOOL AllowPrecache)
 	{
 		glDeleteSamplers(1, &It.Value().Sampler);
 
-		if (UsingBindlessTextures)
-		{
-			if (It.Value().BindlessTexHandle && glIsTextureHandleResidentARB(It.Value().BindlessTexHandle))
-				glMakeTextureHandleNonResidentARB(It.Value().BindlessTexHandle);
-		}
+		if (It.Value().BindlessTexHandle && It.Value().BindlessTexResident)
+			glMakeTextureHandleNonResidentARB(It.Value().BindlessTexHandle);
 
 		It.Value().BindlessTexHandle = 0;
 		It.Value().BindlessTexResident = FALSE;
 		if (It.Value().Id)
-		{
-			glDeleteTextures(1, &It.Value().Id);
-			Binds.AddItem(It.Value().Id);
-		}
+			Binds.AddItem(It.Value().Id); // deleted in one call below
 	}
 	BindMap->Empty();
 	NumResidentTexHandles = 0;
+	appMemzero(CachedTexturesByKind, sizeof(CachedTexturesByKind));
+	CachedAtlasTextures = 0;
 
 	if (Binds.Num())
 		glDeleteTextures(Binds.Num(), (GLuint*)&Binds(0));
@@ -2382,6 +2381,11 @@ void UXOpenGLRenderDevice::Unlock(UBOOL Blit)
 
 	SetProgram(No_Prog);
 
+	// Everything batched this frame has been submitted now (switching to No_Prog drains every
+	// program), so no pending draw can still reference a texture we evict here.
+	TextureCacheFrame++;
+	EvictUnusedTextures();
+
 	if (RenderFBOBound)
 	{
 		// stijn: hit-test frames were rendered directly into their target FBO (see Lock()), so
@@ -2897,6 +2901,89 @@ void UXOpenGLRenderDevice::ShutdownAfterError()
 	unguard;
 }
 
+// stijn: How often we sweep the texture cache and how long can evictable textures live before 
+// we evict them? This is a crucial optimization for the radeonsi driver, whose performance
+// absolutely tanks when we have too many resident bindless texture handles.
+#define XOPENGL_TEXTURE_SWEEP_INTERVAL 64
+#define XOPENGL_TEXTURE_EVICT_AGE      600
+
+void UXOpenGLRenderDevice::EvictUnusedTextures()
+{
+	guard(UXOpenGLRenderDevice::EvictUnusedTextures);
+
+	// UnrealEd's viewports share one BindMap between GL contexts, each with its own frame count
+	// and TexInfo bindings. Keep it simple and never evict there.
+	if (GIsEditor || !BindMap || (TextureCacheFrame % XOPENGL_TEXTURE_SWEEP_INTERVAL) != 0)
+		return;
+
+	const INT OldestAllowed = TextureCacheFrame - XOPENGL_TEXTURE_EVICT_AGE;
+	BindMap->RemoveIf([this, OldestAllowed](const QWORD& CacheID, FCachedTexture& Bind) -> bool
+	{
+		if (Bind.LastUsedFrame >= OldestAllowed || IsAtlasCacheID(CacheID))
+			return false;
+
+		const INT Kind = GetCacheIDKind(CacheID);
+		if (!IsEvictableCacheIDKind(Kind))
+			return false;
+
+		if (Bind.BindlessTexHandle && Bind.BindlessTexResident)
+		{
+			glMakeTextureHandleNonResidentARB(Bind.BindlessTexHandle);
+			NumResidentTexHandles--;
+		}
+		if (Bind.Sampler)
+			glDeleteSamplers(1, &Bind.Sampler);
+		if (Bind.Id)
+			glDeleteTextures(1, &Bind.Id); // also releases the bindless handle
+
+		// Forget any TMU binding we remember for it, so a future texture can't be mistaken for it
+		for (INT i = 0; i < ARRAY_COUNT(TexInfo); i++)
+		{
+			if (TexInfo[i].CurrentCacheID == CacheID)
+			{
+				TexInfo[i].CurrentCacheID = 0;
+				TexInfo[i].BindlessTexHandle = 0;
+			}
+		}
+
+		CachedTexturesByKind[Kind]--;
+		return true;
+	});
+
+	unguard;
+}
+
+// Diagnostic: one-line summary of what's in BindMap, by kind, e.g. "Tex 412, StaticMap 0, DynamicMap 3870, Atlas 1".
+static FString DescribeCachedTextureKinds(const INT* ByKind, INT Atlas)
+{
+	FString Out;
+	auto Add = [&Out](const TCHAR* Name, INT Count)
+	{
+		if (Out.Len())
+			Out += TEXT(", ");
+		Out += FString::Printf(TEXT("%ls %i"), Name, Count);
+	};
+
+	for (INT Kind = 0; Kind <= CID_MAX; Kind++)
+	{
+		if (!ByKind[Kind])
+			continue;
+		switch (Kind)
+		{
+			case CID_ShadowMap:			Add(TEXT("ShadowMap"), ByKind[Kind]); break;
+			case CID_IlluminationMap:	Add(TEXT("IllumMap"), ByKind[Kind]); break;
+			case CID_StaticMap:			Add(TEXT("StaticMap"), ByKind[Kind]); break;
+			case CID_RenderFogMap:		Add(TEXT("FogMap"), ByKind[Kind]); break;
+			case CID_DynamicMap:		Add(TEXT("DynamicMap"), ByKind[Kind]); break;
+			case CID_RenderTexture:		Add(TEXT("Tex"), ByKind[Kind]); break;
+			default:					Add(*FString::Printf(TEXT("0x%02X"), Kind), ByKind[Kind]); break;
+		}
+	}
+	if (Atlas)
+		Add(TEXT("Atlas"), Atlas);
+	return Out.Len() ? Out : FString(TEXT("none"));
+}
+
 void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 {
 	guard(UXOpenGLRenderDevice::GetStats);
@@ -2916,6 +3003,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		NumResidentTexHandles,
 		Stats.ResidentTexReuploads
 	);
+	StatsString += FString::Printf(TEXT("Cached texture kinds: %ls\n"), *DescribeCachedTextureKinds(CachedTexturesByKind, CachedAtlasTextures));
 
 #if UNREAL_OLDUNREAL
     StatsString += FString::Printf(TEXT("NumStaticLights %i\n"),NumLights);
@@ -3012,6 +3100,9 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Bindless re-uploads (this frame) = %i"), Stats.ResidentTexReuploads);
+	Canvas->CurX = 400;
+	Canvas->CurY = (CurY += 12);
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Kinds: %ls"), *DescribeCachedTextureKinds(CachedTexturesByKind, CachedAtlasTextures));
 
 #ifndef __LINUX_ARM__
 	if (SupportsNVIDIAMemoryInfo)
