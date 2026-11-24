@@ -2899,7 +2899,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 {
 	guard(UXOpenGLRenderDevice::GetStats);
 	const double msPerCycle = GSecondsPerCycle * 1000.0f;
-	FString StatsString = *FString::Printf(TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\nPersistent buffer stalls: %i\n"),
+	FString StatsString = FString::Printf(TEXT("XOpenGL stats:\nBind=%04.1f\nImage=%04.1f\nComplex=%04.1f\nGouraud=%04.1f\nTile Buffer/Draw=%04.1f/%04.1f\nDraw2DLine=%04.1f\nDraw3DLine=%04.1f\nDraw2DPoint=%04.1f\nPersistent buffer stalls: %i\n"),
 		msPerCycle * Stats.BindCycles,
 		msPerCycle * Stats.ImageCycles,
 		msPerCycle * Stats.ComplexCycles,
@@ -2913,7 +2913,7 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 	);
 
 #if UNREAL_OLDUNREAL
-    StatsString += *FString::Printf(TEXT("NumStaticLights %i\n"),NumLights);
+    StatsString += FString::Printf(TEXT("NumStaticLights %i\n"),NumLights);
 #endif
 
 #ifndef __LINUX_ARM__
@@ -2924,28 +2924,28 @@ void UXOpenGLRenderDevice::GetStats(TCHAR* Result)
 		GLint TotalAvailableVideoMemory = 0;
 		glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &TotalAvailableVideoMemory);
 		FLOAT Percent = (FLOAT)CurrentAvailableVideoMemory / (FLOAT)TotalAvailableVideoMemory * 100.0f;
-		StatsString += *FString::Printf(TEXT("\nNVidia VRAM=%d MB\nUsed=%d MB\nUsage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
+		StatsString += FString::Printf(TEXT("\nNVidia VRAM=%d MB\nUsed=%d MB\nUsage: %f%%"), TotalAvailableVideoMemory / 1024, (TotalAvailableVideoMemory - CurrentAvailableVideoMemory) / 1024, 100.0f - Percent);
 		glGetError();
 	}
 	if (SupportsAMDMemoryInfo)
 	{
-		GLint CurrentAvailableTextureMemory = 0;
-		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, &CurrentAvailableTextureMemory);
-		GLint CurrentAvailableVBOMemory = 0;
-		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, &CurrentAvailableVBOMemory);
-		GLint CurrentAvailableRenderbufferMemory = 0;
-		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, &CurrentAvailableRenderbufferMemory);
-		StatsString += *FString::Printf(TEXT("\nAMD CurrentAvailableTextureMemory=%d MB\nCurrentAvailableVBOMemory=%d MB\nCurrentAvailableRenderbufferMemory=%d MB"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
+		GLint CurrentAvailableTextureMemory[4];
+		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, CurrentAvailableTextureMemory);
+		GLint CurrentAvailableVBOMemory[4];
+		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, CurrentAvailableVBOMemory);
+		GLint CurrentAvailableRenderbufferMemory[4];
+		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, CurrentAvailableRenderbufferMemory);
+		StatsString += FString::Printf(TEXT("\nAMD CurrentAvailableTextureMemory=%d MB\nCurrentAvailableVBOMemory=%d MB\nCurrentAvailableRenderbufferMemory=%d MB"), CurrentAvailableTextureMemory[0] / 1024, CurrentAvailableVBOMemory[0] / 1024, CurrentAvailableRenderbufferMemory[0] / 1024);
 		glGetError();
 	}
 #endif
-	appSprintf(Result,*StatsString);
+	appStrcpy(Result,*StatsString);
 	unguard;
 }
 
 void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 {
-	guard(UXOpenGLRenderDevice::DrawStats);
+	guard(UXOpenGLRenderDevice::DrawStats);	
 	INT CurY = 48;
 	UCanvas* Canvas = Frame->Viewport->Canvas;
 
@@ -2956,8 +2956,7 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 #endif
 	Canvas->CurX = 392;
 	Canvas->CurY = CurY;
-	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("[XOpenGL]"));
-
+	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("[XOpenGL]"));	
 	Canvas->CurX = 400;
 	Canvas->CurY = (CurY += 12);
 	Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("Cycles: %05.2f"),GSecondsPerCycle * 1000);
@@ -3015,15 +3014,15 @@ void UXOpenGLRenderDevice::DrawStats(FSceneNode* Frame)
 	}
 	if (SupportsAMDMemoryInfo)
 	{
-		GLint CurrentAvailableTextureMemory = 0;
-		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, &CurrentAvailableTextureMemory);
-		GLint CurrentAvailableVBOMemory = 0;
-		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, &CurrentAvailableVBOMemory);
-		GLint CurrentAvailableRenderbufferMemory = 0;
-		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, &CurrentAvailableRenderbufferMemory);
+		GLint CurrentAvailableTextureMemory[4];
+		glGetIntegerv(GL_TEXTURE_FREE_MEMORY_ATI, CurrentAvailableTextureMemory);
+		GLint CurrentAvailableVBOMemory[4];
+		glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, CurrentAvailableVBOMemory);
+		GLint CurrentAvailableRenderbufferMemory[4];
+		glGetIntegerv(GL_RENDERBUFFER_FREE_MEMORY_ATI, CurrentAvailableRenderbufferMemory);
 		Canvas->CurX = 400;
 		Canvas->CurY = (CurY += 12);
-		Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("AMD CurrentAvailableTextureMemory (%d MB) CurrentAvailableVBOMemory (%d MB) CurrentAvailableRenderbufferMemory (%d MB)"), CurrentAvailableTextureMemory / 1024, CurrentAvailableVBOMemory / 1024, CurrentAvailableRenderbufferMemory / 1024);
+		Canvas->WrappedPrintf(Canvas->MedFont, 0, TEXT("AMD CurrentAvailableTextureMemory (%d MB) CurrentAvailableVBOMemory (%d MB) CurrentAvailableRenderbufferMemory (%d MB)"), CurrentAvailableTextureMemory[0] / 1024, CurrentAvailableVBOMemory[0] / 1024, CurrentAvailableRenderbufferMemory[0] / 1024);
 		glGetError();
 	}
 #endif
